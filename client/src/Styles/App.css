@@ -1,7 +1,51 @@
 .App {
   font-family: 'Pretendard';
+  background-color: #F7F5ED;
+  overflow: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 전역(index.css 등) */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+/* 스크롤은 html이 담당, 스크롤바만 숨기기 */
+html {
+  overflow: auto;               /* 스크롤 허용 */
+  -ms-overflow-style: none;     /* IE/레거시 Edge */
+  scrollbar-width: none;        /* Firefox */
+}
+html::-webkit-scrollbar {
+  display: none;                /* Chrome/Safari */
 }
 
 .content {
-  margin-top: 50px;
+  padding-top: 50px;
 }
+
+.bg-100w {
+  /* 배경 기본 */
+  background-image: url('../Assets/Images/img_background.png');
+  background-repeat: no-repeat;
+  background-position: center top;
+
+  /* 가로 100%, 세로는 자동(비율 유지) */
+  background-size: 100% auto;
+  aspect-ratio: 1 / 1.3;
+
+  /* 높이는 반드시 정해줘야 보입니다 */
+   /* 혹은 px값, 또는 아래 2)처럼 aspect-ratio 사용 */
+}
+
+.section-385B44 {
+  background: #385B44FF;
+  color: #fff; /* 필요시 가독성 확보 */
+  /* 경계선 얇은 틈 방지용(서브픽셀 이슈): 살짝 겹치기 */
+  margin-top: -1px;   /* 선택 사항 */
+  width: 100%;
+  height: 200vh; /* 필요에 따라 조정 */
+}
+

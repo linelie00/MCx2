@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import '../Styles/Components.css';
 
 function NavigationBar() {
-  const navigate = useNavigate();
 
   return (
     <div className="bar">

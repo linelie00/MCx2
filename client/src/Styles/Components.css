@@ -1,17 +1,22 @@
 .bar {
     position: fixed;
+    display: flex;
     top: 0;
     width: 100%;
     height: 50px;
+    align-items: center;
+    justify-content: flex-end;
 }
-
 .nav-button {
-    float: right;
+    margin-right: 10px;
 }
 
 .bar a {
-    color: rgb(0, 0, 0);
-    padding: 15px;
+    color: black;
+    padding: 10px;
+    margin-right: 5px;
+    margin-left: 5px;
+    font-size: 18px;
     text-decoration: none;
     display: inline-block;
 }

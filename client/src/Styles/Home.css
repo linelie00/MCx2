@@ -1,0 +1,18 @@
+.title {
+    position: absolute;
+    margin-left: 50px;
+    margin-top: 10vw;
+    z-index: 99;
+}
+
+.title h1 {
+    font-size: 84px;
+    margin: 0;
+    padding: 0;
+}
+
+.title h2 {
+    font-size: 36px;
+    margin: 0;
+    padding: 0;
+}   

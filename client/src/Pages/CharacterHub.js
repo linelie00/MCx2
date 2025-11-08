@@ -5,7 +5,7 @@ import migelImg from '../Assets/Images/img_migel-portrait.png';
 import matiamImg from '../Assets/Images/img_matiam-portrait.png';
 
 const cards = [
-  { slug: 'migel', label: 'Migel Doran', color: '#385B44', img: migelImg },
+  { slug: 'migel', label: 'Migel Doran', color: '#768461', img: migelImg },
   { slug: 'matiam', label: 'Matiam Crohi', color: '#5b656c', img: matiamImg },
 ];
 

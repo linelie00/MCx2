@@ -40,7 +40,7 @@ html::-webkit-scrollbar {
 }
 
 .section-385B44 {
-  background: #385B44FF;
+  background: #385B44;
   color: #fff; /* 필요시 가독성 확보 */
   /* 경계선 얇은 틈 방지용(서브픽셀 이슈): 살짝 겹치기 */
   margin-top: -1px;   /* 선택 사항 */

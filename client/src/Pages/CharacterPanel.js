@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import '../Styles/Character.css';
 
 const COLOR_MAP = {
-  migel: '#385B44',
+  migel: '#768461',
   matiam: '#5b656c',
 };
 

@@ -20,7 +20,7 @@ function App() {
           >
             <Route path="/" element={<HomePage />} />
             <Route path="/image" element={<ImageView />} />
-            <Route path="/character" element={<Character />} />
+            <Route path="/character/:name" element={<Character />} />
             <Route path="/story" element={<Story />} />
             <Route path="/world" element={<World />} />
             <Route path="/playlist" element={<Playlist />} />

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import '../Styles/Home.css';
 import cardImg from '../Assets/Images/img_J4W.png';
 
@@ -99,8 +100,12 @@ const Home = () => {
         <h1 ref={h1Ref}>MIHEARTI</h1>
       </div>
       <div className="title">
-        <h2>Migeldoran Eternos Ozan Colddew</h2>
-        <h2>Matiam Crohi</h2>
+        <h2>
+            <Link to="/character/Migel">Migeldoran Eternos Ozan Colddew</Link>
+        </h2>
+        <h2>
+            <Link to="/character/Matiam">Matiam Crohi</Link>
+        </h2>
       </div>
       <div className="card">
         <img src={cardImg} alt="카드" />

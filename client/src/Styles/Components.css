@@ -36,3 +36,11 @@
     font-size: 24px;
     font-weight: 700;
 }
+
+.bar--migel {
+  background: rgba(118, 132, 97, 0.3);
+}
+
+.bar--matiam {
+  background: rgba(91, 101, 108, 0.3);
+}

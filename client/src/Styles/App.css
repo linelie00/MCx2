@@ -1,9 +1,6 @@
 .App {
   font-family: 'Pretendard';
   background-color: #F7F5ED;
-  overflow: auto;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
 }
 
 /* 전역(index.css 등) */
@@ -28,6 +25,7 @@ html::-webkit-scrollbar {
 
 .bg-100w {
   /* 배경 기본 */
+  margin-top: -12vw;
   background-image: url('../Assets/Images/img_background.png');
   background-repeat: no-repeat;
   background-position: center top;
@@ -38,7 +36,6 @@ html::-webkit-scrollbar {
 
   /* 높이는 반드시 정해줘야 보입니다 */
    /* 혹은 px값, 또는 아래 2)처럼 aspect-ratio 사용 */
-   margin-top: 100px;
 }
 
 .section-385B44 {

@@ -1,7 +1,6 @@
 .title {
     position: absolute;
     margin-left: 2vw;
-    margin-top: 12vw;
     z-index: 99;
 }
 
@@ -16,4 +15,20 @@
     font-size: 36px;
     margin: 0;
     padding: 0;
-}   
+}
+
+.stickydiv {
+    position: sticky;
+    top: 0;
+}
+
+.stickydiv h1 {
+    all: unset;
+    display: block;
+    font-size: 84px;
+    font-weight: 800;
+    margin: 0;
+    padding: 0;
+    margin-left: 2vw;
+    margin-top: 12vw;
+}

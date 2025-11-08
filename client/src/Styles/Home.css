@@ -1,7 +1,7 @@
 .title {
     position: absolute;
     margin-left: 2vw;
-    z-index: 99;
+    z-index: 5;
 }
 
 .title h1 {
@@ -17,18 +17,52 @@
     padding: 0;
 }
 
+.title h2:nth-of-type(1) { color: #385B44; } /* 첫 번째 h2 */
+.title h2:nth-of-type(2) { color: #5b656c; } /* 두 번째 h2 */
+
 .stickydiv {
-    position: sticky;
-    top: 0;
+  position: sticky;
+  top: 12px;
+  z-index: 10;
 }
 
 .stickydiv h1 {
-    all: unset;
-    display: block;
-    font-size: 84px;
-    font-weight: 800;
-    margin: 0;
-    padding: 0;
-    margin-left: 2vw;
-    margin-top: 12vw;
+  all: unset;
+  display: block;
+  margin-left: 2vw;
+  margin-top: 12vw;
+  line-height: 1.05;
+  /* 시작값을 초기로 지정(스크롤 전) */
+  font-size: 84px;
+  font-weight: 800;
+}
+
+.card{
+    position: absolute;
+    display: flex;
+    right: 1vw;
+    border-radius: 30px;
+    margin-top: 20px;
+    rotate: calc(-20deg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+    transition:
+        transform 220ms cubic-bezier(.22,.61,.36,1),
+        box-shadow 220ms ease;
+    will-change: transform;
+}
+
+.card:hover,
+.card:focus-visible{
+    transform: translateY(-100px) rotate(-10deg); /* 회전 유지 + 위로 8px */
+    box-shadow: 0 14px 28px rgba(0,0,0,.30), 0 10px 10px rgba(0,0,0,.20);
+}
+
+.card img {
+    width: 450px;
+    height: auto;
+    border-radius: 30px;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .card{ transition: none; }
 }

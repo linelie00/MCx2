@@ -77,3 +77,35 @@
 
 .migel { background-color: #385B44; }
 .matiam { background-color: #5b656c; }
+
+.burst-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 999;                 /* 네비/카드 위로 */
+  pointer-events: none;         /* 클릭 막지 않음 */
+  background: var(--bcolor, #000);
+  /* 시작: 반경 0, 클릭 좌표에서 시작 */
+  clip-path: circle(0 at var(--bx, 50%) var(--by, 50%));
+  transition: clip-path 520ms cubic-bezier(.22,.61,.36,1);
+  opacity: 0.999;               /* iOS 페인팅 버그 방지용 미세값 */
+}
+
+/* 켜지면 화면 끝까지 확장 (150vmax면 화면 대각선 이상) */
+.burst-overlay.on{
+  clip-path: circle(150vmax at var(--bx, 50%) var(--by, 50%));
+}
+
+/* 접근성: 모션 최소화 선호 시 즉시 전환 */
+@media (prefers-reduced-motion: reduce){
+  .burst-overlay{ transition: none; }
+}
+
+.panel_content {
+    position: absolute;
+    background: var(--panel-bg, #F7F5ED);
+    top: 0;
+    left: 0;
+    padding-top: 50px;
+    width: 100%;
+    height: 100%;
+}

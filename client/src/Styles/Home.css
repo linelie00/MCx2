@@ -1,12 +1,13 @@
 .title {
     position: absolute;
     margin-left: 50px;
-    margin-top: 10vw;
+    margin-top: 12vw;
     z-index: 99;
 }
 
 .title h1 {
     font-size: 84px;
+    font-weight: 800;
     margin: 0;
     padding: 0;
 }

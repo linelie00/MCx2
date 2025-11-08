@@ -6,6 +6,10 @@
     height: 50px;
     align-items: center;
     justify-content: flex-end;
+
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    background: rgba(247, 245, 237, 0.20);
 }
 .nav-button {
     margin-right: 10px;

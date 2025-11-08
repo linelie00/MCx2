@@ -12,15 +12,6 @@ const CharacterPanel = () => {
   const { name = '' } = useParams();
   const color = COLOR_MAP[name.toLowerCase()] ?? '#2f2f2f'; // 기본색
 
-  const close = () => nav('..');
-
-  // (선택) ESC로 닫기
-  useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && close();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-
   return (
     <div className='panel_content' style={{ '--panel-bg': color }}>
     </div>

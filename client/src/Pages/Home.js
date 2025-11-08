@@ -101,10 +101,10 @@ const Home = () => {
       </div>
       <div className="title">
         <h2>
-            <Link to="/character/Migel">Migeldoran Eternos Ozan Colddew</Link>
+            <Link to="/character/migel">Migeldoran Eternos Ozan Colddew</Link>
         </h2>
         <h2>
-            <Link to="/character/Matiam">Matiam Crohi</Link>
+            <Link to="/character/matiam">Matiam Crohi</Link>
         </h2>
       </div>
       <div className="berry-card">

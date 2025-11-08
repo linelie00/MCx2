@@ -26,23 +26,24 @@
 .title h2:nth-of-type(2) { color: #5b656c; } /* 두 번째 h2 */
 
 .stickydiv {
-  position: sticky;
-  top: 12px;
-  z-index: 10;
+    position: sticky;
+    display: inline-block;
+    top: 12px;
+    z-index: 10;
+    margin-left: 2vw;
+    margin-top: 12vw;
 }
 
 .stickydiv h1 {
-  all: unset;
-  display: block;
-  margin-left: 2vw;
-  margin-top: 12vw;
-  line-height: 1.05;
-  /* 시작값을 초기로 지정(스크롤 전) */
-  font-size: 84px;
-  font-weight: 800;
+    all: unset;
+    cursor: default;
+    line-height: 1.05;
+    /* 시작값을 초기로 지정(스크롤 전) */
+    font-size: 84px;
+    font-weight: 800;
 }
 
-.card{
+.berry-card{
     position: absolute;
     display: flex;
     right: 1vw;
@@ -56,13 +57,13 @@
     will-change: transform;
 }
 
-.card:hover,
-.card:focus-visible{
+.berry-card:hover,
+.berry-card:focus-visible{
     transform: translateY(-100px) rotate(-10deg); /* 회전 유지 + 위로 8px */
     box-shadow: 0 14px 28px rgba(0,0,0,.30), 0 10px 10px rgba(0,0,0,.20);
 }
 
-.card img {
+.berry-card img {
     width: 450px;
     height: auto;
     border-radius: 30px;

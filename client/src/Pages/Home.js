@@ -31,7 +31,7 @@ const Home = () => {
 
     // 스타일 적용 함수 (pDisplay 기준)
     const apply = () => {
-      // 84 → 48px (변화 폭 36px)
+      // 84 → 24px (변화 폭 60px)
       const fs = 84 - 60 * pDisplay;
       // 800 → 600 (변화 폭 200)
       const fw = 800 - 100 * pDisplay;
@@ -107,7 +107,7 @@ const Home = () => {
             <Link to="/character/Matiam">Matiam Crohi</Link>
         </h2>
       </div>
-      <div className="card">
+      <div className="berry-card">
         <img src={cardImg} alt="카드" />
       </div>
       <section className="bg-100w" />

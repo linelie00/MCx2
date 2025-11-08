@@ -1,0 +1,79 @@
+.hub { 
+    height: calc(100vh - 50px); 
+}
+
+.hub_main {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+}
+
+.scene{
+  display: inline-block;           /* 자식 크기에 맞춤 (선택) */
+}
+
+.card{
+  display: inline-grid;
+  width: 250px;
+  height: 250px;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+  /* 4) 완만한 이징 + 시간 */
+  transition: transform 380ms cubic-bezier(.22,.61,.36,1);
+  will-change: transform;
+  /* 초기 각도 */
+  --rot: 0deg;
+  transform: rotateY(var(--rot));
+}
+
+/* 3) hover를 scene에 걸고, 각도는 170~176deg 정도로 */
+.scene:hover .card,
+.card:focus-visible{
+  --rot: 176deg;  /* 180deg 대신 (경계 깜빡임 감소) */
+}
+
+/* 양면 공통: 사이즈/반지름 동일 + backface 숨김 */
+.card > *{
+  box-sizing: border-box;
+  grid-area: 1 / 1;           /* 겹치기 */
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden; /* iOS 보정 */
+  /* 5) 미세 떨림 줄이기 위한 얕은 Z 오프셋(선택) */
+  transform: translateZ(0.01px);
+}
+
+/* 앞면 */
+.card-front img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;          /* 이미지 왜곡 방지 */
+  border-radius: 8px;
+}
+
+/* 뒷면은 Y축 반전 */
+.card-back{
+  color: #fff;
+  display: flex;
+  padding: 24px;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  transform: rotateY(180deg);
+  border-radius: 8px;
+}
+
+.card-back p{
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.migel { background-color: #385B44; }
+.matiam { background-color: #5b656c; }

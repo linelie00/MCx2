@@ -11,7 +11,8 @@ html, body, #root {
 
 /* 스크롤은 html이 담당, 스크롤바만 숨기기 */
 html {
-  overflow: auto;               /* 스크롤 허용 */
+  overflow-y: auto;               /* 스크롤 허용 */
+  overflow-x: hidden;
   -ms-overflow-style: none;     /* IE/레거시 Edge */
   scrollbar-width: none;        /* Firefox */
 }

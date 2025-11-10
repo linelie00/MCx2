@@ -9,6 +9,7 @@
     z-index: 9;
     color: white;
     mix-blend-mode: difference;
+    backdrop-filter: blur(2px);
 }
 .nav-button {
     margin-right: 10px;
@@ -45,6 +46,10 @@
   mix-blend-mode: difference;
 }
 
-.bar--migel a, .bar--matiam a {
-    color: rgb(123, 123, 123);
+.bar--migel a {
+    color: #768461;
+}
+
+.bar--matiam a {
+    color: #5b656c;
 }

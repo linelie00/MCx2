@@ -1,4 +1,5 @@
 import './Styles/App.css';
+import './Assets/Font/Font.css';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import NavigateLayout from './Layouts/NavigateLayout';
 import HomePage from './Pages/Home';

@@ -71,8 +71,27 @@ http://scripts.sil.org/OFL
 }
 
 @font-face {
+    font-family: 'NexonWarhaven';
+    src: url('./ttf/NEXON_Warhaven_Regular.ttf') format('truetype');
+    font-weight: 400;
+}
+
+@font-face {
+	font-family: 'NexonWarhaven';
+	src: url('./ttf/NEXON_Warhaven_Bold.ttf') format('truetype');
+	font-weight: 700;
+}
+
+@font-face {
     font-family: 'ClimateCrisisKR-1979';
     src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2212@1.0/ClimateCrisisKR-1979.woff2') format('woff2');
     font-weight: 900;
     font-style: normal;
+}
+
+@font-face {
+    font-family: 'Yangjin';
+    src: url('https://cdn.jsdelivr.net/gh/supernovice-lab/font@0.9/yangjin.woff') format('woff');
+    font-weight: normal;
+    font-display: swap;
 }

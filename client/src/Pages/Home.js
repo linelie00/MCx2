@@ -16,7 +16,7 @@ const Home = () => {
     const SCROLL_RANGE = 100; // 60 → 240
 
     // 문서 기준 시작 위치(한 번만 계산)
-    const start = wrap.getBoundingClientRect().top + window.scrollY;
+    const start = wrap.getBoundingClientRect().top;
 
     // 부드러운 이징 (easeOutCubic)
     const ease = (t) => 1 - Math.pow(1 - t, 3);

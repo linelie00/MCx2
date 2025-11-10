@@ -26,6 +26,8 @@
 .title h2:nth-of-type(2) { color: #5b656c; } /* 두 번째 h2 */
 
 .stickydiv {
+    color: rgb(255, 255, 255);
+    mix-blend-mode: difference;
     position: sticky;
     display: inline-block;
     top: 12px;
@@ -35,6 +37,8 @@
 }
 
 .stickydiv h1 {
+    color: rgb(255, 255, 255);
+    mix-blend-mode: difference;
     all: unset;
     cursor: default;
     line-height: 1.05;

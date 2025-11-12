@@ -76,7 +76,7 @@
 }
 
 .migel { background-color: #768461; }
-.matiam { background-color: #5b656c; }
+.matiam { background-color: #737b7f; }
 
 .burst-overlay{
   position: fixed;
@@ -108,4 +108,31 @@
     padding-top: 50px;
     width: 100%;
     height: 100%;
+}
+
+.panel-inner {
+  padding-top: 2vh;
+  padding-left: 2vw;
+  padding-right: 2vw;
+}
+
+.panel-header {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.panel-header p {
+  font-family: 'NexonWarhaven';
+  font-size: 16px;
+  font-weight: 400;
+  margin: 0;
+  padding: 0;
+}
+
+.panel-header img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
 }

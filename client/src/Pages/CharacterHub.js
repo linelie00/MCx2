@@ -6,7 +6,7 @@ import matiamImg from '../Assets/Images/img_matiam-portrait.png';
 
 const cards = [
   { slug: 'migel', label: 'Migel Doran', color: '#768461', img: migelImg },
-  { slug: 'matiam', label: 'Matiam Crohi', color: '#5b656c', img: matiamImg },
+  { slug: 'matiam', label: 'Matiam Crohi', color: '#737b7f', img: matiamImg },
 ];
 
 export default function CharacterHub() {

@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import '../Styles/Home.css';
 import cardImg from '../Assets/Images/img_J4W.png';
+import StickyRevealLines from '../Components/StickyRevealLines.js';
 
 const Home = () => {
   const stickyRef = useRef(null); // .stickydiv
@@ -111,7 +112,17 @@ const Home = () => {
         <img src={cardImg} alt="카드" />
       </div>
       <section className="bg-100w" />
-      <section className="section-385B44" />
+      <section className="section-385B44">
+          <StickyRevealLines
+            range={200}    // 라인 하나가 완전히 나타나기까지 스크롤(px)
+            startOffset={0}
+            className="srl--center"
+          />
+      </section>
+      <div className="message-box">
+        <div className="box-content">
+        </div>
+      </div>
     </>
   );
 };

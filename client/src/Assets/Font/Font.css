@@ -95,3 +95,8 @@ http://scripts.sil.org/OFL
     font-weight: normal;
     font-display: swap;
 }
+
+@font-face {
+	font-family: 'Quentin';
+	src: url('./otf/Quentin.otf') format('opentype');
+}

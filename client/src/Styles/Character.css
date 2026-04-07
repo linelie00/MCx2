@@ -130,6 +130,7 @@
   flex-direction: row;
   align-items: flex-end;
   gap: 10px;
+  margin-bottom: 20px;
 }
 
 .panel-header p {

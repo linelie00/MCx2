@@ -22,14 +22,15 @@ const CharacterPanel = () => {
   const desc = character.description;
 
   const fields = [
-    { key: "job", label: "직업" },
+    { key: "job", label: "칭호 혹은 직업" },
     { key: "body", label: "키/체형" },
     { key: "gender", label: "성별" },
     { key: "race", label: "종족" },
     { key: "age", label: "나이" },
     { key: "enlistment_period", label: "모험단에 입단한 기간" },
     { key: "personality", label: "성격"},
-    {key: "etc", label: "기타"}
+    {key: "etc", label: "기타"},
+    {key: "belongings", label: "소지품"}
   ];
 
   return (
@@ -41,50 +42,21 @@ const CharacterPanel = () => {
           <h2>"{character.title}"</h2>
         </div>
 
-        {/* 헤더 */}
-        <div className="panel-header">
-          <img src={character.portrait} alt={character.name} />
-          <p>{character.name}</p>
+        <div className="panel-appearance">
+          <img src={character.appearance.image} alt={character.name}/>
+          <p>{character.appearance.description}</p>
         </div>
 
         {/* 기본 정보 */}
         <div className="panel-body">
+          <div className="panel-header">
+            <img src={character.portrait} alt={character.name} />
+            <p>{character.name}</p>
+          </div>
           {fields.map(({ key, label }) => (
             <InfoItem key={key} label={label} value={desc?.[key]} />
           ))}
         </div>
-
-        {/* 외형 */}
-        {character.appearance?.description && (
-          <div className="panel-section">
-            <h3>외형</h3>
-            <p>{character.appearance.description}</p>
-          </div>
-        )}
-
-        {/* 성격 */}
-        {character.personality && (
-          <div className="panel-section">
-            <h3>성격</h3>
-            <p>{character.personality}</p>
-          </div>
-        )}
-
-        {/* 기타 */}
-        {character.etc && (
-          <div className="panel-section">
-            <h3>기타</h3>
-            <p>{character.etc}</p>
-          </div>
-        )}
-
-        {/* 대사 */}
-        <div className="panel-quotes">
-          {character.quotes.map((q, i) => (
-            <p key={i}>"{q}"</p>
-          ))}
-        </div>
-
       </div>
     </div>
   );

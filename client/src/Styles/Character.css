@@ -116,6 +116,14 @@
   padding-right: 2vw;
 }
 
+.panel-title {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  color: #F7F5ED;
+  font-family: 'NexonWarhaven';
+  font-style: italic;
+}
 .panel-header {
   display: flex;
   flex-direction: row;
@@ -135,4 +143,31 @@
     width: 100px;
     height: 100px;
     object-fit: cover;
+}
+
+.panel-body {
+  background-color: #d9d9cd;
+}
+
+.panel-body p {
+  margin: 0;
+  padding: 0;
+}
+
+.info-item {
+  margin-bottom: 16px;
+  line-height: 1.6;
+}
+
+.label {
+  font-family: 'NexonWarhaven';
+  display: block;
+  color: #524438;
+  font-size: 16px;
+}
+
+.value {
+  display: block;
+  font-size: 14px;
+  white-space: pre-line;
 }

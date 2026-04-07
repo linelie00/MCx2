@@ -76,3 +76,9 @@
 @media (prefers-reduced-motion: reduce){
   .card{ transition: none; }
 }
+
+.message-box {
+    width: 100%;
+    height: 200%;
+    min-height: 200vh;
+}

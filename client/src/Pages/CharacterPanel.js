@@ -46,7 +46,25 @@ const CharacterPanel = () => {
 
         <div className="panel-appearance">
           <img src={character.appearance.image} alt={character.name}/>
-          <p>{character.appearance.description}</p>
+          <div className="panel-appearance-content">
+            <div className="info-item">
+              <span className="label">&#91;외관&#93;</span>
+            <p>{character.appearance.description}</p>
+            </div>
+            <div className="info-item">
+              <span className="label">&#91;무기&#93;</span>
+              <img src={character.weapon} alt={character.name} />
+            </div>
+            <div className="info-item">
+              <span className="label">&#91;스탯&#93;</span>
+              {character.stats?.map((s, i) => (
+                <div className="stat-row" key={i}>
+                  <span className="stat-label">{s.label}</span>
+                  <span className="stat-value">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* 기본 정보 */}

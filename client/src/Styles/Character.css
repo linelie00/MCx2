@@ -131,6 +131,7 @@
   align-items: flex-end;
   gap: 10px;
   margin-bottom: 20px;
+  z-index: 99;
 }
 
 .panel-header p {
@@ -176,7 +177,7 @@
   position: absolute;
   top: -10px;
   right: 0;
-  width: 500px;
+  width: 50%;
   opacity: 0.6;
   pointer-events: none;
 }
@@ -217,9 +218,18 @@
 }
 
 .info-item {
+  position: relative;
+  width: 100%;
   margin-bottom: 16px;
   line-height: 1.6;
   z-index: 8;
+}
+
+.info-item img {
+  position: relative;
+  display: flex;
+  width: 1000px;
+  height: auto;
 }
 
 .label {
@@ -257,4 +267,25 @@
   width: 50%;
   max-height: 1000px;
   display: block;
+}
+
+.panel-appearance-content {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+}
+
+.panel-appearance-content img {
+  width: 100%;
+}
+
+.stat-row {
+  display: flex;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.stat-label {
+  width: 25px;
 }

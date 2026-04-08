@@ -1,10 +1,16 @@
+.world-content {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+
 .article {
     position: relative;
     display: flex;
     flex-direction: column;
     padding-top: 5vh;
-    padding-left: 25vw;
-    padding-right: 25vw;
+    width: 60%;
 }
 
 .article-header {

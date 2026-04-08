@@ -55,14 +55,25 @@ const CharacterPanel = () => {
               <span className="label">&#91;무기&#93;</span>
               <img src={character.weapon} alt={character.name} />
             </div>
-            <div className="info-item">
-              <span className="label">&#91;스탯&#93;</span>
-              {character.stats?.map((s, i) => (
-                <div className="stat-row" key={i}>
-                  <span className="stat-label">{s.label}</span>
-                  <span className="stat-value">{s.value}</span>
-                </div>
-              ))}
+            <div className="row-box">
+              <div className="info-item">
+                <span className="label">&#91;스탯&#93;</span>
+                {character.stats?.map((s, i) => (
+                  <div className="stat-row" key={i}>
+                    <span className="stat-label">{s.label}</span>
+                    <span className="stat-value">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="info-item">
+                <span className="label">&#91;기술&#93;</span>
+                {character.skill?.map((s, i) => (
+                  <div className="skill-row" key={i}>
+                    <span className="skill-label">{s.label}</span>
+                    <span className="skill-value">{s.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

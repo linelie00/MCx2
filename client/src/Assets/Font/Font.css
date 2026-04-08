@@ -105,3 +105,10 @@ http://scripts.sil.org/OFL
 	font-family: 'OldLondon';
 	src: url('./otf/OldLondon.otf') format('opentype');
 }
+
+@font-face {
+    font-family: 'GilbutRainbow';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2112@1.0/GilbeotRainbow.woff') format('woff');
+    font-weight: normal;
+    font-display: swap;
+}

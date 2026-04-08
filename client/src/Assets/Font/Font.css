@@ -100,3 +100,8 @@ http://scripts.sil.org/OFL
 	font-family: 'Quentin';
 	src: url('./otf/Quentin.otf') format('opentype');
 }
+
+@font-face {
+	font-family: 'OldLondon';
+	src: url('./otf/OldLondon.otf') format('opentype');
+}

@@ -4,13 +4,13 @@
     width: 100%;
 }
 
-
 .article {
     position: relative;
     display: flex;
     flex-direction: column;
     padding-top: 5vh;
     width: 60%;
+    min-width: 650px;
 }
 
 .article-header {

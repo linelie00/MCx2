@@ -69,7 +69,7 @@
 .article-image {
     float: left;
     width: 400px;
-    margin: 0 10px 10px 0;
+    margin: 0 10px 0 0;
 }
 
 .article-zetta-image {
@@ -89,15 +89,15 @@
 }
 
 .article-photo-image {
-    float: right;
     width: 100%;
-    margin: 10px;
+    margin-top: 10px;
+    margin-bottom: 10px;
 }
 
 .article-berry-image {
     float: left;
     width: 300px;
-    margin: 0 10px 10px 0;
+    margin: 0 10px 0 0;
 }
 
 .body-label {

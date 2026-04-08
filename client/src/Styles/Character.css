@@ -157,6 +157,7 @@
   gap: 10px;
   margin-bottom: 10%;
   margin-top: 10px;
+  overflow: hidden;
 }
 
 .panel-body::before {
@@ -169,6 +170,24 @@
 
   opacity: 0.4; /* 🔥 여기서 투명도 조절 */
   mix-blend-mode: difference;
+}
+
+.stamp {
+  position: absolute;
+  top: -10px;
+  right: 0;
+  width: 500px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.stamp-reverse {
+  top: auto;
+  right: auto;
+  bottom: -10px;
+  left: 0;
+  opacity: 0.4;
+  transform: scale(-1, -1);
 }
 
 .tear-top {
@@ -200,6 +219,7 @@
 .info-item {
   margin-bottom: 16px;
   line-height: 1.6;
+  z-index: 8;
 }
 
 .label {

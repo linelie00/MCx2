@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom';
 import '../Styles/Character.css';
 import characters from '../Data/Characters.js';
 import { ReactComponent as Tear } from '../Assets/Images/tear.svg';
+import imgJ4W from '../Assets/Images/img_J4Wseal.png';
 
 const InfoItem = ({ label, value }) => {
   if (!value) return null;
@@ -50,6 +51,8 @@ const CharacterPanel = () => {
 
         {/* 기본 정보 */}
         <div className="panel-body">
+          <img src={imgJ4W} className="stamp" />
+          <img src={imgJ4W} className="stamp stamp-reverse" />
           <Tear className="tear-top" />
           <Tear className="tear-bottom" />
           <div className="panel-header">

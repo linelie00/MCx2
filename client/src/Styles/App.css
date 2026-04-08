@@ -1,6 +1,10 @@
 .App {
+  position: relative;
   font-family: 'Pretendard';
   background-color: #F7F5ED;
+  width: 100%;
+  height: auto;
+  min-height: 100%;
 }
 
 /* 전역(index.css 등) */

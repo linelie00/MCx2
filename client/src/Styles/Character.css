@@ -113,15 +113,15 @@
 
 .panel-inner {
   padding-top: 2vh;
-  padding-left: 10vw;
-  padding-right: 10vw;
+  padding-left: 15vw;
+  padding-right: 15vw;
 }
 
 .panel-title {
   display: flex;
   width: 100%;
   justify-content: center;
-  color: #F7F5ED;
+  color: #d9d9cd;
   font-family: 'NexonWarhaven';
   font-style: italic;
 }
@@ -149,11 +149,47 @@
 
 .panel-body {
   display: flex;
+  position: relative;
   flex-direction: column;
   background-color: #d9d9cd;
   padding: 1.2%;
+  padding-top: 27px;
   gap: 10px;
   margin-bottom: 10%;
+  margin-top: 10px;
+}
+
+.panel-body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background: url('../Assets/Images/parchment.jpg');
+  background-size: cover;
+
+  opacity: 0.4; /* 🔥 여기서 투명도 조절 */
+  mix-blend-mode: difference;
+}
+
+.tear-top {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 101%;
+  height: auto;
+  transform: scaleY(-1);
+  color: var(--panel-bg); /* 🔥 적용됨 */
+}
+
+.tear-bottom {
+  position: absolute;
+  bottom: -1px;
+  left: -1px;
+
+  width: 101%;
+  height: auto;
+
+  color: var(--panel-bg);
 }
 
 .panel-body p {

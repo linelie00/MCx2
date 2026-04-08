@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import '../Styles/Character.css';
 import characters from '../Data/Characters.js';
+import { ReactComponent as Tear } from '../Assets/Images/tear.svg';
 
 const InfoItem = ({ label, value }) => {
   if (!value) return null;
@@ -49,6 +50,8 @@ const CharacterPanel = () => {
 
         {/* 기본 정보 */}
         <div className="panel-body">
+          <Tear className="tear-top" />
+          <Tear className="tear-bottom" />
           <div className="panel-header">
             <img src={character.portrait} alt={character.name} />
             <p>{character.name}</p>

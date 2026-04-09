@@ -19,9 +19,22 @@ html {
   overflow-x: hidden;
   -ms-overflow-style: none;     /* IE/레거시 Edge */
   scrollbar-width: none;        /* Firefox */
+  font-size: 16px;
 }
 html::-webkit-scrollbar {
   display: none;                /* Chrome/Safari */
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  html {
+    font-size: 10px;
+  }
 }
 
 .content {

@@ -5,14 +5,14 @@
 }
 
 .title h1 {
-    font-size: 84px;
+    font-size: 4rem;
     font-weight: 800;
     margin: 0;
     padding: 0;
 }
 
 .title h2 {
-    font-size: 36px;
+    font-size: 2rem;
     margin: 0;
     padding: 0;
 }
@@ -38,21 +38,29 @@
 
 .stickydiv h1 {
     color: rgb(255, 255, 255);
+    font-size: 4rem;
     mix-blend-mode: difference;
     all: unset;
     cursor: default;
     line-height: 1.05;
     /* 시작값을 초기로 지정(스크롤 전) */
-    font-size: 84px;
+    font-size: 4rem;
     font-weight: 800;
+}
+
+@media (max-width: 480px) {
+  .stickydiv h1 {
+    font-size: 4rem;
+  }
 }
 
 .berry-card{
     position: absolute;
     display: flex;
     right: 1vw;
-    border-radius: 30px;
-    margin-top: 20px;
+    border-radius: 4%;
+    overflow: hidden;
+    top: 40vh;
     rotate: calc(-20deg);
     box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
     transition:
@@ -68,9 +76,8 @@
 }
 
 .berry-card img {
-    width: 450px;
+    width: 32vw;
     height: auto;
-    border-radius: 30px;
 }
 
 @media (prefers-reduced-motion: reduce){

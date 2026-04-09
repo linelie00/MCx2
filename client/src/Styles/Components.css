@@ -10,32 +10,116 @@
     color: white;
     mix-blend-mode: difference;
     backdrop-filter: blur(2px);
-}
-.nav-button {
-    margin-right: 10px;
+    padding: 0 30px;
+    box-sizing: border-box;
 }
 
 .bar a {
     color: white;
     mix-blend-mode: difference;
     padding: 10px;
-    margin-right: 5px;
-    margin-left: 5px;
     font-size: 18px;
     text-decoration: none;
 }
+
 .nav-extra {
     padding: 0;
     margin: 0;
 }
+
 .nav-extra a{
     all: unset;
     cursor: pointer;
-    margin-left: 2vw;
     font-size: 24px;
     font-weight: 700;
     color: white;
-    mix-blend-mode: difference;
+}
+
+.hamburger {
+  position: relative;
+  display: none;
+  cursor: pointer;
+  z-index: 99;
+  width: 24px;
+  height: 18px;
+}
+
+.bar span {
+  position: absolute;
+  left: 0;
+  width: 24px;
+  height: 3px;
+  background: white;
+  border-radius: 5px;
+  transition: transform 0.3s ease, opacity 0.2s ease, top 0.3s ease;
+  transform-origin: center;
+}
+
+.hamburger span:nth-child(1) {
+  top: 0;
+}
+
+.hamburger span:nth-child(2) {
+  top: 7.5px;
+}
+
+.hamburger span:nth-child(3) {
+  top: 15px;
+}
+
+/* 애니메이션 (X 모양) */
+.hamburger.active span:nth-child(1) {
+  top: 7.5px;
+  transform: rotate(45deg);
+}
+
+.hamburger.active span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger.active span:nth-child(3) {
+  top: 7.5px;
+  transform: rotate(-45deg);
+}
+
+@media (max-width: 768px) {
+  .bar {
+    height: 60px;
+  }
+  /* 햄버거 보이기 */
+  .hamburger {
+    display: flex;
+  }
+
+  /* 기존 메뉴 숨김 */
+  .nav-button {
+    position: absolute;
+    top: 50px;
+    right: 0;
+    width: 100%;
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+
+    transition: 0.3s;
+  }
+
+  /* 열렸을 때 */
+  .nav-button.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .nav-button a {
+    padding: 12px;
+    font-size: 16px;
+  }
 }
 
 .bar--migel {
@@ -52,6 +136,14 @@
 
 .bar--matiam a {
     color: #0e7741;
+}
+
+.bar.bar--migel .hamburger span {
+  background-color: #d3b6a1;
+}
+
+.bar.bar--matiam .hamburger span {
+  background-color: #0e7741;
 }
 
 /* 래퍼: 스크롤 공간 제공 */

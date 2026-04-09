@@ -16,7 +16,7 @@ const World = () => {
                     </div>
                     <h2>World</h2>
                     <div className="header-box right-box">
-                        <span className="header-label">No contact with the capital, Lelain?!</span>
+                        <span className="header-label">No contact with the capital, Lil'laign?!</span>
                         <span className='header-details'>Dependence, is facing severe difficulties due to a shortage of supplies...</span>
                     </div>
                 </div>

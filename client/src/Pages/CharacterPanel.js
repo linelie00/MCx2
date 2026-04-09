@@ -43,9 +43,8 @@ const CharacterPanel = () => {
         <div className="panel-title">
           <h2>"{character.title}"</h2>
         </div>
-
         <div className="panel-appearance">
-          <img src={character.appearance.image} alt={character.name}/>
+          <img src={character.appearance.image} alt={character.name} className="appearance-img"/>
           <div className="panel-appearance-content">
             <div className="info-item">
               <span className="label">&#91;외관&#93;</span>
@@ -53,7 +52,7 @@ const CharacterPanel = () => {
             </div>
             <div className="info-item">
               <span className="label">&#91;무기&#93;</span>
-              <img src={character.weapon} alt={character.name} />
+              <img src={character.weapon} alt={character.name}/>
             </div>
             <div className="row-box">
               <div className="info-item">
@@ -64,6 +63,10 @@ const CharacterPanel = () => {
                     <span className="stat-value">{s.value}</span>
                   </div>
                 ))}
+                <div className="info-item">
+                  <span className="label">&#91;주요 공격 수단&#93;</span>
+                  <span className="value attack_types">{character.attack_types}</span>
+                </div>
               </div>
               <div className="info-item">
                 <span className="label">&#91;기술&#93;</span>

@@ -102,6 +102,8 @@
 
 .panel_content {
   position: absolute;
+  display: flex;
+  justify-content: center;
   background: var(--panel-bg, #F7F5ED);
   top: 0;
   left: 0;
@@ -113,8 +115,8 @@
 
 .panel-inner {
   padding-top: 2vh;
-  padding-left: 15vw;
-  padding-right: 15vw;
+  width: 60%;
+  min-width: 650px;
 }
 
 .panel-title {
@@ -227,13 +229,15 @@
 
 .info-item {
   position: relative;
+  display: flex;
+  flex-direction: column;
   margin-bottom: 16px;
   line-height: 1.6;
   z-index: 8;
 }
 
 .info-item img {
-  max-width: 700px;
+  width: 100%;
   height: auto;
 }
 
@@ -267,6 +271,23 @@
   }
 }
 
+.panel-appearance-content {
+  display: flex;
+  position: relative;
+  flex-direction: column;
+  width: 40%;
+}
+
+/* 🔥 화면이 좁아지면 */
+@media (max-width: 1200px) {
+  .panel-appearance-content {
+    width: 100%;
+  }
+}
+
+.panel-appearance-content img {
+  width: 100%;
+}
 
 .panel-appearance p {
   font-size: 14px;
@@ -276,22 +297,11 @@
   font-style: italic;
 }
 
-.panel-appearance img {
+.appearance-img {
   height: auto;
-  width: 50%;
-  max-height: 1000px;
+  width: 40%;
   min-width: 500px;
   display: block;
-}
-
-.panel-appearance-content {
-  display: flex;
-  position: relative;
-  flex-direction: column;
-}
-
-.panel-appearance-content img {
-  width: 100%;
 }
 
 .stat-row {
@@ -317,4 +327,13 @@
   font-size: 16px;
   font-family: 'GilbutRainbow';
   font-style: italic;
+}
+
+.attack_types {
+  width: 95%;
+  text-align: center;
+  font-family: 'NexonWarhaven';
+  font-weight: 700;
+  font-size: 20px;
+  border: thick double;
 }

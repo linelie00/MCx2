@@ -61,7 +61,8 @@ export const characters = {
     skill: [
       { label: "마지막 구절", value: "머리를 가르는 선율이 퍼져나온다. 브라바! 골을 울리는 연주자여."},
       { label: "낙원의 칸타타", value: "두려워 말라, 이 선율은 상처를 아물고 피를 맑게 하며 영혼까지 치유할 것이다. 들어라! 이것이 낙원이다."}
-    ]
+    ],
+    attack_types: "물리"
   },
 
   matiam: {
@@ -136,7 +137,8 @@ export const characters = {
     ],
     skill: [
       { label: "머리 받아라!", value: "목 없는 재봉사에겐 두 손이 있다. 날아온 머리와 눈을 마주치면, 레이피어는 수선 못 할 상처를 남긴다."}
-    ]
+    ],
+    attack_types: "민첩"
   },
 };
 

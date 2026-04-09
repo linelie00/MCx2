@@ -75,7 +75,7 @@ const CharacterPanel = () => {
                 {character.skill?.map((s, i) => (
                   <div className="skill-row" key={i}>
                     <span className="skill-label">{s.label}</span>
-                    <span className="skill-value">{s.value}</span>
+                    <span className="skill-value">~{s.value}~</span>
                   </div>
                 ))}
               </div>

@@ -1,9 +1,9 @@
-import migelPortraitImg from '../Assets/Images/img_migel-portrait.png';
-import matiamPortraitImg from '../Assets/Images/img_matiam-portrait.png';
-import migelImg from '../Assets/Images/img_migel_1.png';
-import matiamImg from '../Assets/Images/img_matiam.png';
-import migelWeaponImg from '../Assets/Images/img_migel_weapon.png';
-import matiamWeaponImg from '../Assets/Images/img_matiam_weapon.png';
+import migelPortraitImg from '../Assets/Images/img_migel-portrait.webp';
+import matiamPortraitImg from '../Assets/Images/img_matiam-portrait.webp';
+import migelImg from '../Assets/Images/img_migel_1.webp';
+import matiamImg from '../Assets/Images/img_matiam.webp';
+import migelWeaponImg from '../Assets/Images/img_migel_weapon.webp';
+import matiamWeaponImg from '../Assets/Images/img_matiam_weapon.webp';
 
 export const characters = {
   migel: {

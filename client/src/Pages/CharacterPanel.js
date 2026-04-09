@@ -2,7 +2,7 @@ import { useParams } from 'react-router-dom';
 import '../Styles/Character.css';
 import characters from '../Data/Characters.js';
 import { ReactComponent as Tear } from '../Assets/Images/tear.svg';
-import imgJ4W from '../Assets/Images/img_J4Wseal.png';
+import imgJ4W from '../Assets/Images/img_J4Wseal.webp';
 
 const InfoItem = ({ label, value }) => {
   if (!value) return null;

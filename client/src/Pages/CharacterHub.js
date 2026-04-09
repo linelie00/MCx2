@@ -1,8 +1,8 @@
 import { useNavigate, Outlet } from 'react-router-dom';
 import { useRef, useState, useCallback } from 'react';
 import '../Styles/Character.css';
-import migelImg from '../Assets/Images/img_migel-portrait.png';
-import matiamImg from '../Assets/Images/img_matiam-portrait.png';
+import migelImg from '../Assets/Images/img_migel-portrait.webp';
+import matiamImg from '../Assets/Images/img_matiam-portrait.webp';
 
 const cards = [
   { slug: 'migel', label: 'Migel Doran', color: '#768461', img: migelImg },

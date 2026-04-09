@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import '../Styles/Home.css';
-import cardImg from '../Assets/Images/img_J4W.png';
+import cardImg from '../Assets/Images/img_J4W.webp';
 import StickyRevealLines from '../Components/StickyRevealLines.js';
 
 const Home = () => {

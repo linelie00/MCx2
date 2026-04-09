@@ -1,9 +1,8 @@
 import '../Styles/World.css';
-import imgMonster from '../Assets/Images/img_monster.jpg';
-import J4Wphoto from '../Assets/Images/img_J4Wphoto.jpg';
-import imgZetta from '../Assets/Images/img_zetta.png';
-import imgBerry from '../Assets/Images/img_berry.jpg';
-import imgCrow from '../Assets/Images/img_crow.jpg';
+import imgMonster from '../Assets/Images/img_monster.webp';
+import J4Wphoto from '../Assets/Images/img_J4Wphoto.webp';
+import imgZetta from '../Assets/Images/img_zetta.webp';
+import imgCrow from '../Assets/Images/img_crow.webp';
 
 const World = () => {
     return (

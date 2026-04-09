@@ -32,14 +32,19 @@ const Home = () => {
 
     // 스타일 적용 함수 (pDisplay 기준)
     const apply = () => {
-      // 84 → 24px (변화 폭 60px)
-      const fs = 84 - 60 * pDisplay;
-      // 800 → 600 (변화 폭 200)
+      const isMobile = window.innerWidth <= 768;
+
+      // 시작값만 다르게
+      const startSize = isMobile ? 60 : 84;
+      const endSize = 24;
+
+      const fs = startSize - (startSize - endSize) * pDisplay;
+
       const fw = 800 - 100 * pDisplay;
 
       h1.style.fontSize = `${fs}px`;
       h1.style.fontWeight = `${Math.round(fw)}`;
-      h1.style.fontVariationSettings = `"wght" ${Math.round(fw)}`; // Variable 폰트면 부드럽게
+      h1.style.fontVariationSettings = `"wght" ${Math.round(fw)}`;
     };
 
     // rAF 루프: pDisplay가 pTarget을 서서히 따라가게

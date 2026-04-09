@@ -37,7 +37,7 @@ const Home = () => {
       // 800 → 600 (변화 폭 200)
       const fw = 800 - 100 * pDisplay;
 
-      h1.style.fontSize = `${fs / 16}rem`;
+      h1.style.fontSize = `${fs}px`;
       h1.style.fontWeight = `${Math.round(fw)}`;
       h1.style.fontVariationSettings = `"wght" ${Math.round(fw)}`; // Variable 폰트면 부드럽게
     };

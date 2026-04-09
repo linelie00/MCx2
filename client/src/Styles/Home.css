@@ -47,9 +47,12 @@
     font-weight: 800;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .stickydiv h1 {
-    font-size: 4rem;
+    margin-left: 5px;
+  }
+  .title h2 a {
+    margin-left: 5px;
   }
 }
 

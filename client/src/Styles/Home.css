@@ -37,13 +37,12 @@
 }
 
 .stickydiv h1 {
+    all: unset;
     color: rgb(255, 255, 255);
     font-size: 4rem;
     mix-blend-mode: difference;
-    all: unset;
     cursor: default;
     line-height: 1.05;
-    /* 시작값을 초기로 지정(스크롤 전) */
     font-size: 4rem;
     font-weight: 800;
 }

@@ -41,7 +41,7 @@
   cursor: pointer;
   z-index: 99;
   width: 18px;
-  height: 14px;
+  height: 15px;
 }
 
 .bar span {
@@ -82,9 +82,6 @@
 }
 
 @media (max-width: 768px) {
-  .bar {
-    height: 60px;
-  }
   /* 햄버거 보이기 */
   .hamburger {
     display: flex;

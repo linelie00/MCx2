@@ -55,14 +55,16 @@ const CharacterPanel = () => {
               <img src={character.weapon} alt={character.name}/>
             </div>
             <div className="row-box">
-              <div className="info-item">
-                <span className="label">&#91;스탯&#93;</span>
-                {character.stats?.map((s, i) => (
-                  <div className="stat-row" key={i}>
-                    <span className="stat-label">{s.label}</span>
-                    <span className="stat-value">{s.value}</span>
-                  </div>
-                ))}
+              <div className="stat-and-attack-box">
+                <div className="info-item">
+                  <span className="label">&#91;스탯&#93;</span>
+                  {character.stats?.map((s, i) => (
+                    <div className="stat-row" key={i}>
+                      <span className="stat-label">{s.label}</span>
+                      <span className="stat-value">{s.value}</span>
+                    </div>
+                  ))}
+                </div>
                 <div className="info-item">
                   <span className="label">&#91;주요 공격 수단&#93;</span>
                   <span className="value attack_types">{character.attack_types}</span>

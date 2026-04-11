@@ -16,7 +16,7 @@ function NavigationBar() {
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={barClass}>
+    <div className={`${barClass} ${menuOpen ? 'open' : ''}`}>
       <div className="nav-extra">
         {pathname !== '/' && <Link to="/">MIHEARTI</Link>}
       </div>

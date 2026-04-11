@@ -6,7 +6,7 @@
     height: 50px;
     align-items: center;
     justify-content: space-between;
-    z-index: 9;
+    z-index: 9999;
     color: white;
     mix-blend-mode: difference;
     backdrop-filter: blur(2px);
@@ -82,6 +82,10 @@
 }
 
 @media (max-width: 500px) {
+  .bar.open {
+    height: 80px;
+    padding-bottom: 30px;
+  }
   /* 햄버거 보이기 */
   .hamburger {
     display: flex;
@@ -89,20 +93,19 @@
 
   /* 기존 메뉴 숨김 */
   .nav-button {
-    position: absolute;
-    top: 50px;
-    right: 0;
-    width: 100%;
-    
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+  position: fixed;
+  top: 50px;
+  left: 0;
+  width: 100%;
+  z-index: 1000;
 
-    transform: translateY(-100%);
-    opacity: 0;
-    pointer-events: none;
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.3s;
 
-    transition: 0.3s;
+  /* 기본 상태에서는 blur 없음 */
+  backdrop-filter: none;
   }
 
   /* 열렸을 때 */

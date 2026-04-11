@@ -67,7 +67,6 @@
     right: 1vw;
     border-radius: 5%;
     overflow: hidden;
-    top: 20;
     rotate: calc(-20deg);
     box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
     transition:
@@ -85,6 +84,16 @@
 .berry-card img {
     width: 32vw;
     height: auto;
+}
+
+@media (max-width: 500px) {
+  .berry-card{
+    margin-top: 100px;
+    right: 25%;
+  }
+  .berry-card img {
+    width: 50vw;
+}
 }
 
 @media (prefers-reduced-motion: reduce){

@@ -1,3 +1,8 @@
+.home_content {
+    width: 100%;
+    position: relative;
+}
+
 .title {
     position: absolute;
     margin-left: 2vw;
@@ -47,7 +52,7 @@
     font-weight: 800;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 480px) {
   .stickydiv h1 {
     margin-left: 5px;
   }
@@ -60,9 +65,9 @@
     position: absolute;
     display: flex;
     right: 1vw;
-    border-radius: 4%;
+    border-radius: 5%;
     overflow: hidden;
-    top: 40vh;
+    top: 20;
     rotate: calc(-20deg);
     box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
     transition:

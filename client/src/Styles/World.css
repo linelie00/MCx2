@@ -2,6 +2,7 @@
     display: flex;
     justify-content: center;
     width: 100%;
+    overflow-x: hidden;
 }
 
 .article {
@@ -45,7 +46,7 @@
 
 .header-label {
     font-family: 'NexonWarhaven';
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: 600;
 }
 
@@ -59,12 +60,12 @@
     justify-content: space-between;
     border-top: 2px solid;
     border-bottom: 2px solid;
-    height: 18px;
+    height: 1.125rem;
 }
 
 .byname {
     font-family: 'NexonWarhaven';
-    font-size: 14px;
+    font-size: 0.875rem;
     font-style: italic;
 }
 
@@ -110,17 +111,23 @@
 .body-label {
     font-family: 'NexonWarhaven';
     font-style: italic;
-    font-size: 42px;
+    font-size: 2.625rem;
     padding: 0;
     margin: 0;
 }
 
 .body-text {
     font-family: 'NexonWarhaven';
-    font-size: 14px;
+    font-size: 0.875rem;
 }
 
-.body-Comment {
-    font-size: 12px;
+.body-comment {
+    font-size: 0.75rem;
     color: #848484;
+}
+
+@media (max-width: 480px) {
+    .article {
+        width: 100%;
+    }
 }

@@ -37,7 +37,7 @@ const World = () => {
                     <div className="article-zetta-image">
                         <img src={imgZetta}/>
                         <span className="body-text">~단장, 제타~</span>
-                        <span className="body-Comment">“ 따라와, 내가 길을 열어주겠다! ”</span>
+                        <span className="body-comment">“ 따라와, 내가 길을 열어주겠다! ”</span>
                     </div>
                     <span className="body-text">그렇습니다, 바로 여러분이 속해 있는 모험단, 베리 파수꾼단입니다.<br/>
                     이들은 온 세상을 돌아다니며 머무는 곳에서 일을 돕거나, 마물을 물리쳐주거나, 노숙을 하거나, 노숙을 하거나, 노숙을 하거나··· 하지만, 새로운 곳을 탐험하려는 처음의 그 목적만큼은 잊지 않았습니다. 이 넓은 세상, 발을 디디지 않은 곳이 없게 하겠다는 목적이죠. 덕분에 단원들의 출신도 다양합니다.<br/>

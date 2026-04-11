@@ -10,7 +10,7 @@
     color: white;
     mix-blend-mode: difference;
     backdrop-filter: blur(2px);
-    padding: 0 30px;
+    padding: 0 2vw;
     box-sizing: border-box;
 }
 
@@ -81,7 +81,7 @@
   transform: rotate(-45deg);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 480px) {
   /* 햄버거 보이기 */
   .hamburger {
     display: flex;

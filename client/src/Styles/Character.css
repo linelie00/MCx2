@@ -1,5 +1,6 @@
 .hub { 
     height: calc(100vh - 50px); 
+    overflow-x: hidden;
 }
 
 .hub_main {
@@ -111,6 +112,7 @@
   width: 100%;
   height: auto;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .panel-inner {

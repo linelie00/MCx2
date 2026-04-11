@@ -81,7 +81,7 @@
   transform: rotate(-45deg);
 }
 
-@media (max-width: 480px) {
+@media (max-width: 500px) {
   /* 햄버거 보이기 */
   .hamburger {
     display: flex;

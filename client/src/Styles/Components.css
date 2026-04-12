@@ -10,6 +10,7 @@
     color: white;
     mix-blend-mode: difference;
     backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
     padding: 0 2vw;
     box-sizing: border-box;
 }
@@ -93,19 +94,16 @@
 
   /* 기존 메뉴 숨김 */
   .nav-button {
-  position: fixed;
-  top: 50px;
-  left: 0;
-  width: 100%;
-  z-index: 1000;
+    position: fixed;
+    top: 50px;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
 
-  transform: translateY(-100%);
-  opacity: 0;
-  pointer-events: none;
-  transition: 0.3s;
-
-  /* 기본 상태에서는 blur 없음 */
-  backdrop-filter: none;
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+    transition: 0.3s;
   }
 
   /* 열렸을 때 */

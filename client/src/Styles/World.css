@@ -118,7 +118,7 @@
         height: 80px;
     }
     .article-image {
-        width: 200px;
+        width: 50%;
     }
     .article-zetta-image {
         width: 150px;
@@ -127,7 +127,7 @@
         width: 120px;
     }
     .article-berry-image {
-    width: 300px;
+        width: 40%;
     }
 }
 

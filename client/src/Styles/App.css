@@ -4,7 +4,7 @@
   background-color: #F7F5ED;
   width: 100%;
   height: auto;
-  min-height: 100%;
+  min-height: 100vh;
 }
 
 /* 전역(index.css 등) */
@@ -31,9 +31,9 @@ html::-webkit-scrollbar {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 650px) {
   html {
-    font-size: 10px;
+    font-size: 12px;
   }
 }
 

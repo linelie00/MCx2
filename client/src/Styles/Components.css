@@ -8,7 +8,10 @@
     justify-content: space-between;
     z-index: 9999;
     color: white;
-    mix-blend-mode: difference;
+    /* Safari 대응: blur(backdrop-filter)와 mix-blend-mode 를 같은 요소에 두면
+       backdrop-filter 가 요소를 격리시켜 블렌드가 깨진다.
+       그래서 블러만 .bar 에 두고, 반전(mix-blend-mode)은 글자/아이콘에만 적용한다.
+       (.bar a, .bar span 참고) */
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
     padding: 0 2vw;
@@ -34,6 +37,8 @@
     font-size: 24px;
     font-weight: 700;
     color: white;
+    /* all: unset 이 mix-blend-mode 를 normal 로 되돌리므로 반전을 다시 명시 */
+    mix-blend-mode: difference;
 }
 
 .hamburger {
@@ -51,6 +56,7 @@
   width: 18px;
   height: 3px;
   background: white;
+  mix-blend-mode: difference;
   transition: transform 0.3s ease, opacity 0.2s ease, top 0.3s ease;
   transform-origin: center;
 }

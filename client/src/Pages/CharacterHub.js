@@ -1,12 +1,12 @@
 import { useNavigate, Outlet } from 'react-router-dom';
 import { useRef, useState, useCallback } from 'react';
 import '../Styles/Character.css';
-import migelImg from '../Assets/Images/img_migel-portrait.webp';
-import matiamImg from '../Assets/Images/img_matiam-portrait.webp';
+import { characterColors } from '../Data/constants/colors';
+import { images } from '../Data/constants/images';
 
 const cards = [
-  { slug: 'migel', label: 'Migel Doran', color: '#768461', img: migelImg },
-  { slug: 'matiam', label: 'Matiam Crohi', color: '#737b7f', img: matiamImg },
+  { slug: 'migel', label: 'Migel Doran', color: characterColors.migel.primary, img: images.characters.migel.portrait },
+  { slug: 'matiam', label: 'Matiam Crohi', color: characterColors.matiam.primary, img: images.characters.matiam.portrait },
 ];
 
 export default function CharacterHub() {

@@ -1,7 +1,6 @@
 // Theme & Global Styles (먼저 로드)
 import './Styles/theme.css';
 import './Styles/global.css';
-import './Styles/layout.css';
 
 // Font & Component Styles
 import './Assets/Font/Font.css';

@@ -79,6 +79,15 @@
 - **주의**: 제 환경에서 Safari 검증 불가. 실제 iOS/Safari에서 글자·햄버거 반전과
   블러가 함께 보이는지 확인 필요.
 
+### 6-1단계 — 네비 블렌드 재설계 (반전은 .bar, blur는 별도 레이어)
+- 6단계처럼 반전을 자식에만 두면, `.bar`의 `backdrop-filter` 격리 때문에 글자가
+  "페이지 배경"이 아니라 "바 내부"를 기준으로 블렌드되어 **색이 어긋났음**(Chrome에서 확인).
+- 수정: `.bar`에 `mix-blend-mode: difference` 복원(페이지 기준 반전) + `backdrop-filter`
+  제거. blur는 `NavigationBar.js`에 추가한 `.nav-blur`(고정, z-index 9998) 레이어로
+  분리. 자식 개별 블렌드(`.bar span`/`.nav-extra a`)는 제거(그룹 블렌드가 처리).
+- **이유**: 반전 기준을 페이지로 되돌리면서 blur는 별도 요소로 빼 Safari 충돌도 회피.
+- **확인**: Chrome에서 글자 반전 색 정상 복귀 확인 요망. Safari 최종 확인은 기기 필요.
+
 ---
 
 ## 현재 적용 현황

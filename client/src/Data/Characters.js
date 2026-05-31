@@ -1,20 +1,16 @@
-import migelPortraitImg from '../Assets/Images/img_migel-portrait.webp';
-import matiamPortraitImg from '../Assets/Images/img_matiam-portrait.webp';
-import migelImg from '../Assets/Images/img_migel_1.webp';
-import matiamImg from '../Assets/Images/img_matiam.webp';
-import migelWeaponImg from '../Assets/Images/img_migel_weapon.webp';
-import matiamWeaponImg from '../Assets/Images/img_matiam_weapon.webp';
+import { characterColors } from './constants/colors';
+import { images } from './constants/images';
 
 export const characters = {
   migel: {
     name: "미겔 / Migel",
     realname: "Migeldoran Eternos Ozan Colddew",
-    color: "#768461",
+    color: characterColors.migel.primary,
     title: "다 같이 뛰어!",
-    portrait: migelPortraitImg,
+    portrait: images.characters.migel.portrait,
 
     appearance: {
-      image: migelImg,
+      image: images.characters.migel.full,
       description: `‘야성의 미(美)’를 묘사해보자. 잔파도처럼 굽슬거리며 내려오는 고동색 머리칼, 짙은 눈썹과 까만 눈동자···가 아니라 이건··· 색안경?! 따지자면 그는 야성의 미(美)가 아닌 미친 사람에 가까운 인상이다. 자유롭다 못해 헝클어진 머리카락, 제대로 된 행색이라는 걸 갖추지 못한 코트, 뜯겨나간듯한 소매··· 이뿐인가? 양팔을 한껏 감은 붕대와 거대한 황금빛 버클까지 여러분의 시선을 기다린다. 그의 개성인지, 혹은 유일한 영광을 뽐내려는 진심인지 버클에는 ‘THE WORLD’S BEST BARD’라고 새겨져있다. 겉으로 보기에도 존재감이 강한 그는 개의치 않고 부츠를 무릎까지 끌어올리며 굽을 부딪힌다. 눈의 생김새가 보이지 않아도 장난스레 올린 입꼬리에서 천성이 드러난다. 뭐가 그리 신나는지 9할은 늘 웃고 있는 얼굴이다. 정확히는, 몸 안에서 근질거리는 박자감을 참지 못하는 표정이다.`,
     },
 
@@ -52,7 +48,7 @@ export const characters = {
       belongings: `류트 / (코트 뒷자락에 가려진) 검 / 여분의 붕대 / 여분의 류트 줄 / 가죽 수첩과 짧은 깃펜`
     },
     quotes: ["다 같이 뛰어!"],
-    weapon: migelWeaponImg,
+    weapon: images.characters.migel.weapon,
     stats: [
       { label: "힘", value: "◆◆◆◆◆◇◇◇◇" },
       { label: "지식", value: "◆◆◆◆◆◇◇◇◇" },
@@ -68,12 +64,12 @@ export const characters = {
   matiam: {
     name: "마티암 / Matiam",
     realname: "Matiam Crohi",
-    color: "#737b7f",
+    color: characterColors.matiam.primary,
     title: "이거 정말 고민되는걸. 초상화에는 어느 부분이 나와야하지?",
-    portrait: matiamPortraitImg,
+    portrait: images.characters.matiam.portrait,
 
     appearance: {
-      image: matiamImg,
+      image: images.characters.matiam.full,
       description: `그는 그다지 친숙한 모습은 아니었다. 떼어놓고 보면 별다를 것 없었으나 붙여놓으니 문제였다. 안 그래도 새하얀 얼굴이 손에 가볍게 들려있으니 마치 시체와 같은 모습이었다. 그를 처음 본 사람은 꼭 두 번 놀란다. 그 모습에 한 번, 죽은 줄 알았던 얼굴이 태평하게 말을 걸 때 한 번.. 
         머리카락은 젖어버린 듯한 모습 그대로 말라붙어버렸다. 그렇게까지 악성 곱슬머리는 아니었지만 이리 구르고 저리 구르면서 피와 정체 모를 액체들이 묻어 그대로 마른 탓이었다. 목욕은 자주 하지만 머리가 깔끔해지기 무섭게 이런저런 이유로 더러워지는 모양이다. 아무래도, 계속 이렇게 들고 있으면 팔 저리니까 어딘가에 놓아둘 때가 많다.
         목은 칼과 같은 날카로운 것으로 깔끔하게 한 번에 자른 듯했다. 그의 목을 두 동강 낸 범인은 상당한 실력의 소유자였을 것이리라.
@@ -129,7 +125,7 @@ export const characters = {
       "이거 정말 고민되는걸.",
       "초상화에는 어느 부분이 나와야하지?"
     ],
-    weapon: matiamWeaponImg,
+    weapon: images.characters.matiam.weapon,
     stats: [
       { label: "힘", value: "◆◆◆◆◇◇◇◇◇" },
       { label: "지식", value: "◆◆◆◆◆◆◆◇◇" },

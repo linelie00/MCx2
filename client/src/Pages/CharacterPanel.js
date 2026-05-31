@@ -3,17 +3,7 @@ import '../Styles/Character.css';
 import characters from '../Data/Characters.js';
 import { ReactComponent as Tear } from '../Assets/Images/tear.svg';
 import imgJ4W from '../Assets/Images/img_J4Wseal.webp';
-
-const InfoItem = ({ label, value }) => {
-  if (!value) return null;
-
-  return (
-    <div className="info-item">
-      <span className="label">[{label}]</span>
-      <span className="value">{value}</span>
-    </div>
-  );
-};
+import InfoItem from '../Components/common/InfoItem';
 
 const CharacterPanel = () => {
   const { name = '' } = useParams();

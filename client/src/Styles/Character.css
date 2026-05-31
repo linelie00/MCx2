@@ -385,3 +385,27 @@
     min-width: 100px;
   }
 }
+
+/* ===== Mobile (iPhone 등) 보정 ===== */
+@media (max-width: 767px) {
+  /* 스탯/공격수단 박스와 기술 박스를 세로로 쌓아 좁은 화면에서 안 눌리게 */
+  .row-box {
+    flex-direction: column;
+  }
+  .panel-body {
+    padding: 16px;
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+}
+
+/* iOS Safari: 동적 툴바 때문에 100vh 가 실제 화면보다 커지는 문제 보정.
+   dvh 를 지원하는 브라우저에서만 덮어쓰고, 미지원 시 기존 100vh 유지. */
+@supports (height: 100dvh) {
+  .hub {
+    height: calc(100dvh - 50px);
+  }
+  .panel_content {
+    min-height: 100dvh;
+  }
+}

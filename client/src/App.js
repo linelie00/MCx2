@@ -1,5 +1,12 @@
-import './Styles/App.css';
+// Theme & Global Styles (먼저 로드)
+import './Styles/theme.css';
+import './Styles/global.css';
+import './Styles/layout.css';
+
+// Font & Component Styles
 import './Assets/Font/Font.css';
+import './Styles/App.css';
+
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import NavigateLayout from './Layouts/NavigateLayout';
 import ScrollToTop from "./Components/ScrollToTop";

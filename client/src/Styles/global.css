@@ -1,0 +1,92 @@
+/**
+ * Global Styles
+ * 전역 스타일과 레이아웃 기초를 정의합니다.
+ * theme.css 이후에 로드되어야 합니다.
+ */
+
+/* ===== App Container ===== */
+.App {
+  position: relative;
+  width: 100%;
+  height: auto;
+  min-height: 100vh;
+  background-color: var(--color-bg);
+}
+
+/* ===== Content Wrapper ===== */
+/* 주의: 여기에 overflow-x:hidden 를 주면 자식의 position:sticky 가 깨진다.
+   (overflow-x:hidden 시 overflow-y 가 auto 로 계산되어 .content 가 스크롤
+   컨테이너가 되기 때문) 가로 스크롤 차단은 페이지별(.world-content, .hub 등)
+   또는 html 레벨에서 처리한다. */
+.content {
+  padding-top: 50px;
+  width: 100%;
+}
+
+/* ===== Headings ===== */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  padding: 0;
+  font-weight: 600;
+}
+
+h1 {
+  font-size: 2.5rem;
+}
+
+h2 {
+  font-size: 2rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+}
+
+@media (max-width: 767px) {
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+  }
+}
+
+/* ===== Paragraphs ===== */
+p {
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
+}
+
+/* ===== Buttons ===== */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+/* ===== Sections ===== */
+section {
+  width: 100%;
+}
+
+/* ===== Utility Classes ===== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

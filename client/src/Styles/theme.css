@@ -1,0 +1,108 @@
+/**
+ * Theme 설정
+ * 색상, 폰트, CSS 변수, 기본 breakpoint를 정의합니다.
+ * 다른 모든 CSS 파일보다 먼저 로드되어야 합니다.
+ */
+
+:root {
+  /* ===== Character Colors ===== */
+  --color-migel-primary: #768461;
+  --color-matiam-primary: #737b7f;
+
+  /* ===== Theme Colors ===== */
+  --color-bg: #f7f5ed;
+  --color-text: #333333;
+  --color-text-light: #d9d9cd;
+  --color-border: #000000;
+  --color-section-dark: #385b44;
+  --color-white: #ffffff;
+
+  /* ===== Fonts ===== */
+  --font-serif: 'Oldlondon', serif;
+  --font-sans: 'Pretendard', sans-serif;
+  --font-display: 'NexonWarhaven', sans-serif;
+  --font-accent: 'Quentin', serif;
+
+  /* ===== Spacing ===== */
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  /* ===== Content Width ===== */
+  --content-width: 60%;
+  --content-max-width: 1400px;
+}
+
+/* ===== Responsive Content Width ===== */
+@media (max-width: 1023px) {
+  :root {
+    --content-width: 70%;
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --content-width: 90%;
+  }
+}
+
+/* ===== Base Styles ===== */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+@media (max-width: 767px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 374px) {
+  html {
+    font-size: 13px;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Links ===== */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ===== Images ===== */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* ===== Scrollbar 숨김 (크로스 브라우저) ===== */
+html {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar {
+  display: none;
+}
+
+#root {
+  min-height: 100vh;
+}

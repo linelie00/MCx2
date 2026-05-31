@@ -46,18 +46,35 @@
 - **이유**: 아이폰에서 카드 선택 화면이 잘리고 스탯/기술 박스가 눌리던 문제 해결 +
   공통 컴포넌트 첫 실사용/검증. 카드 3D 플립·burst 애니메이션은 미변경.
 
+### 4단계 — World 페이지 데이터 분리 + 모바일 반응형
+- `Data/world.js` 신규 : 헤더/바이라인/본문을 구조화 데이터로 분리.
+  본문은 순서 있는 블록 배열(image/label/text/figure) — float 레이아웃이
+  DOM 순서에 의존하므로 순서 보존이 중요.
+- `Pages/World.js` : 하드코딩 JSX → 데이터 기반 렌더(`renderBlock`).
+  클래스명/DOM 순서 동일, 모든 `<img>`에 `alt` 추가(기존 a11y 경고 해소),
+  `images.world.*` 연결.
+- `Styles/World.css` (추가만) : `@media (max-width: 767px)`에서 본문 이미지
+  (`.article-image/.article-berry-image/.article-zetta-image`) float 해제 +
+  width 100%(max 360px) 중앙 정렬로 세로 스택.
+- **이유**: 콘텐츠/표현 분리(텍스트를 JSX 밖에서 편집 가능), 아이폰에서 float로
+  텍스트가 눌리던 문제 해결. 데스크톱 잡지(float) 레이아웃은 그대로 유지.
+- **방침**: float→flex 전면 교체는 데스크톱 텍스트 감싸기를 깨므로 하지 않고,
+  모바일에서만 float을 해제하는 방식 선택.
+
 ---
 
 ## 현재 적용 현황
 - ✅ InfoItem : CharacterPanel 적용
+- ✅ images.characters.* / images.world.* : Characters.js / World.js 연결
+- ✅ World 콘텐츠 : world.js 분리 완료
 - ⬜ ArticleContainer / ResponsiveImage : 생성만, 미적용
-- ⬜ images.world.* / images.home.* : 정의됨, World.js/Home.js는 아직 직접 import
+- ⬜ images.home.* : 정의됨, Home.js는 아직 직접 import
 - ⬜ breakpoints.js : JS에서 아직 미사용(CSS는 리터럴 px)
 
 ## 다음 작업 후보
-1. World 페이지 반응형(float→flex) + 콘텐츠 `world.js` 분리, `images.world.*` 연결.
-2. Home 페이지 모바일 점검(message-box 정리, 제목 clamp 등).
-3. 기존 `<img>` `alt` 누락 경고 정리 + ResponsiveImage 점진 도입.
+1. Home 페이지 모바일 점검(message-box 정리, 제목 clamp, `images.home.*` 연결 등).
+2. CharacterPanel 남은 `alt` 누락 경고 정리 + ResponsiveImage 점진 도입.
+3. 비표준 breakpoint(1500/1000/650/480) 정리 검토 — 회귀 위험 있어 신중히.
 
 ## 검증 메모
 - 각 단계 후 `cd client && CI=false npm run build` 로 컴파일 확인.

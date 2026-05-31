@@ -20,6 +20,7 @@ client/src/
 │   └── StickyRevealLines.js
 ├── Data/
 │   ├── Characters.js    캐릭터 데이터 (색상/이미지는 constants 참조)
+│   ├── world.js         World 페이지 콘텐츠 (순서 있는 본문 블록 배열)
 │   └── constants/       신규: 중앙 상수
 │       ├── colors.js        캐릭터/테마 색상
 │       ├── images.js        이미지 import → 번들 URL 제공
@@ -79,6 +80,9 @@ App.css     → 기존 전역 스타일
   필요 시 `max-width: 767px` 블록을 **추가**하는 방식으로 모바일을 보정한다.
 - iOS Safari 동적 툴바 대응: `100vh` 대신 `@supports (height: 100dvh)` 안에서
   `dvh`로 덮어쓴다. (미지원 브라우저는 기존 `vh` 유지)
+- World의 잡지(float) 레이아웃: 데스크톱은 float 유지(텍스트 감싸기), 모바일
+  (≤767px)에서만 `float: none; width: 100%`로 세로 스택. float→flex 전면 교체는
+  텍스트 감싸기를 깨므로 하지 않는다.
 
 ## 클래스 소유권 메모
 

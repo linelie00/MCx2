@@ -10,10 +10,6 @@
   position: sticky;
   top: 50px;                 /* 네비게이션 바 높이 */
   z-index: 50;
-  background: #e9dec3;
-  border-top: 2px solid #b6a072;
-  border-bottom: 2px solid #b6a072;
-  box-shadow: 0 4px 10px rgba(60, 46, 34, 0.08);
   overflow-x: auto;
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -24,7 +20,7 @@
   display: flex;
   align-items: flex-start;
   list-style: none;
-  margin: 0;
+  margin: 0 auto;            /* 좁으면 가운데, 넘치면 처음부터 스크롤 */
   padding: 12px 20px;
   width: max-content;        /* 가로 스크롤 허용 */
 }

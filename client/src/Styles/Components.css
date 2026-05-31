@@ -8,14 +8,29 @@
     justify-content: space-between;
     z-index: 9999;
     color: white;
-    /* Safari 대응: blur(backdrop-filter)와 mix-blend-mode 를 같은 요소에 두면
-       backdrop-filter 가 요소를 격리시켜 블렌드가 깨진다.
-       그래서 블러만 .bar 에 두고, 반전(mix-blend-mode)은 글자/아이콘에만 적용한다.
-       (.bar a, .bar span 참고) */
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
+    /* 흰 글자가 "페이지 배경"에 반전(밝은 배경 위에서 검게)되도록 .bar 자체에
+       mix-blend-mode 를 둔다. (자식에만 두면 backdrop-filter 격리 때문에 페이지가
+       아니라 바 내부 기준으로 블렌드되어 색이 어긋난다.)
+       blur 는 같은 요소에 두면 Safari에서 블렌드가 깨지므로 별도 레이어(.nav-blur)로
+       분리한다. */
+    mix-blend-mode: difference;
     padding: 0 2vw;
     box-sizing: border-box;
+}
+
+/* 네비 블러 전용 레이어: .bar 와 분리해 mix-blend-mode 와 충돌하지 않게 한다.
+   바보다 한 단계 아래(z-index)에 깔려 페이지를 블러 처리하고, .bar 는 그 위에서
+   페이지 배경에 반전된다. */
+.nav-blur {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50px;
+    z-index: 9998;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    pointer-events: none;
 }
 
 .bar a {
@@ -37,8 +52,6 @@
     font-size: 24px;
     font-weight: 700;
     color: white;
-    /* all: unset 이 mix-blend-mode 를 normal 로 되돌리므로 반전을 다시 명시 */
-    mix-blend-mode: difference;
 }
 
 .hamburger {
@@ -56,7 +69,6 @@
   width: 18px;
   height: 3px;
   background: white;
-  mix-blend-mode: difference;
   transition: transform 0.3s ease, opacity 0.2s ease, top 0.3s ease;
   transform-origin: center;
 }

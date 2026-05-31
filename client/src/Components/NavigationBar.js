@@ -16,7 +16,10 @@ function NavigationBar() {
   ].filter(Boolean).join(' ');
 
   return (
-    <div className={`${barClass} ${menuOpen ? 'open' : ''}`}>
+    <>
+      {/* 블러 전용 레이어 (.bar 의 mix-blend-mode 와 충돌 방지) */}
+      <div className="nav-blur" aria-hidden="true" />
+      <div className={`${barClass} ${menuOpen ? 'open' : ''}`}>
       <div className="nav-extra">
         {pathname !== '/' && <Link to="/">MIHEARTI</Link>}
       </div>
@@ -39,7 +42,8 @@ function NavigationBar() {
         <Link to="/image" onClick={() => setMenuOpen(false)}>Gallery</Link>
         <Link to="/playlist" onClick={() => setMenuOpen(false)}>Playlist</Link>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

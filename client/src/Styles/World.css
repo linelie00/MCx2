@@ -154,3 +154,18 @@
         width: 100%;
     }
 }
+
+/* ===== Mobile (iPhone 등) 보정 =====
+   데스크톱의 잡지(float) 레이아웃은 유지하되, 좁은 화면에서는 float을 해제해
+   이미지를 가로 꽉 채워 세로로 쌓는다. (좁은 폭에서 텍스트가 눌리는 문제 해결)
+   이 블록을 파일 끝에 둬 모바일에서 이미지 폭 규칙을 마지막으로 덮어쓴다. */
+@media (max-width: 767px) {
+    .article-image,
+    .article-berry-image,
+    .article-zetta-image {
+        float: none;
+        width: 100%;
+        max-width: 360px;
+        margin: 12px auto;
+    }
+}

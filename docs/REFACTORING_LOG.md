@@ -90,19 +90,31 @@
 
 ---
 
+### 7단계 — 미사용 스캐폴딩 제거 + CharacterHub 상수 연결
+- 삭제: `Components/common/ArticleContainer.jsx`, `ResponsiveImage.jsx`(미채택),
+  `Styles/layout.css`(전부 미사용) + `App.js`의 layout.css import 제거.
+- `Pages/CharacterHub.js` : `cards`의 하드코딩 색상/이미지 → `characterColors.*` /
+  `images.characters.*.portrait` 연결.
+- **이유**: 안 쓰는 코드 제거(리팩터링 규칙 8), 색상/이미지 단일 출처 일관성 마무리.
+  실제 채택된 `InfoItem`은 유지.
+
+---
+
 ## 현재 적용 현황
 - ✅ InfoItem : CharacterPanel 적용
+- ✅ 색상 단일 출처 : Characters.js / CharacterHub.js / (panel CSS var) 연결
 - ✅ images.characters.* / images.world.* / images.home.card : 연결
 - ✅ World 콘텐츠 : world.js 분리 완료
 - ✅ Home / World / Character : 모바일 보정 1차 완료
-- ⬜ ArticleContainer / ResponsiveImage : 생성만, 미적용
-- ⬜ `.bg-100w` 배경 : App.css에서 직접 url(png) 사용 중(미연결)
-- ⬜ breakpoints.js : JS에서 아직 미사용(CSS는 리터럴 px)
+- ✅ 미사용 스캐폴딩(컴포넌트/layout.css) 제거 완료
+- ⬜ `.bg-100w` 배경 : App.css에서 직접 url(png) 사용 중(미연결, 의도적 보류)
+- ⬜ breakpoints.js : JS에서 아직 미사용(참고용 유지)
+- ⬜ CharacterPanel stamp `alt` 누락 경고(사소)
 
 ## 다음 작업 후보
-1. CharacterPanel 남은 `alt` 누락 경고 정리 + ResponsiveImage 점진 도입.
-2. 비표준 breakpoint(1500/1000/650/480) 정리 검토 — 회귀 위험 있어 신중히.
-3. 미구현 페이지(Story/Gallery/Playlist) 착수.
+1. 미구현 페이지(Story/Gallery/Playlist) 착수.
+2. CharacterPanel 남은 `alt` 경고 정리(빌드 경고 0 만들기).
+3. 비표준 breakpoint(1500/1000/650/480) 정리 검토 — 회귀 위험 있어 신중히.
 
 ## 검증 메모
 - 각 단계 후 `cd client && CI=false npm run build` 로 컴파일 확인.

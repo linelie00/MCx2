@@ -61,20 +61,29 @@
 - **방침**: float→flex 전면 교체는 데스크톱 텍스트 감싸기를 깨므로 하지 않고,
   모바일에서만 float을 해제하는 방식 선택.
 
+### 5단계 — Home 페이지 모바일 마무리
+- `Pages/Home.js` : 빈 `.message-box`(200vh) 마크업 제거(하단 불필요한 빈 스크롤
+  공간 정리), 카드 이미지 → `images.home.card` 연결.
+- `Styles/Home.css` : `.title h2`(캐릭터 이름)에 `clamp(1rem, 5vw, 2rem)` 적용 →
+  좁은 화면에서 긴 영문 이름 오버플로 방지. 빈 `.message-box` CSS 제거.
+- **이유**: 아이폰에서 이름 오버플로/하단 빈 공간 정리. 스크롤 축소/고정
+  애니메이션(JS)과 `.bg-100w` 배경은 미변경.
+
 ---
 
 ## 현재 적용 현황
 - ✅ InfoItem : CharacterPanel 적용
-- ✅ images.characters.* / images.world.* : Characters.js / World.js 연결
+- ✅ images.characters.* / images.world.* / images.home.card : 연결
 - ✅ World 콘텐츠 : world.js 분리 완료
+- ✅ Home / World / Character : 모바일 보정 1차 완료
 - ⬜ ArticleContainer / ResponsiveImage : 생성만, 미적용
-- ⬜ images.home.* : 정의됨, Home.js는 아직 직접 import
+- ⬜ `.bg-100w` 배경 : App.css에서 직접 url(png) 사용 중(미연결)
 - ⬜ breakpoints.js : JS에서 아직 미사용(CSS는 리터럴 px)
 
 ## 다음 작업 후보
-1. Home 페이지 모바일 점검(message-box 정리, 제목 clamp, `images.home.*` 연결 등).
-2. CharacterPanel 남은 `alt` 누락 경고 정리 + ResponsiveImage 점진 도입.
-3. 비표준 breakpoint(1500/1000/650/480) 정리 검토 — 회귀 위험 있어 신중히.
+1. CharacterPanel 남은 `alt` 누락 경고 정리 + ResponsiveImage 점진 도입.
+2. 비표준 breakpoint(1500/1000/650/480) 정리 검토 — 회귀 위험 있어 신중히.
+3. 미구현 페이지(Story/Gallery/Playlist) 착수.
 
 ## 검증 메모
 - 각 단계 후 `cd client && CI=false npm run build` 로 컴파일 확인.

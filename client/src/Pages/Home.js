@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import '../Styles/Home.css';
-import cardImg from '../Assets/Images/img_J4W.webp';
+import { images } from '../Data/constants/images';
 import StickyRevealLines from '../Components/StickyRevealLines.js';
 
 const Home = () => {
@@ -114,7 +114,7 @@ const Home = () => {
         </h2>
       </div>
       <div className="berry-card">
-        <img src={cardImg} alt="카드" />
+        <img src={images.home.card} alt="베리 파수꾼 카드" />
       </div>
       <section className="bg-100w" />
       <section className="section-385B44">
@@ -124,10 +124,6 @@ const Home = () => {
             className="srl--center"
           />
       </section>
-      <div className="message-box">
-        <div className="box-content">
-        </div>
-      </div>
     </>
   );
 };

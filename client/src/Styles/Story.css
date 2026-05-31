@@ -1,0 +1,241 @@
+/* ===== Story page (중세/기록보관소 톤) ===== */
+.story {
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--color-bg, #f7f5ed);
+}
+
+/* ----- 세션 타임라인 (네비 아래 고정) ----- */
+.story-timeline {
+  position: sticky;
+  top: 50px;                 /* 네비게이션 바 높이 */
+  z-index: 50;
+  background: #e9dec3;
+  border-top: 2px solid #b6a072;
+  border-bottom: 2px solid #b6a072;
+  box-shadow: 0 4px 10px rgba(60, 46, 34, 0.08);
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.story-timeline::-webkit-scrollbar { display: none; }
+
+.story-timeline-track {
+  display: flex;
+  align-items: flex-start;
+  list-style: none;
+  margin: 0;
+  padding: 12px 20px;
+  width: max-content;        /* 가로 스크롤 허용 */
+}
+
+.story-node { display: flex; align-items: flex-start; }
+
+/* 세션 사이 점선 연결 (진행 흐름) */
+.story-node:not(:last-child)::after {
+  content: '';
+  width: 26px;
+  height: 2px;
+  margin: 17px 4px 0;        /* 봉인(원) 세로 중앙에 맞춤 */
+  background: repeating-linear-gradient(90deg, #a8946a 0 6px, transparent 6px 11px);
+  flex: 0 0 auto;
+}
+
+.story-node-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  max-width: 112px;
+}
+
+/* 밀랍 봉인 느낌의 번호 */
+.story-node-seal {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid #a8946a;
+  background: #f3ead4;
+  color: #6b5b40;
+  font-family: 'OldLondon', serif;
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+.story-node-title {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.78rem;
+  color: #8a7a5c;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.story-node-btn:hover .story-node-seal {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(60, 46, 34, 0.2);
+}
+
+.story-node.is-active .story-node-seal {
+  background: #7a2f2f;        /* 밀랍 적색 */
+  color: #f3ead4;
+  border-color: #5e2222;
+  box-shadow: 0 0 0 3px rgba(122, 47, 47, 0.18);
+}
+.story-node.is-active .story-node-title {
+  color: #3a2e22;
+  font-weight: 700;
+}
+
+/* ----- 양피지 본문 ----- */
+.story-parchment {
+  position: relative;
+  width: 72%;
+  max-width: 880px;
+  min-width: 320px;
+  margin: 36px auto 96px;
+  padding: 48px clamp(20px, 5vw, 56px);
+  background-color: #f5eede;
+  border: 1px solid #d8cba6;
+  box-shadow: 0 10px 30px rgba(60, 46, 34, 0.12),
+              inset 0 0 60px rgba(180, 160, 120, 0.15);
+  overflow: hidden;
+}
+.story-parchment::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: url('../Assets/Images/parchment.jpg');
+  background-size: cover;
+  opacity: 0.18;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+.story-parchment > * { position: relative; z-index: 1; }
+
+.story-head {
+  text-align: center;
+  margin-bottom: 36px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #cbbd9a;
+}
+.story-order {
+  display: block;
+  font-family: 'OldLondon', serif;
+  letter-spacing: 0.14em;
+  color: #9c8a63;
+  font-size: 1.1rem;
+}
+.story-title {
+  font-family: 'NexonWarhaven', serif;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  color: #3a2e22;
+  margin-top: 6px;
+}
+
+/* ----- 시점(scene) 구분 ----- */
+.story-scene { margin-top: 8px; }
+
+.story-scene-label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 34px 0 26px;
+  color: #8a7a5c;
+  font-family: 'NexonWarhaven', serif;
+  font-style: italic;
+  font-size: 0.85rem;
+}
+.story-scene-label::before,
+.story-scene-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #cbbd9a;
+}
+.story-scene-label span { white-space: nowrap; }
+
+/* ----- 대사 (대본/기록 스타일) ----- */
+.story-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.story-line {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.story-speaker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.story-portrait {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent, #888);
+}
+.story-name {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent, #555);
+  text-align: center;
+}
+.story-bubble {
+  border-left: 3px solid var(--accent, #ccc);
+  padding: 2px 0 2px 16px;
+  min-width: 0;
+}
+.story-text {
+  margin: 0;
+  font-family: 'Hahmlet', serif;
+  font-size: 0.98rem;
+  line-height: 1.95;
+  color: #33291f;
+  white-space: pre-line;
+  word-break: break-word;
+}
+.story-illust {
+  margin-top: 12px;
+  padding: 16px;
+  text-align: center;
+  font-family: 'NexonWarhaven', serif;
+  letter-spacing: 0.12em;
+  font-size: 0.78rem;
+  color: #9c8a63;
+  border: 1px dashed #c3b48d;
+  background: rgba(210, 195, 160, 0.12);
+}
+
+/* ----- 모바일 ----- */
+@media (max-width: 767px) {
+  .story-parchment {
+    width: 92%;
+    padding: 28px 18px;
+  }
+  .story-line {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .story-speaker {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .story-portrait { width: 34px; height: 34px; }
+  .story-bubble { padding-left: 12px; }
+  .story-node-btn { max-width: 92px; }
+  .story-node-title { font-size: 0.68rem; }
+}

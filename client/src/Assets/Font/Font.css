@@ -112,3 +112,25 @@ http://scripts.sil.org/OFL
     font-weight: normal;
     font-display: swap;
 }
+
+/* 한글 세리프 — 낡은 책/기록 느낌 본문용 (Story 등) */
+@font-face {
+	font-family: 'Hahmlet';
+	font-weight: 400;
+	font-display: swap;
+	src: url('./woff2/Hahmlet-Regular.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'Hahmlet';
+	font-weight: 500;
+	font-display: swap;
+	src: url('./woff2/Hahmlet-Medium.woff2') format('woff2');
+}
+
+@font-face {
+	font-family: 'Hahmlet';
+	font-weight: 700;
+	font-display: swap;
+	src: url('./woff2/Hahmlet-Bold.woff2') format('woff2');
+}

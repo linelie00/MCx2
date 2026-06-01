@@ -176,7 +176,6 @@ function PageBody({ page }) {
 export default function StoryBookTest() {
   const measureRef = useRef(null); // 숨겨진 측정 노드
   const sizeRef = useRef(null); // 페이지 치수 측정용 sizer
-  const riffleRef = useRef(null); // 챕터 점프 시 여러 장 연속 넘김 상태
 
   const [book, setBook] = useState({ pages: [], dividerBySid: {} });
   const [view, setView] = useState({ spread: 0 });
@@ -234,81 +233,71 @@ export default function StoryBookTest() {
     return () => cancelAnimationFrame(id);
   }, [flip]);
 
-  // 한 칸(스프레드) 넘김 flip 객체 생성. dur 로 속도 조절(리플용 빠른 넘김 등)
-  const buildStepFlip = useCallback(
-    (from, dir, dur) => {
-      if (dir === 'next') {
-        return {
-          dir, dur,
-          front: pages[from + 1],
-          back: pages[from + 2],
-          staticLeft: pages[from],
-          staticRight: pages[from + 3],
-          end: { spread: from + 2 },
-        };
-      }
-      return {
-        dir, dur,
-        front: pages[from],
-        back: pages[from - 1],
-        staticLeft: pages[from - 2],
-        staticRight: pages[from + 1],
-        end: { spread: from - 2 },
-      };
-    },
-    [pages]
-  );
-
   const onFlipEnd = useCallback(
     (e) => {
       if (e.propertyName !== 'transform' || !flip) return;
-      const landed = flip.end.spread;
-      const r = riffleRef.current;
+      setView({ spread: flip.end.spread });
       setFlip(null);
       setAnimate(false);
-      setView({ spread: landed });
-      if (r && landed !== r.target) {
-        // 아직 목표에 못 닿았으면 다음 장을 연속으로 넘긴다(리플)
-        requestAnimationFrame(() => {
-          setFlip(buildStepFlip(landed, r.dir, r.dur));
-          setAnimate(false);
-        });
-      } else {
-        riffleRef.current = null;
-      }
     },
-    [flip, buildStepFlip]
+    [flip]
   );
 
   const goNext = useCallback(() => {
     if (safeSpread >= lastSpread || flip) return;
-    riffleRef.current = null;
-    setFlip(buildStepFlip(safeSpread, 'next', '0.7s'));
+    setFlip({
+      dir: 'next',
+      front: pages[safeSpread + 1],
+      back: pages[safeSpread + 2],
+      staticLeft: pages[safeSpread],
+      staticRight: pages[safeSpread + 3],
+      end: { spread: safeSpread + 2 },
+    });
     setAnimate(false);
-  }, [safeSpread, lastSpread, flip, buildStepFlip]);
+  }, [safeSpread, lastSpread, flip, pages]);
 
   const goPrev = useCallback(() => {
     if (safeSpread <= 0 || flip) return;
-    riffleRef.current = null;
-    setFlip(buildStepFlip(safeSpread, 'prev', '0.7s'));
+    setFlip({
+      dir: 'prev',
+      front: pages[safeSpread],
+      back: pages[safeSpread - 1],
+      staticLeft: pages[safeSpread - 2],
+      staticRight: pages[safeSpread + 1],
+      end: { spread: safeSpread - 2 },
+    });
     setAnimate(false);
-  }, [safeSpread, flip, buildStepFlip]);
+  }, [safeSpread, flip, pages]);
 
-  // 세션 선택 → 그 세션 도비라까지 "여러 장 넘기는" 모션으로 이동
+  // 세션 선택 → 그 세션 도비라로 넘김 모션 이동
   const jumpTo = useCallback(
     (sid) => {
       if (flip) return;
       const target = book.dividerBySid[sid];
       if (target == null || target === safeSpread) return;
-      const dir = target > safeSpread ? 'next' : 'prev';
-      const steps = Math.abs(target - safeSpread) / 2;
-      // 거리가 멀수록 한 장당 빠르게(전체 ~1.1s 안쪽)
-      const dur = `${Math.max(0.07, Math.min(0.2, 1.1 / steps)).toFixed(3)}s`;
-      riffleRef.current = { dir, target, dur };
-      setFlip(buildStepFlip(safeSpread, dir, dur));
+      const forward = target > safeSpread;
+      setFlip(
+        forward
+          ? {
+              dir: 'next',
+              front: pages[safeSpread + 1],
+              back: pages[target],
+              staticLeft: pages[safeSpread],
+              staticRight: pages[target + 1],
+              end: { spread: target },
+            }
+          : {
+              dir: 'prev',
+              front: pages[safeSpread],
+              back: pages[target + 1],
+              staticLeft: pages[target],
+              staticRight: pages[safeSpread + 1],
+              end: { spread: target },
+            }
+      );
       setAnimate(false);
     },
-    [flip, book.dividerBySid, safeSpread, buildStepFlip]
+    [flip, book.dividerBySid, safeSpread, pages]
   );
 
   // 키보드 ← →
@@ -346,7 +335,6 @@ export default function StoryBookTest() {
           {flip && (
             <div
               className={`page-flip page-flip--${flip.dir} ${animate ? 'is-animating' : ''}`}
-              style={{ transitionDuration: flip.dur }}
               onTransitionEnd={onFlipEnd}
             >
               <div className={`page-face page-face--front${pageMod(flip.front)}`}><PageBody page={flip.front} /></div>

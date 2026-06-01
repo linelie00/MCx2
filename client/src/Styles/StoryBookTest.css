@@ -45,6 +45,51 @@
   box-shadow: inset 18px 0 26px -20px rgba(40, 30, 15, 0.4);
 }
 
+/* 페이지 치수 측정용 sizer (안 보임) */
+.page--sizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* 도비라(속표지) — 섹터 시작 페이지 */
+.bp-divider {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 40px;
+  text-align: center;
+}
+.bp-divider-order {
+  font-family: 'OldLondon', serif;
+  letter-spacing: 0.15em;
+  color: #9c8a63;
+  font-size: 1.1rem;
+}
+.bp-divider-rule {
+  width: 54px;
+  height: 2px;
+  background: #c9b88f;
+}
+.bp-divider-title {
+  margin: 0;
+  font-family: 'NexonWarhaven', serif;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  color: #2c2620;
+}
+.bp-divider-orn {
+  color: #b6a072;
+  font-size: 1.1rem;
+}
+
 /* ----- 넘어가는 페이지 ----- */
 .page-flip {
   position: absolute;

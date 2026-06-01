@@ -127,11 +127,16 @@ export default function StoryBookTest() {
     return () => { alive = false; };
   }, []);
 
-  // 페이지 박스 치수 측정 (+ 리사이즈)
+  // 페이지 "콘텐츠 박스"(패딩 제외) 치수 측정 (+ 리사이즈)
+  // clientWidth/Height 는 패딩을 포함하므로 측정 노드(패딩 없음)와 맞추려면 패딩을 뺀다.
   useEffect(() => {
     const measure = () => {
       const el = sizeRef.current;
-      if (el) setDims({ w: el.clientWidth, h: el.clientHeight });
+      if (!el) return;
+      const cs = getComputedStyle(el);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      setDims({ w: el.clientWidth - padX, h: el.clientHeight - padY });
     };
     measure();
     window.addEventListener('resize', measure);
@@ -143,7 +148,7 @@ export default function StoryBookTest() {
       const node = measureRef.current;
       if (!node || !dims) return [[]];
       node.style.width = `${dims.w}px`;
-      return paginate(session.scenes.flatMap((s) => s.lines), node, dims.h - 2);
+      return paginate(session.scenes.flatMap((s) => s.lines), node, dims.h - 1);
     },
     [dims]
   );

@@ -14,9 +14,10 @@
 }
 
 /* ----- 펼친 책 ----- */
+/* 책 높이는 aspect-ratio 로만 결정. 페이지는 absolute 라 내용이 책 높이를
+   절대 못 늘림(넘김 시 세로가 늘어나던 문제 방지). */
 .book {
   position: relative;
-  display: flex;
   width: min(800px, 92vw);
   /* 한 페이지를 1748:2480 비율로 → 양면은 그 두 배(3496:2480) */
   aspect-ratio: 3496 / 2480;
@@ -31,20 +32,20 @@
 }
 
 .page {
-  position: relative;
+  position: absolute;
+  top: 0;
   width: 50%;
   height: 100%;
-  /* flex 아이템 기본 min-height:auto 가 내용에 밀려 책 높이를 늘리는 것 방지 */
-  min-width: 0;
-  min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
 .page--left {
+  left: 0;
   border-radius: 3px 0 0 3px;
   box-shadow: inset -18px 0 26px -20px rgba(40, 30, 15, 0.4);
 }
 .page--right {
+  left: 50%;
   border-radius: 0 3px 3px 0;
   box-shadow: inset 18px 0 26px -20px rgba(40, 30, 15, 0.4);
 }

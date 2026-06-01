@@ -2,54 +2,31 @@
 .booktest {
   width: 100%;
   min-height: calc(100vh - 50px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-  padding: 28px 16px 60px;
   background-color: var(--color-bg, #f7f5ed);
 }
 
-.booktest-bar {
+.booktest-stage {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-.booktest-bar select {
-  font-family: 'NexonWarhaven', serif;
-  font-size: 0.9rem;
-  padding: 6px 10px;
-  background: #f3ead4;
-  border: 1px solid #b6a072;
-  color: #4a3c2a;
-  border-radius: 2px;
-}
-.booktest-hint {
-  font-family: 'NexonWarhaven', serif;
-  font-size: 0.78rem;
-  color: #9c8a63;
+  gap: 22px;
+  padding: 26px 16px 64px;
 }
 
 /* ----- 펼친 책 ----- */
 .book {
   position: relative;
   display: flex;
-  width: min(900px, 94vw);
-  height: 540px;
-  perspective: 2200px;
-  filter: drop-shadow(0 18px 30px rgba(60, 46, 34, 0.25));
+  width: min(940px, 94vw);
+  height: 560px;
+  perspective: 2400px;
+  filter: drop-shadow(0 20px 32px rgba(60, 46, 34, 0.28));
 }
 
-/* 밝은 양피지 질감 (이미지 없이 CSS 그라데이션으로) */
+/* 흰 종이 */
 .page,
 .page-face {
-  background-color: #f1e7cf;
-  background-image:
-    radial-gradient(140% 120% at 50% -10%, rgba(255, 252, 242, 0.7), rgba(255, 252, 242, 0) 60%),
-    radial-gradient(120% 140% at 100% 120%, rgba(150, 120, 70, 0.12), rgba(150, 120, 70, 0) 55%),
-    radial-gradient(120% 140% at 0% 120%, rgba(150, 120, 70, 0.1), rgba(150, 120, 70, 0) 55%);
+  background-color: #fcfbf8;
 }
 
 .page {
@@ -60,13 +37,12 @@
   overflow: hidden;
 }
 .page--left {
-  border-radius: 4px 0 0 4px;
-  /* 책등 그림자 (오른쪽으로 갈수록 어두워짐) */
-  box-shadow: inset -22px 0 28px -22px rgba(60, 46, 34, 0.55);
+  border-radius: 3px 0 0 3px;
+  box-shadow: inset -18px 0 26px -20px rgba(40, 30, 15, 0.4);
 }
 .page--right {
-  border-radius: 0 4px 4px 0;
-  box-shadow: inset 22px 0 28px -22px rgba(60, 46, 34, 0.55);
+  border-radius: 0 3px 3px 0;
+  box-shadow: inset 18px 0 26px -20px rgba(40, 30, 15, 0.4);
 }
 
 /* ----- 넘어가는 페이지 ----- */
@@ -86,17 +62,13 @@
   transform-origin: left center;
   transform: rotateY(0deg);
 }
-.page-flip--next.is-animating {
-  transform: rotateY(-180deg);
-}
+.page-flip--next.is-animating { transform: rotateY(-180deg); }
 .page-flip--prev {
   left: 0;
   transform-origin: right center;
   transform: rotateY(0deg);
 }
-.page-flip--prev.is-animating {
-  transform: rotateY(180deg);
-}
+.page-flip--prev.is-animating { transform: rotateY(180deg); }
 
 .page-face {
   position: absolute;
@@ -107,57 +79,87 @@
 }
 .page-face--front {
   transform: rotateY(0deg);
-  box-shadow: inset 22px 0 28px -22px rgba(60, 46, 34, 0.55);
+  box-shadow: inset 18px 0 26px -20px rgba(40, 30, 15, 0.4);
 }
 .page-face--back {
   transform: rotateY(180deg);
-  box-shadow: inset -22px 0 28px -22px rgba(60, 46, 34, 0.55);
+  box-shadow: inset -18px 0 26px -20px rgba(40, 30, 15, 0.4);
 }
 
-/* ----- 페이지 내용 ----- */
+/* ----- 페이지 내용 (높이 측정 기반으로 채움 → 내부 스크롤 없음) ----- */
 .bp-lines {
   height: 100%;
-  overflow-y: auto;       /* 임시: 페이지 넘침 방지(정밀 분할 전까지) */
-  padding: 34px clamp(20px, 4vw, 40px);
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 30px clamp(20px, 3.4vw, 38px);
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  gap: 11px;
 }
-.bp-lines::-webkit-scrollbar { display: none; }
-.bp-empty { height: 100%; }
 
 .bp-line {
-  border-left: 3px solid var(--accent, #ccc);
+  border-left: 2px solid var(--accent, #ccc);
   padding-left: 12px;
 }
+.bp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.bp-portrait {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--accent, #888);
+  flex: 0 0 auto;
+}
 .bp-name {
-  display: block;
   font-family: 'NexonWarhaven', serif;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 700;
   color: var(--accent, #555);
-  margin-bottom: 3px;
+}
+.bp-cont {
+  display: block;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.68rem;
+  font-style: italic;
+  color: #aa9b7d;
+  margin-bottom: 2px;
 }
 .bp-text {
   margin: 0;
   font-family: 'Hahmlet', serif;
-  font-size: 0.92rem;
-  line-height: 1.85;
-  color: #33291f;
+  font-size: 0.82rem;
+  line-height: 1.72;
+  color: #2c2620;
   white-space: pre-line;
   word-break: break-word;
 }
 .bp-illust {
   display: inline-block;
-  margin-top: 8px;
-  padding: 6px 12px;
+  margin-top: 7px;
+  padding: 5px 11px;
   font-family: 'NexonWarhaven', serif;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   letter-spacing: 0.1em;
   color: #9c8a63;
   border: 1px dashed #c3b48d;
+}
+
+/* 숨겨진 측정 노드 — .bp-lines 의 자식 스타일과 동일하게 높이를 잰다 */
+.bp-measure {
+  position: fixed;
+  left: -99999px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;       /* .bp-lines gap 과 동일 */
 }
 
 /* ----- 컨트롤 ----- */
@@ -183,11 +185,11 @@
   font-family: 'NexonWarhaven', serif;
   font-size: 0.85rem;
   color: #6b5b40;
-  min-width: 90px;
+  min-width: 70px;
   text-align: center;
 }
 
 @media (max-width: 767px) {
-  .book { height: 460px; }
-  .bp-text { font-size: 0.86rem; }
+  .book { height: 480px; }
+  .bp-text { font-size: 0.8rem; }
 }

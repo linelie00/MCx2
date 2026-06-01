@@ -34,6 +34,9 @@
   position: relative;
   width: 50%;
   height: 100%;
+  /* flex 아이템 기본 min-height:auto 가 내용에 밀려 책 높이를 늘리는 것 방지 */
+  min-width: 0;
+  min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
 }

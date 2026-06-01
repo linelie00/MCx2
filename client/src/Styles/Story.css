@@ -204,15 +204,12 @@
   word-break: break-word;
 }
 .story-illust {
+  display: block;
   margin-top: 12px;
-  padding: 16px;
-  text-align: center;
-  font-family: 'NexonWarhaven', serif;
-  letter-spacing: 0.12em;
-  font-size: 0.78rem;
-  color: #9c8a63;
-  border: 1px dashed #c3b48d;
-  background: rgba(210, 195, 160, 0.12);
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #cbbd9a;
+  border-radius: 2px;
 }
 
 /* ----- 모바일 ----- */

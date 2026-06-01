@@ -7,7 +7,7 @@
  *        line  → { speaker: 'migel'|'matiam', text, image? }
  *
  * image 필드: 원래 이미지가 있던 대사에만 존재하며 현재 null(미매핑).
- *             나중에 이미지를 추가할 자리다. (총 5곳)
+ *             나중에 이미지를 추가할 자리다. (총 7곳)
  */
 export const stories = [
   {
@@ -202,7 +202,8 @@ export const stories = [
         "lines": [
           {
             "speaker": "migel",
-            "text": "찢기고 태워진 전단지 조각을 소중히 품에 안은 채) 전 왜 실연 당한 기분이 드는 겁니까? 이런 게 사랑입니까? (시작도 안했다.)"
+            "text": "찢기고 태워진 전단지 조각을 소중히 품에 안은 채) 전 왜 실연 당한 기분이 드는 겁니까? 이런 게 사랑입니까? (시작도 안했다.)",
+            "image": null
           },
           {
             "speaker": "matiam",
@@ -1119,7 +1120,8 @@ export const stories = [
         "lines": [
           {
             "speaker": "migel",
-            "text": "(죽은 듯 완전히 고요해진 숲에서 노래한다.)"
+            "text": "(죽은 듯 완전히 고요해진 숲에서 노래한다.)",
+            "image": null
           },
           {
             "speaker": "matiam",

@@ -13,6 +13,7 @@ import '../Styles/Story.css'; // 상단 타임라인 스타일 재사용
 import '../Styles/StoryBookTest.css';
 import { stories } from '../Data/stories';
 import characters from '../Data/Characters';
+import { getStoryImage } from '../Data/storyImages';
 import StoryTimeline from '../Components/story/StoryTimeline';
 import coverFront from '../Assets/Images/img_front_cover.png';
 import coverBack from '../Assets/Images/img_back_cover.png';
@@ -29,7 +30,8 @@ function segmentHTML(seg) {
     ? ''
     : `<div class="bp-head"><img class="bp-portrait" src="${ch.portrait}" alt=""><span class="bp-name">${esc(shortName(ch.name))}</span></div>`;
   const text = seg.text ? `<p class="bp-text">${esc(seg.text)}</p>` : '';
-  const illust = 'image' in seg ? `<div class="bp-illust">✦ 삽화 ✦</div>` : '';
+  // 측정용: 실제 이미지와 같은 고정 높이 박스로 자리를 잡아둔다
+  const illust = 'image' in seg ? '<div class="bp-illust"></div>' : '';
   return `<div class="bp-line" style="--accent:${ch.color}">${head}${text}${illust}</div>`;
 }
 
@@ -116,7 +118,12 @@ function buildBook(node, maxH) {
     pages.push({ type: 'divider', side: 'left', sid: session.id, title: session.title, order: session.order });
     pages.push({ type: 'divider', side: 'right', sid: session.id, title: session.title, order: session.order });
     const content = paginateSession(session.scenes.flatMap((s) => s.lines), node, maxH);
-    for (const segs of content) pages.push({ type: 'content', sid: session.id, segs });
+    for (const segs of content) {
+      for (const seg of segs) {
+        if ('image' in seg) seg.image = getStoryImage(session.id, seg.speaker);
+      }
+      pages.push({ type: 'content', sid: session.id, segs });
+    }
     lastSid = session.id;
   }
   if (pages.length % 2 === 1) pages.push({ type: 'blank', sid: lastSid }); // 스프레드 짝수 보정
@@ -137,7 +144,7 @@ function Segment({ seg }) {
         </div>
       )}
       {seg.text && <p className="bp-text">{seg.text}</p>}
-      {'image' in seg && <div className="bp-illust">✦ 삽화 ✦</div>}
+      {seg.image && <img className="bp-illust" src={seg.image} alt="삽화" />}
     </div>
   );
 }

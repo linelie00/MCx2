@@ -208,14 +208,11 @@
   word-break: break-word;
 }
 .bp-illust {
-  display: inline-block;
-  margin-top: 7px;
-  padding: 5px 11px;
-  font-family: 'NexonWarhaven', serif;
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
-  color: #9c8a63;
-  border: 1px dashed #c3b48d;
+  display: block;
+  width: 100%;
+  height: 180px;          /* 고정 높이 → 측정/페이지네이션 일관성 */
+  object-fit: contain;     /* 비율 유지(잘리지 않게) */
+  margin-top: 8px;
 }
 
 /* 숨겨진 측정 노드 — .bp-lines 의 자식 스타일과 동일하게 높이를 잰다 */

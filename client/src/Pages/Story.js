@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import '../Styles/Story.css';
 import { stories } from '../Data/stories';
 import characters from '../Data/Characters';
+import { getStoryImage } from '../Data/storyImages';
 import StoryTimeline from '../Components/story/StoryTimeline';
 
 // "미겔 / Migel" → "미겔"
@@ -50,8 +51,13 @@ const Story = () => {
                     </div>
                     <div className="story-bubble">
                       {line.text && <p className="story-text">{line.text}</p>}
-                      {'image' in line && (
-                        <div className="story-illust" aria-label="삽화 자리">✦ 삽화 ✦</div>
+                      {'image' in line && getStoryImage(session.id, line.speaker) && (
+                        <img
+                          className="story-illust"
+                          src={getStoryImage(session.id, line.speaker)}
+                          alt={`${name} 삽화`}
+                          loading="lazy"
+                        />
                       )}
                     </div>
                   </div>

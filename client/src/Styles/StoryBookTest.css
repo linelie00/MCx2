@@ -1,0 +1,191 @@
+/* ===== StoryBookTest (책 넘김 프로토타입) ===== */
+.booktest {
+  width: 100%;
+  min-height: calc(100vh - 50px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 28px 16px 60px;
+  background-color: var(--color-bg, #f7f5ed);
+}
+
+.booktest-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.booktest-bar select {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.9rem;
+  padding: 6px 10px;
+  background: #f3ead4;
+  border: 1px solid #b6a072;
+  color: #4a3c2a;
+  border-radius: 2px;
+}
+.booktest-hint {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.78rem;
+  color: #9c8a63;
+}
+
+/* ----- 펼친 책 ----- */
+.book {
+  position: relative;
+  display: flex;
+  width: min(900px, 94vw);
+  height: 540px;
+  perspective: 2200px;
+  filter: drop-shadow(0 18px 30px rgba(60, 46, 34, 0.25));
+}
+
+.page {
+  position: relative;
+  width: 50%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: #f5eede;
+  background-image: url('../Assets/Images/parchment.jpg');
+  background-size: cover;
+  background-blend-mode: multiply;
+}
+.page--left {
+  border-radius: 4px 0 0 4px;
+  /* 책등 그림자 (오른쪽으로 갈수록 어두워짐) */
+  box-shadow: inset -22px 0 28px -22px rgba(60, 46, 34, 0.55);
+}
+.page--right {
+  border-radius: 0 4px 4px 0;
+  box-shadow: inset 22px 0 28px -22px rgba(60, 46, 34, 0.55);
+}
+
+/* ----- 넘어가는 페이지 ----- */
+.page-flip {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  transform-style: preserve-3d;
+  z-index: 5;
+}
+.page-flip.is-animating {
+  transition: transform 0.7s cubic-bezier(0.3, 0.1, 0.2, 1);
+}
+.page-flip--next {
+  left: 50%;
+  transform-origin: left center;
+  transform: rotateY(0deg);
+}
+.page-flip--next.is-animating {
+  transform: rotateY(-180deg);
+}
+.page-flip--prev {
+  left: 0;
+  transform-origin: right center;
+  transform: rotateY(0deg);
+}
+.page-flip--prev.is-animating {
+  transform: rotateY(180deg);
+}
+
+.page-face {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  background-color: #f5eede;
+  background-image: url('../Assets/Images/parchment.jpg');
+  background-size: cover;
+  background-blend-mode: multiply;
+}
+.page-face--front {
+  transform: rotateY(0deg);
+  box-shadow: inset 22px 0 28px -22px rgba(60, 46, 34, 0.55);
+}
+.page-face--back {
+  transform: rotateY(180deg);
+  box-shadow: inset -22px 0 28px -22px rgba(60, 46, 34, 0.55);
+}
+
+/* ----- 페이지 내용 ----- */
+.bp-lines {
+  height: 100%;
+  overflow-y: auto;       /* 임시: 페이지 넘침 방지(정밀 분할 전까지) */
+  padding: 34px clamp(20px, 4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.bp-lines::-webkit-scrollbar { display: none; }
+.bp-empty { height: 100%; }
+
+.bp-line {
+  border-left: 3px solid var(--accent, #ccc);
+  padding-left: 12px;
+}
+.bp-name {
+  display: block;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent, #555);
+  margin-bottom: 3px;
+}
+.bp-text {
+  margin: 0;
+  font-family: 'Hahmlet', serif;
+  font-size: 0.92rem;
+  line-height: 1.85;
+  color: #33291f;
+  white-space: pre-line;
+  word-break: break-word;
+}
+.bp-illust {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  color: #9c8a63;
+  border: 1px dashed #c3b48d;
+}
+
+/* ----- 컨트롤 ----- */
+.booktest-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.booktest-controls button {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.9rem;
+  padding: 8px 18px;
+  background: #f3ead4;
+  border: 1px solid #a8946a;
+  color: #4a3c2a;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.booktest-controls button:hover:not(:disabled) { background: #e9dec3; }
+.booktest-controls button:disabled { opacity: 0.4; cursor: default; }
+.booktest-page {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.85rem;
+  color: #6b5b40;
+  min-width: 90px;
+  text-align: center;
+}
+
+@media (max-width: 767px) {
+  .book { height: 460px; }
+  .bp-text { font-size: 0.86rem; }
+}

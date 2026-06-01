@@ -14,6 +14,7 @@ import ImageView from './Pages/ImageView';
 import CharacterHub from './Pages/CharacterHub';
 import CharacterPanel from './Pages/CharacterPanel';
 import Story from './Pages/Story';
+import StoryBookTest from './Pages/StoryBookTest';
 import World from './Pages/World';
 import Playlist from './Pages/Playlist';
 
@@ -34,6 +35,7 @@ function App() {
               <Route path=":name" element={<CharacterPanel />} />
             </Route>
             <Route path="/story" element={<Story />} />
+            <Route path="/story-test" element={<StoryBookTest />} />
             <Route path="/world" element={<World />} />
             <Route path="/playlist" element={<Playlist />} />
           </Route>

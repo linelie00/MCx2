@@ -14,7 +14,7 @@ import '../Styles/StoryBookTest.css';
 import { stories } from '../Data/stories';
 import characters from '../Data/Characters';
 import StoryTimeline from '../Components/story/StoryTimeline';
-import coverFront from '../Assets/Images/img_Front_cover.png';
+import coverFront from '../Assets/Images/img_front_cover.png';
 import coverBack from '../Assets/Images/img_back_cover.png';
 import coverSpine from '../Assets/Images/img_spine.png';
 

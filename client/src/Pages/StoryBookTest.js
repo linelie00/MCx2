@@ -14,6 +14,11 @@ import '../Styles/StoryBookTest.css';
 import { stories } from '../Data/stories';
 import characters from '../Data/Characters';
 import StoryTimeline from '../Components/story/StoryTimeline';
+import coverFront from '../Assets/Images/img_Front_cover.png';
+import coverBack from '../Assets/Images/img_back_cover.png';
+import coverSpine from '../Assets/Images/img_spine.png';
+
+const COVER = { front: coverFront, back: coverBack, spine: coverSpine };
 
 const shortName = (full) => full.split('/')[0].trim();
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -102,6 +107,9 @@ function paginateSession(lines, node, maxH) {
 function buildBook(node, maxH) {
   const pages = [];
   const dividerBySid = {};
+  // 앞표지 스프레드: 왼=책등, 오=앞표지
+  pages.push({ type: 'cover', img: COVER.spine, fit: 'contain' });
+  pages.push({ type: 'cover', img: COVER.front, fit: 'cover' });
   let lastSid = null;
   for (const session of stories) {
     if (pages.length % 2 === 1) pages.push({ type: 'blank', sid: lastSid }); // 도비라를 왼쪽으로
@@ -113,6 +121,9 @@ function buildBook(node, maxH) {
     lastSid = session.id;
   }
   if (pages.length % 2 === 1) pages.push({ type: 'blank', sid: lastSid }); // 스프레드 짝수 보정
+  // 뒷표지 스프레드: 왼=뒷표지, 오=책등
+  pages.push({ type: 'cover', img: COVER.back, fit: 'cover' });
+  pages.push({ type: 'cover', img: COVER.spine, fit: 'contain' });
   return { pages, dividerBySid };
 }
 
@@ -134,6 +145,14 @@ function Segment({ seg }) {
 
 function PageBody({ page }) {
   if (!page || page.type === 'blank') return <div className="bp-lines" />;
+  if (page.type === 'cover') {
+    return (
+      <div
+        className={`bp-cover${page.fit === 'contain' ? ' bp-cover--contain' : ''}`}
+        style={{ backgroundImage: `url(${page.img})` }}
+      />
+    );
+  }
   if (page.type === 'divider') {
     if (page.side === 'left') {
       return (
@@ -297,7 +316,7 @@ export default function StoryBookTest() {
   }, [goNext, goPrev]);
 
   const pageSid = (i) => (pages[i] && pages[i].sid) || null;
-  const currentSid = pageSid(safeSpread) || pageSid(safeSpread + 1) || stories[0].id;
+  const currentSid = pageSid(safeSpread) || pageSid(safeSpread + 1) || null;
 
   const leftPage = flip ? flip.staticLeft : pages[safeSpread];
   const rightPage = flip ? flip.staticRight : pages[safeSpread + 1];

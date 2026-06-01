@@ -17,8 +17,9 @@
 .book {
   position: relative;
   display: flex;
-  width: min(940px, 94vw);
-  height: 560px;
+  width: min(800px, 92vw);
+  /* 한 페이지를 1748:2480 비율로 → 양면은 그 두 배(3496:2480) */
+  aspect-ratio: 3496 / 2480;
   perspective: 2400px;
   filter: drop-shadow(0 20px 32px rgba(60, 46, 34, 0.28));
 }
@@ -254,6 +255,5 @@
 }
 
 @media (max-width: 767px) {
-  .book { height: 480px; }
   .bp-text { font-size: 0.8rem; }
 }

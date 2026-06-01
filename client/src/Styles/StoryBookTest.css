@@ -57,16 +57,20 @@
   z-index: -1;
 }
 
-/* 표지(앞/뒤/책등) */
+/* 표지(앞/뒤) — 1748x2480 비율 유지(contain), 안 보이는 반쪽은 투명(배경색) */
+.page.is-cover,
+.page-face.is-cover {
+  background-color: transparent;
+  box-shadow: none;
+}
 .bp-cover {
   height: 100%;
-  background-size: cover;
+  background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
 }
-.bp-cover--contain {
-  background-color: #241c14; /* 책등 등 thin 이미지 뒤 어두운 바탕 */
-  background-size: contain;
+.bp-cover-blank {
+  height: 100%;
 }
 
 /* 도비라(속표지) — 섹터 시작 양면. 배경색을 흰 내지와 다르게 해 챕터 진입을 표시 */

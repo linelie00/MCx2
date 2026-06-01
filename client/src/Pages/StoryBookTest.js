@@ -16,9 +16,8 @@ import characters from '../Data/Characters';
 import StoryTimeline from '../Components/story/StoryTimeline';
 import coverFront from '../Assets/Images/img_front_cover.png';
 import coverBack from '../Assets/Images/img_back_cover.png';
-import coverSpine from '../Assets/Images/img_spine.png';
 
-const COVER = { front: coverFront, back: coverBack, spine: coverSpine };
+const COVER = { front: coverFront, back: coverBack };
 
 const shortName = (full) => full.split('/')[0].trim();
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -107,9 +106,9 @@ function paginateSession(lines, node, maxH) {
 function buildBook(node, maxH) {
   const pages = [];
   const dividerBySid = {};
-  // 앞표지 스프레드: 왼=책등, 오=앞표지
-  pages.push({ type: 'cover', img: COVER.spine, fit: 'contain' });
-  pages.push({ type: 'cover', img: COVER.front, fit: 'cover' });
+  // 앞표지 스프레드: 왼=투명(배경), 오=앞표지
+  pages.push({ type: 'cover-blank' });
+  pages.push({ type: 'cover', img: COVER.front });
   let lastSid = null;
   for (const session of stories) {
     if (pages.length % 2 === 1) pages.push({ type: 'blank', sid: lastSid }); // 도비라를 왼쪽으로
@@ -121,9 +120,9 @@ function buildBook(node, maxH) {
     lastSid = session.id;
   }
   if (pages.length % 2 === 1) pages.push({ type: 'blank', sid: lastSid }); // 스프레드 짝수 보정
-  // 뒷표지 스프레드: 왼=뒷표지, 오=책등
-  pages.push({ type: 'cover', img: COVER.back, fit: 'cover' });
-  pages.push({ type: 'cover', img: COVER.spine, fit: 'contain' });
+  // 뒷표지 스프레드: 왼=뒷표지, 오=투명(배경)
+  pages.push({ type: 'cover', img: COVER.back });
+  pages.push({ type: 'cover-blank' });
   return { pages, dividerBySid };
 }
 
@@ -145,13 +144,9 @@ function Segment({ seg }) {
 
 function PageBody({ page }) {
   if (!page || page.type === 'blank') return <div className="bp-lines" />;
+  if (page.type === 'cover-blank') return <div className="bp-cover-blank" />;
   if (page.type === 'cover') {
-    return (
-      <div
-        className={`bp-cover${page.fit === 'contain' ? ' bp-cover--contain' : ''}`}
-        style={{ backgroundImage: `url(${page.img})` }}
-      />
-    );
+    return <div className="bp-cover" style={{ backgroundImage: `url(${page.img})` }} />;
   }
   if (page.type === 'divider') {
     if (page.side === 'left') {
@@ -321,7 +316,12 @@ export default function StoryBookTest() {
   const leftPage = flip ? flip.staticLeft : pages[safeSpread];
   const rightPage = flip ? flip.staticRight : pages[safeSpread + 1];
   const totalSpreads = Math.max(1, Math.ceil(pages.length / 2));
-  const divCls = (p) => (p && p.type === 'divider' ? ' is-divider' : '');
+  const pageMod = (p) => {
+    if (!p) return '';
+    if (p.type === 'divider') return ' is-divider';
+    if (p.type === 'cover' || p.type === 'cover-blank') return ' is-cover';
+    return '';
+  };
 
   return (
     <div className="booktest">
@@ -329,16 +329,16 @@ export default function StoryBookTest() {
 
       <div className="booktest-stage">
         <div className="book">
-          <div className={`page page--left${divCls(leftPage)}`}><PageBody page={leftPage} /></div>
-          <div className={`page page--right${divCls(rightPage)}`}><PageBody page={rightPage} /></div>
+          <div className={`page page--left${pageMod(leftPage)}`}><PageBody page={leftPage} /></div>
+          <div className={`page page--right${pageMod(rightPage)}`}><PageBody page={rightPage} /></div>
 
           {flip && (
             <div
               className={`page-flip page-flip--${flip.dir} ${animate ? 'is-animating' : ''}`}
               onTransitionEnd={onFlipEnd}
             >
-              <div className={`page-face page-face--front${divCls(flip.front)}`}><PageBody page={flip.front} /></div>
-              <div className={`page-face page-face--back${divCls(flip.back)}`}><PageBody page={flip.back} /></div>
+              <div className={`page-face page-face--front${pageMod(flip.front)}`}><PageBody page={flip.front} /></div>
+              <div className={`page-face page-face--back${pageMod(flip.back)}`}><PageBody page={flip.back} /></div>
             </div>
           )}
 

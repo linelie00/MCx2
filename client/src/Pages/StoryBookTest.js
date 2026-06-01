@@ -25,13 +25,14 @@ function segmentHTML(seg) {
   const head = seg.isCont
     ? ''
     : `<div class="bp-head"><img class="bp-portrait" src="${ch.portrait}" alt=""><span class="bp-name">${esc(shortName(ch.name))}</span></div>`;
-  const cont = seg.isCont ? `<span class="bp-cont">(이어서)</span>` : '';
   const text = seg.text ? `<p class="bp-text">${esc(seg.text)}</p>` : '';
   const illust = 'image' in seg ? `<div class="bp-illust">✦ 삽화 ✦</div>` : '';
-  return `<div class="bp-line" style="--accent:${ch.color}">${head}${cont}${text}${illust}</div>`;
+  return `<div class="bp-line" style="--accent:${ch.color}">${head}${text}${illust}</div>`;
 }
 
 // 높이 측정 기반 페이지 분할. node=측정용 DOM, maxH=페이지 내용 높이.
+// 규칙: 대사는 되도록 통째로 한 페이지에. 현재 페이지에 안 들어가면 다음 페이지로 통째로
+//       넘기고, 한 페이지에도 안 들어갈 만큼 긴 대사만 단어 단위로 분할한다.
 function paginate(lines, node, maxH) {
   const fits = (prefix, segHtml) => {
     node.innerHTML = prefix + segHtml;
@@ -43,18 +44,16 @@ function paginate(lines, node, maxH) {
   const commit = (seg) => { page.push(seg); prefix += segmentHTML(seg); };
   const newPage = () => { pages.push(page); page = []; prefix = ''; };
 
-  for (const ln of lines) {
+  // 한 페이지를 넘는 긴 대사를 단어 단위로 여러 페이지에 나눠 담는다.
+  const splitAcross = (ln) => {
     const words = (ln.text || '').split(' ');
     let idx = 0;
     let first = true;
     do {
       const base = { speaker: ln.speaker, isCont: !first };
       if (first && 'image' in ln) base.image = ln.image;
-
-      // 현재 페이지에 머리글조차 안 들어가면 새 페이지로
       if (page.length > 0 && !fits(prefix, segmentHTML({ ...base, text: '' }))) newPage();
 
-      // idx부터 들어가는 최대 단어 수를 이분 탐색
       let lo = 0;
       let hi = words.length - idx;
       let best = 0;
@@ -64,13 +63,31 @@ function paginate(lines, node, maxH) {
         if (fits(prefix, segmentHTML({ ...base, text }))) { best = mid; lo = mid + 1; }
         else hi = mid - 1;
       }
-      if (best === 0) best = 1; // 한 단어도 안 들어가도 강제 진행(무한루프 방지)
+      if (best === 0) best = 1; // 무한루프 방지
 
       commit({ ...base, text: words.slice(idx, idx + best).join(' ') });
       idx += best;
       first = false;
       if (idx < words.length) newPage();
     } while (idx < words.length);
+  };
+
+  for (const ln of lines) {
+    const whole = { speaker: ln.speaker, isCont: false, text: ln.text || '' };
+    if ('image' in ln) whole.image = ln.image;
+    const wholeHtml = segmentHTML(whole);
+
+    // 1) 현재 페이지에 통째로 들어가면 그대로
+    if (fits(prefix, wholeHtml)) { commit(whole); continue; }
+
+    // 2) 현재 페이지가 차 있으면, 빈 페이지엔 통째로 들어가는지 확인
+    if (page.length > 0) {
+      if (fits('', wholeHtml)) { newPage(); commit(whole); continue; } // 통째로 다음 페이지
+      newPage(); // 한 페이지에도 안 들어갈 만큼 긺 → 새 페이지에서 분할
+    }
+
+    // 3) 한 페이지를 넘는 대사만 분할
+    splitAcross(ln);
   }
   if (page.length) pages.push(page);
   if (pages.length === 0) pages.push([]);
@@ -88,7 +105,6 @@ function Segment({ seg }) {
           <span className="bp-name">{shortName(ch.name)}</span>
         </div>
       )}
-      {seg.isCont && <span className="bp-cont">(이어서)</span>}
       {seg.text && <p className="bp-text">{seg.text}</p>}
       {'image' in seg && <div className="bp-illust">✦ 삽화 ✦</div>}
     </div>

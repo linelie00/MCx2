@@ -121,14 +121,6 @@
   font-weight: 700;
   color: var(--accent, #555);
 }
-.bp-cont {
-  display: block;
-  font-family: 'NexonWarhaven', serif;
-  font-size: 0.68rem;
-  font-style: italic;
-  color: #aa9b7d;
-  margin-bottom: 2px;
-}
 .bp-text {
   margin: 0;
   font-family: 'Hahmlet', serif;

@@ -68,15 +68,29 @@ function paginateSession(lines, node, maxH) {
     } while (idx < words.length);
   };
 
+  const SPLIT_MIN_RATIO = 0.13; // 현재 페이지에 이 비율 이상 여백이 남으면 분할해 채움
   for (const ln of lines) {
     const whole = { speaker: ln.speaker, isCont: false, text: ln.text || '' };
     if ('image' in ln) whole.image = ln.image;
     const wholeHtml = segmentHTML(whole);
+
+    // 1) 현재 페이지에 통째로 들어가면 그대로
     if (fits(prefix, wholeHtml)) { commit(whole); continue; }
+
+    // 2) 안 들어감 — 남은 여백을 보고 분할/이동 결정
     if (page.length > 0) {
-      if (fits('', wholeHtml)) { newPage(); commit(whole); continue; }
-      newPage();
+      node.innerHTML = prefix;
+      const remaining = maxH - node.scrollHeight;
+      const roomToSplit = remaining > maxH * SPLIT_MIN_RATIO;
+      if (!roomToSplit) {
+        // 남은 공간이 적으면(어색한 1~2줄 방지) 통째로 다음 페이지로
+        if (fits('', wholeHtml)) { newPage(); commit(whole); continue; }
+        newPage(); // 한 페이지에도 안 들어갈 만큼 긺
+      }
+      // roomToSplit 이면 현재 페이지부터 분할해 채운다
     }
+
+    // 3) 분할
     splitAcross(ln);
   }
   if (page.length) pages.push(page);
@@ -92,7 +106,8 @@ function buildBook(node, maxH) {
   for (const session of stories) {
     if (pages.length % 2 === 1) pages.push({ type: 'blank', sid: lastSid }); // 도비라를 왼쪽으로
     dividerBySid[session.id] = pages.length;
-    pages.push({ type: 'divider', sid: session.id, title: session.title, order: session.order });
+    pages.push({ type: 'divider', side: 'left', sid: session.id, title: session.title, order: session.order });
+    pages.push({ type: 'divider', side: 'right', sid: session.id, title: session.title, order: session.order });
     const content = paginateSession(session.scenes.flatMap((s) => s.lines), node, maxH);
     for (const segs of content) pages.push({ type: 'content', sid: session.id, segs });
     lastSid = session.id;
@@ -120,11 +135,19 @@ function Segment({ seg }) {
 function PageBody({ page }) {
   if (!page || page.type === 'blank') return <div className="bp-lines" />;
   if (page.type === 'divider') {
+    if (page.side === 'left') {
+      return (
+        <div className="bp-divider bp-divider--left">
+          <span className="bp-divider-orn">✦</span>
+          <span className="bp-divider-chapter">CHAPTER</span>
+          <span className="bp-divider-num">{page.order}</span>
+        </div>
+      );
+    }
     return (
-      <div className="bp-divider">
-        <span className="bp-divider-order">CHAPTER {page.order}</span>
-        <span className="bp-divider-rule" />
+      <div className="bp-divider bp-divider--right">
         <h3 className="bp-divider-title">{page.title}</h3>
+        <span className="bp-divider-rule" />
         <span className="bp-divider-orn">✦</span>
       </div>
     );
@@ -279,6 +302,7 @@ export default function StoryBookTest() {
   const leftPage = flip ? flip.staticLeft : pages[safeSpread];
   const rightPage = flip ? flip.staticRight : pages[safeSpread + 1];
   const totalSpreads = Math.max(1, Math.ceil(pages.length / 2));
+  const divCls = (p) => (p && p.type === 'divider' ? ' is-divider' : '');
 
   return (
     <div className="booktest">
@@ -286,16 +310,16 @@ export default function StoryBookTest() {
 
       <div className="booktest-stage">
         <div className="book">
-          <div className="page page--left"><PageBody page={leftPage} /></div>
-          <div className="page page--right"><PageBody page={rightPage} /></div>
+          <div className={`page page--left${divCls(leftPage)}`}><PageBody page={leftPage} /></div>
+          <div className={`page page--right${divCls(rightPage)}`}><PageBody page={rightPage} /></div>
 
           {flip && (
             <div
               className={`page-flip page-flip--${flip.dir} ${animate ? 'is-animating' : ''}`}
               onTransitionEnd={onFlipEnd}
             >
-              <div className="page-face page-face--front"><PageBody page={flip.front} /></div>
-              <div className="page-face page-face--back"><PageBody page={flip.back} /></div>
+              <div className={`page-face page-face--front${divCls(flip.front)}`}><PageBody page={flip.front} /></div>
+              <div className={`page-face page-face--back${divCls(flip.back)}`}><PageBody page={flip.back} /></div>
             </div>
           )}
 

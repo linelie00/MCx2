@@ -30,9 +30,9 @@ function segmentHTML(seg) {
     ? ''
     : `<div class="bp-head"><img class="bp-portrait" src="${ch.portrait}" alt=""><span class="bp-name">${esc(shortName(ch.name))}</span></div>`;
   const text = seg.text ? `<p class="bp-text">${esc(seg.text)}</p>` : '';
-  // 측정용: 실제 이미지와 같은 고정 높이 박스로 자리를 잡아둔다
-  const illust = 'image' in seg ? '<div class="bp-illust"></div>' : '';
-  return `<div class="bp-line" style="--accent:${ch.color}">${head}${text}${illust}</div>`;
+  // 측정용: 실제와 같은 <img>(고정 높이)로 자리를 잡아둔다. 삽화는 대사 앞에 위치.
+  const illust = 'image' in seg ? '<img class="bp-illust" alt="">' : '';
+  return `<div class="bp-line" style="--accent:${ch.color}">${head}${illust}${text}</div>`;
 }
 
 // 한 세션의 대사를 높이 측정 기반으로 페이지(세그먼트 배열)들로 분할.
@@ -143,8 +143,8 @@ function Segment({ seg }) {
           <span className="bp-name">{shortName(ch.name)}</span>
         </div>
       )}
-      {seg.text && <p className="bp-text">{seg.text}</p>}
       {seg.image && <img className="bp-illust" src={seg.image} alt="삽화" />}
+      {seg.text && <p className="bp-text">{seg.text}</p>}
     </div>
   );
 }
@@ -220,7 +220,7 @@ export default function StoryBookTest() {
   useEffect(() => {
     if (!ready || !dims || !measureRef.current) return;
     measureRef.current.style.width = `${dims.w}px`;
-    const b = buildBook(measureRef.current, dims.h - 1);
+    const b = buildBook(measureRef.current, dims.h - 6);
     setBook(b);
     setView((v) => ({ spread: Math.min(v.spread, Math.max(0, b.pages.length - 2)) }));
   }, [ready, dims]);

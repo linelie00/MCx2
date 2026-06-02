@@ -50,7 +50,6 @@ const Story = () => {
                       <span className="story-name">{name}</span>
                     </div>
                     <div className="story-bubble">
-                      {line.text && <p className="story-text">{line.text}</p>}
                       {'image' in line && getStoryImage(session.id, line.speaker) && (
                         <img
                           className="story-illust"
@@ -59,6 +58,7 @@ const Story = () => {
                           loading="lazy"
                         />
                       )}
+                      {line.text && <p className="story-text">{line.text}</p>}
                     </div>
                   </div>
                 );

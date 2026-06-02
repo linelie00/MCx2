@@ -13,7 +13,7 @@ import '../Styles/Story.css'; // 상단 타임라인 스타일 재사용
 import '../Styles/StoryBookTest.css';
 import { stories } from '../Data/stories';
 import characters from '../Data/Characters';
-import { getStoryImage } from '../Data/storyImages';
+import { getStoryImage, storyImages } from '../Data/storyImages';
 import StoryTimeline from '../Components/story/StoryTimeline';
 import coverFront from '../Assets/Images/img_front_cover.png';
 import coverBack from '../Assets/Images/img_back_cover.png';
@@ -23,15 +23,32 @@ const COVER = { front: coverFront, back: coverBack };
 const shortName = (full) => full.split('/')[0].trim();
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// 삽화를 미리 로드해 pageWidth 기준 렌더 높이를 반환한다. (url → px)
+function preloadImageHeights(pageWidth) {
+  return Promise.all(
+    Object.values(storyImages).map((url) =>
+      new Promise((resolve) => {
+        const img = new window.Image();
+        img.onload = () =>
+          resolve([url, Math.round((img.naturalHeight / img.naturalWidth) * pageWidth)]);
+        img.onerror = () => resolve([url, 180]);
+        img.src = url;
+      })
+    )
+  ).then((entries) => Object.fromEntries(entries));
+}
+
 // 측정용 HTML — 아래 <Segment> 마크업과 동일해야 한다.
-function segmentHTML(seg) {
+// speakerHeightMap: speaker → px 높이 (preloadImageHeights 결과 기반)
+function segmentHTML(seg, speakerHeightMap = {}) {
   const ch = characters[seg.speaker];
   const head = seg.isCont
     ? ''
     : `<div class="bp-head"><img class="bp-portrait" src="${ch.portrait}" alt=""><span class="bp-name">${esc(shortName(ch.name))}</span></div>`;
   const text = seg.text ? `<p class="bp-text">${esc(seg.text)}</p>` : '';
-  // 측정용: 실제와 같은 <img>(고정 높이)로 자리를 잡아둔다. 삽화는 대사 앞에 위치.
-  const illust = 'image' in seg ? '<img class="bp-illust" alt="">' : '';
+  // 측정용: 실제 이미지 비율로 계산된 높이를 inline으로 주입해 측정 일관성을 유지한다.
+  const illustH = speakerHeightMap[seg.speaker] || 180;
+  const illust = 'image' in seg ? `<img class="bp-illust" style="height:${illustH}px" alt="">` : '';
   return `<div class="bp-line" style="--accent:${ch.color}">${head}${illust}${text}</div>`;
 }
 
@@ -40,7 +57,7 @@ function segmentHTML(seg) {
 // 반환: [{ label?, segs[] }, ...]  (label 은 그 시점 첫 페이지에만)
 // 규칙: 대사는 되도록 통째로. 안 들어가면 다음 페이지로 통째로,
 //       한 페이지에도 안 들어갈 만큼 긴 대사만 단어 단위로 분할.
-function paginateScene(lines, node, maxH, label) {
+function paginateScene(lines, node, maxH, label, speakerHeightMap = {}) {
   const labelHTML = label ? `<div class="bp-scene-label"><span>${esc(label)}</span></div>` : '';
   const fits = (prefix, segHtml) => {
     node.innerHTML = prefix + segHtml;
@@ -50,7 +67,7 @@ function paginateScene(lines, node, maxH, label) {
   let page = [];
   let firstPage = true;
   let prefix = labelHTML; // 첫 페이지엔 라벨 자리를 미리 잡아둔다
-  const commit = (seg) => { page.push(seg); prefix += segmentHTML(seg); };
+  const commit = (seg) => { page.push(seg); prefix += segmentHTML(seg, speakerHeightMap); };
   const flush = () => {
     pages.push({ label: firstPage && label ? label : undefined, segs: page });
     page = [];
@@ -65,14 +82,14 @@ function paginateScene(lines, node, maxH, label) {
     do {
       const base = { speaker: ln.speaker, isCont: !first };
       if (first && 'image' in ln) base.image = ln.image;
-      if (page.length > 0 && !fits(prefix, segmentHTML({ ...base, text: '' }))) flush();
+      if (page.length > 0 && !fits(prefix, segmentHTML({ ...base, text: '' }, speakerHeightMap))) flush();
       let lo = 0;
       let hi = words.length - idx;
       let best = 0;
       while (lo <= hi) {
         const mid = (lo + hi) >> 1;
         const text = words.slice(idx, idx + mid).join(' ');
-        if (fits(prefix, segmentHTML({ ...base, text }))) { best = mid; lo = mid + 1; }
+        if (fits(prefix, segmentHTML({ ...base, text }, speakerHeightMap))) { best = mid; lo = mid + 1; }
         else hi = mid - 1;
       }
       if (best === 0) best = 1;
@@ -87,7 +104,7 @@ function paginateScene(lines, node, maxH, label) {
   for (const ln of lines) {
     const whole = { speaker: ln.speaker, isCont: false, text: ln.text || '' };
     if ('image' in ln) whole.image = ln.image;
-    const wholeHtml = segmentHTML(whole);
+    const wholeHtml = segmentHTML(whole, speakerHeightMap);
 
     // 1) 현재 페이지에 통째로 들어가면 그대로
     if (fits(prefix, wholeHtml)) { commit(whole); continue; }
@@ -112,7 +129,7 @@ function paginateScene(lines, node, maxH, label) {
 }
 
 // 전체 세션을 하나의 책(페이지 배열)으로 합친다. 도비라는 왼쪽(짝수 index)에 정렬.
-function buildBook(node, maxH) {
+function buildBook(node, maxH, imageHeights = {}) {
   const pages = [];
   const dividerBySid = {};
   // 앞표지 스프레드: 왼=투명(배경), 오=앞표지
@@ -124,9 +141,20 @@ function buildBook(node, maxH) {
     dividerBySid[session.id] = pages.length;
     pages.push({ type: 'divider', side: 'left', sid: session.id, title: session.title, order: session.order });
     pages.push({ type: 'divider', side: 'right', sid: session.id, title: session.title, order: session.order });
+    // 세션 내 화자별 삽화 높이 (imageHeights는 url → px)
+    const speakerHeightMap = {};
+    for (const scene of session.scenes) {
+      for (const ln of scene.lines) {
+        if ('image' in ln && !(ln.speaker in speakerHeightMap)) {
+          const url = getStoryImage(session.id, ln.speaker);
+          speakerHeightMap[ln.speaker] = (url && imageHeights[url]) ? imageHeights[url] : 180;
+        }
+      }
+    }
+
     // 시점(scene)별로 조판 → 시점이 바뀌면 새 페이지로 나뉘고, 첫 페이지에 날짜 라벨
     for (const scene of session.scenes) {
-      const scenePages = paginateScene(scene.lines, node, maxH, scene.label);
+      const scenePages = paginateScene(scene.lines, node, maxH, scene.label, speakerHeightMap);
       for (const p of scenePages) {
         for (const seg of p.segs) {
           if ('image' in seg) seg.image = getStoryImage(session.id, seg.speaker);
@@ -229,13 +257,15 @@ export default function StoryBookTest() {
     return () => { window.removeEventListener('resize', onResize); clearTimeout(t); };
   }, []);
 
-  // 전체 책 조판 (폰트/치수 준비되면)
+  // 전체 책 조판 (폰트/치수 준비되면) — 삽화를 먼저 로드해 실제 높이를 측정에 반영
   useEffect(() => {
     if (!ready || !dims || !measureRef.current) return;
     measureRef.current.style.width = `${dims.w}px`;
-    const b = buildBook(measureRef.current, dims.h - 6);
-    setBook(b);
-    setView((v) => ({ spread: Math.min(v.spread, Math.max(0, b.pages.length - 2)) }));
+    preloadImageHeights(dims.w).then((imageHeights) => {
+      const b = buildBook(measureRef.current, dims.h - 6, imageHeights);
+      setBook(b);
+      setView((v) => ({ spread: Math.min(v.spread, Math.max(0, b.pages.length - 2)) }));
+    });
   }, [ready, dims]);
 
   const pages = book.pages;

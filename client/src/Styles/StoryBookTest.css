@@ -221,9 +221,9 @@
 }
 .bp-illust {
   display: block;
+  /* 대사(.bp-text)와 동일한 컨테이너 폭 — 캐릭터 색 선/들여쓰기를 넘지 않음 */
   width: 100%;
-  height: 180px;          /* 고정 높이 → 측정/페이지네이션 일관성 */
-  object-fit: contain;     /* 비율 유지(잘리지 않게) */
+  /* height는 측정 시 inline style로 주입 — CSS에서 고정하지 않음 */
   margin-top: 8px;
 }
 

@@ -35,19 +35,28 @@ function segmentHTML(seg) {
   return `<div class="bp-line" style="--accent:${ch.color}">${head}${illust}${text}</div>`;
 }
 
-// 한 세션의 대사를 높이 측정 기반으로 페이지(세그먼트 배열)들로 분할.
-// 규칙: 대사는 되도록 통째로. 현재 페이지에 안 들어가면 다음 페이지로 통째로,
+// 한 "시점(scene)"의 대사를 높이 측정 기반으로 페이지들로 분할한다.
+// 첫 페이지 상단엔 시점 라벨(날짜)을 두고, 그 높이를 미리 반영해 조판한다.
+// 반환: [{ label?, segs[] }, ...]  (label 은 그 시점 첫 페이지에만)
+// 규칙: 대사는 되도록 통째로. 안 들어가면 다음 페이지로 통째로,
 //       한 페이지에도 안 들어갈 만큼 긴 대사만 단어 단위로 분할.
-function paginateSession(lines, node, maxH) {
+function paginateScene(lines, node, maxH, label) {
+  const labelHTML = label ? `<div class="bp-scene-label"><span>${esc(label)}</span></div>` : '';
   const fits = (prefix, segHtml) => {
     node.innerHTML = prefix + segHtml;
     return node.scrollHeight <= maxH;
   };
   const pages = [];
   let page = [];
-  let prefix = '';
+  let firstPage = true;
+  let prefix = labelHTML; // 첫 페이지엔 라벨 자리를 미리 잡아둔다
   const commit = (seg) => { page.push(seg); prefix += segmentHTML(seg); };
-  const newPage = () => { pages.push(page); page = []; prefix = ''; };
+  const flush = () => {
+    pages.push({ label: firstPage && label ? label : undefined, segs: page });
+    page = [];
+    firstPage = false;
+    prefix = ''; // 다음 페이지부터는 라벨 없음
+  };
 
   const splitAcross = (ln) => {
     const words = (ln.text || '').split(' ');
@@ -56,7 +65,7 @@ function paginateSession(lines, node, maxH) {
     do {
       const base = { speaker: ln.speaker, isCont: !first };
       if (first && 'image' in ln) base.image = ln.image;
-      if (page.length > 0 && !fits(prefix, segmentHTML({ ...base, text: '' }))) newPage();
+      if (page.length > 0 && !fits(prefix, segmentHTML({ ...base, text: '' }))) flush();
       let lo = 0;
       let hi = words.length - idx;
       let best = 0;
@@ -70,7 +79,7 @@ function paginateSession(lines, node, maxH) {
       commit({ ...base, text: words.slice(idx, idx + best).join(' ') });
       idx += best;
       first = false;
-      if (idx < words.length) newPage();
+      if (idx < words.length) flush();
     } while (idx < words.length);
   };
 
@@ -89,18 +98,16 @@ function paginateSession(lines, node, maxH) {
       const remaining = maxH - node.scrollHeight;
       const roomToSplit = remaining > maxH * SPLIT_MIN_RATIO;
       if (!roomToSplit) {
-        // 남은 공간이 적으면(어색한 1~2줄 방지) 통째로 다음 페이지로
-        if (fits('', wholeHtml)) { newPage(); commit(whole); continue; }
-        newPage(); // 한 페이지에도 안 들어갈 만큼 긺
+        // flush 하면 다음 페이지엔 라벨이 없으므로 빈 페이지 기준으로 판정
+        if (fits('', wholeHtml)) { flush(); commit(whole); continue; }
+        flush(); // 한 페이지에도 안 들어갈 만큼 긺
       }
-      // roomToSplit 이면 현재 페이지부터 분할해 채운다
     }
 
     // 3) 분할
     splitAcross(ln);
   }
-  if (page.length) pages.push(page);
-  if (pages.length === 0) pages.push([]);
+  pages.push({ label: firstPage && label ? label : undefined, segs: page });
   return pages;
 }
 
@@ -117,12 +124,15 @@ function buildBook(node, maxH) {
     dividerBySid[session.id] = pages.length;
     pages.push({ type: 'divider', side: 'left', sid: session.id, title: session.title, order: session.order });
     pages.push({ type: 'divider', side: 'right', sid: session.id, title: session.title, order: session.order });
-    const content = paginateSession(session.scenes.flatMap((s) => s.lines), node, maxH);
-    for (const segs of content) {
-      for (const seg of segs) {
-        if ('image' in seg) seg.image = getStoryImage(session.id, seg.speaker);
+    // 시점(scene)별로 조판 → 시점이 바뀌면 새 페이지로 나뉘고, 첫 페이지에 날짜 라벨
+    for (const scene of session.scenes) {
+      const scenePages = paginateScene(scene.lines, node, maxH, scene.label);
+      for (const p of scenePages) {
+        for (const seg of p.segs) {
+          if ('image' in seg) seg.image = getStoryImage(session.id, seg.speaker);
+        }
+        pages.push({ type: 'content', sid: session.id, label: p.label, segs: p.segs });
       }
-      pages.push({ type: 'content', sid: session.id, segs });
     }
     lastSid = session.id;
   }
@@ -175,6 +185,9 @@ function PageBody({ page }) {
   }
   return (
     <div className="bp-lines">
+      {page.label && (
+        <div className="bp-scene-label"><span>{page.label}</span></div>
+      )}
       {page.segs.map((s, i) => <Segment key={i} seg={s} />)}
     </div>
   );

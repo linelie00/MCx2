@@ -176,11 +176,13 @@
 .gal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000; /* 네비 바보다 위에 와서 겹침 방지 */
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  /* 상단 여백으로 네비 바 영역을 비워 둠 → 모달이 그 아래에서만 크기를 가짐
+     (이미지가 커도 모달 상단이 네비 블러와 겹치지 않음) */
+  padding: 72px 24px 28px;
   background: rgba(28, 22, 16, 0.66);
   backdrop-filter: blur(2px);
 }
@@ -249,7 +251,7 @@
 /* ----- 업로드 다이얼로그 ----- */
 .gal-dialog {
   width: min(440px, 92vw);
-  max-height: 90vh;
+  max-height: 100%;
   overflow-y: auto;
   padding: 22px;
   background: #fcfbf8;

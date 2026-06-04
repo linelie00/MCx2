@@ -5,6 +5,8 @@
  * 다른 출처이므로 절대 URL로 바꿔 <img src>/<video src>가 동작하게 한다.
  * 저장소를 바꿔도 이 파일의 계약만 유지하면 컴포넌트는 그대로다.
  */
+import { authHeaders } from './ownerAuth';
+
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000';
 const API = `${API_BASE}/api/gallery`;
 
@@ -45,19 +47,21 @@ export async function uploadImage({ file, tags = [] }) {
   const form = new FormData();
   form.append('file', file);
   form.append('tags', JSON.stringify(tags));
-  const created = await asJson(await fetch(`${API}/images`, { method: 'POST', body: form }));
+  const created = await asJson(
+    await fetch(`${API}/images`, { method: 'POST', headers: { ...authHeaders() }, body: form })
+  );
   return withAbsUrls(created);
 }
 
 export async function deleteImage(id) {
-  await asJson(await fetch(`${API}/images/${id}`, { method: 'DELETE' }));
+  await asJson(await fetch(`${API}/images/${id}`, { method: 'DELETE', headers: { ...authHeaders() } }));
 }
 
 export async function updateImageTags(id, nextTags) {
   const updated = await asJson(
     await fetch(`${API}/images/${id}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ tags: nextTags }),
     })
   );
@@ -68,7 +72,7 @@ export async function createTag(label) {
   return asJson(
     await fetch(`${API}/tags`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ label }),
     })
   );
@@ -78,14 +82,16 @@ export async function renameTag(id, label) {
   return asJson(
     await fetch(`${API}/tags/${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ label }),
     })
   );
 }
 
 export async function deleteTag(id) {
-  await asJson(await fetch(`${API}/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+  await asJson(
+    await fetch(`${API}/tags/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { ...authHeaders() } })
+  );
 }
 
 // 미디어 url(절대/상대)에서 파일명을 뽑아 강제 다운로드용 엔드포인트 URL을 만든다.

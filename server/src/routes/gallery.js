@@ -5,6 +5,7 @@ const express = require('express');
 const multer = require('multer');
 const ctrl = require('../controllers/galleryController');
 const storage = require('../services/storageService');
+const { requireOwner } = require('../middleware/requireOwner');
 
 const router = express.Router();
 
@@ -17,16 +18,17 @@ const upload = multer({
   limits: { fileSize: 500 * 1024 * 1024 }, // 영상 대비 500MB
 });
 
+// 읽기 / 다운로드 — 공개
 router.get('/images', ctrl.listImages);
-router.post('/images', upload.single('file'), ctrl.createImage);
-router.delete('/images/:id', ctrl.deleteImage);
-router.patch('/images/:id', express.json(), ctrl.updateImageTags);
-
 router.get('/download/:name', ctrl.downloadFile);
-
 router.get('/tags', ctrl.listTags);
-router.post('/tags', express.json(), ctrl.createTag);
-router.patch('/tags/:id', express.json(), ctrl.renameTag);
-router.delete('/tags/:id', ctrl.deleteTag);
+
+// 쓰기 — 오너만 (requireOwner)
+router.post('/images', requireOwner, upload.single('file'), ctrl.createImage);
+router.delete('/images/:id', requireOwner, ctrl.deleteImage);
+router.patch('/images/:id', requireOwner, express.json(), ctrl.updateImageTags);
+router.post('/tags', requireOwner, express.json(), ctrl.createTag);
+router.patch('/tags/:id', requireOwner, express.json(), ctrl.renameTag);
+router.delete('/tags/:id', requireOwner, ctrl.deleteTag);
 
 module.exports = router;

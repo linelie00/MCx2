@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 
-function TagFilterBar({ tags, active, onToggle, onClear, onCreateTag, onRenameTag, onDeleteTag }) {
+function TagFilterBar({ tags, active, onToggle, onClear, canManage = false, onCreateTag, onRenameTag, onDeleteTag }) {
   const [query, setQuery] = useState('');
   const [manage, setManage] = useState(false);
   const [newTag, setNewTag] = useState('');
@@ -15,6 +15,7 @@ function TagFilterBar({ tags, active, onToggle, onClear, onCreateTag, onRenameTa
 
   const q = query.trim().toLowerCase();
   const shown = q ? tags.filter((t) => t.label.toLowerCase().includes(q)) : tags;
+  const inManage = manage && canManage; // 권한이 없으면 관리 모드를 강제 해제
 
   const handleDelete = (tag) => {
     if (window.confirm(`'${tag.label}' 태그를 삭제할까요?\n모든 이미지에서 이 태그가 제거됩니다.`)) {
@@ -53,18 +54,20 @@ function TagFilterBar({ tags, active, onToggle, onClear, onCreateTag, onRenameTa
           onChange={(e) => setQuery(e.target.value)}
           placeholder="태그 검색…"
         />
-        {!manage && active.length > 0 && <span className="gal-tagbar-info">{active.length}개 선택</span>}
-        <button
-          type="button"
-          className={`gal-tagmanage${manage ? ' is-active' : ''}`}
-          onClick={() => setManage((m) => !m)}
-        >
-          {manage ? '완료' : '태그 관리'}
-        </button>
+        {!inManage && active.length > 0 && <span className="gal-tagbar-info">{active.length}개 선택</span>}
+        {canManage && (
+          <button
+            type="button"
+            className={`gal-tagmanage${manage ? ' is-active' : ''}`}
+            onClick={() => setManage((m) => !m)}
+          >
+            {manage ? '완료' : '태그 관리'}
+          </button>
+        )}
       </div>
 
       <div className="gal-chips">
-        {!manage && (
+        {!inManage && (
           <button
             type="button"
             className={`gal-chip${active.length === 0 ? ' is-active' : ''}`}
@@ -75,7 +78,7 @@ function TagFilterBar({ tags, active, onToggle, onClear, onCreateTag, onRenameTa
         )}
 
         {shown.map((t) =>
-          manage ? (
+          inManage ? (
             <span className="gal-chip gal-chip--manage" key={t.id}>
               {editingId === t.id ? (
                 <input
@@ -120,9 +123,9 @@ function TagFilterBar({ tags, active, onToggle, onClear, onCreateTag, onRenameTa
           )
         )}
 
-        {!manage && shown.length === 0 && <span className="gal-tagbar-info">검색 결과 없음</span>}
+        {!inManage && shown.length === 0 && <span className="gal-tagbar-info">검색 결과 없음</span>}
 
-        {manage && (
+        {inManage && (
           <form className="gal-tagadd" onSubmit={handleAdd}>
             <input
               className="gal-tagadd-field"

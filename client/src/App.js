@@ -7,6 +7,7 @@ import './Assets/Font/Font.css';
 import './Styles/App.css';
 
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { OwnerProvider } from './contexts/OwnerContext';
 import NavigateLayout from './Layouts/NavigateLayout';
 import ScrollToTop from "./Components/ScrollToTop";
 import HomePage from './Pages/Home';
@@ -20,6 +21,7 @@ import Playlist from './Pages/Playlist';
 function App() {
   return (
     <div className="App">
+      <OwnerProvider>
       <Router>
         <ScrollToTop />
         <Routes>
@@ -39,6 +41,7 @@ function App() {
           </Route>
         </Routes>
       </Router>
+      </OwnerProvider>
     </div>
   );
 }

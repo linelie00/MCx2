@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import '../Styles/Gallery.css';
 import * as galleryApi from '../services/galleryApi';
+import { useOwner } from '../contexts/OwnerContext';
 import TagFilterBar from '../Components/gallery/TagFilterBar';
 import GalleryGrid from '../Components/gallery/GalleryGrid';
 import GalleryModal from '../Components/gallery/GalleryModal';
@@ -39,6 +40,22 @@ function Gallery() {
   const [selected, setSelected] = useState(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const { isOwner, ownerLabel, unlock, lock } = useOwner();
+
+  const handleLockToggle = useCallback(async () => {
+    if (isOwner) {
+      lock();
+      return;
+    }
+    const key = window.prompt('오너 패스코드를 입력하세요');
+    if (!key) return;
+    try {
+      await unlock(key.trim());
+    } catch (e) {
+      window.alert('패스코드가 올바르지 않습니다.');
+    }
+  }, [isOwner, unlock, lock]);
 
   useEffect(() => {
     let alive = true;
@@ -122,9 +139,22 @@ function Gallery() {
     <div className="gallery">
       <header className="gal-head">
         <h2 className="gal-title">Gallery</h2>
-        <button type="button" className="gal-btn gal-btn--primary gal-add" onClick={() => setUploadOpen(true)}>
-          + 이미지 추가
-        </button>
+        <div className="gal-head-actions">
+          {isOwner && (
+            <button type="button" className="gal-btn gal-btn--primary gal-add" onClick={() => setUploadOpen(true)}>
+              + 이미지 추가
+            </button>
+          )}
+          <button
+            type="button"
+            className={`gal-lock${isOwner ? ' is-unlocked' : ''}`}
+            onClick={handleLockToggle}
+            title={isOwner ? `${ownerLabel} · 잠그기` : '오너 잠금 해제'}
+            aria-label={isOwner ? '잠그기' : '오너 잠금 해제'}
+          >
+            {isOwner ? '🔓' : '🔒'}
+          </button>
+        </div>
       </header>
 
       <TagFilterBar
@@ -132,6 +162,7 @@ function Gallery() {
         active={activeTags}
         onToggle={toggleTag}
         onClear={clearTags}
+        canManage={isOwner}
         onCreateTag={handleCreateTag}
         onRenameTag={handleRenameTag}
         onDeleteTag={handleDeleteTag}
@@ -154,6 +185,7 @@ function Gallery() {
           image={selected}
           tagLabels={tagLabels}
           allTags={tags}
+          canEdit={isOwner}
           onCreateTag={handleCreateTag}
           onSaveTags={handleSaveTags}
           onDelete={handleDelete}

@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const galleryRoutes = require('./routes/gallery');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 
@@ -13,7 +14,8 @@ app.use(cors());
 // 업로드된 미디어 정적 서빙
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// 갤러리 API
+// 인증(오너 확인) / 갤러리 API
+app.use('/api/auth', authRoutes);
 app.use('/api/gallery', galleryRoutes);
 
 app.get('/', (req, res) => res.send('MIHEARTI API'));

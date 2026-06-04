@@ -22,6 +22,31 @@
   color: #4a3c2a;
   letter-spacing: 0.04em;
 }
+.gal-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gal-lock {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  background: #f3ead4;
+  border: 1px solid #a8946a;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.gal-lock:hover {
+  background: #e9dec3;
+}
+.gal-lock.is-unlocked {
+  background: #e6d7b4;
+  border-color: #8a7a5c;
+}
 
 /* ----- 태그 필터 바 ----- */
 .gal-tagbar {

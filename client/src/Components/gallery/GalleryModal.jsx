@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import TagInput from './TagInput';
 import { downloadUrl } from '../../services/galleryApi';
 
-function GalleryModal({ image, tagLabels = {}, allTags = [], onCreateTag, onSaveTags, onDelete, onClose }) {
+function GalleryModal({ image, tagLabels = {}, allTags = [], canEdit = false, onCreateTag, onSaveTags, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
   const [draftTags, setDraftTags] = useState([]);
   const [idx, setIdx] = useState(0);
@@ -127,12 +127,16 @@ function GalleryModal({ image, tagLabels = {}, allTags = [], onCreateTag, onSave
               </>
             ) : (
               <>
-                <button type="button" className="gal-btn" onClick={startEdit}>
-                  태그 수정
-                </button>
-                <button type="button" className="gal-btn gal-btn--danger" onClick={() => onDelete(image)}>
-                  삭제
-                </button>
+                {canEdit && (
+                  <>
+                    <button type="button" className="gal-btn" onClick={startEdit}>
+                      태그 수정
+                    </button>
+                    <button type="button" className="gal-btn gal-btn--danger" onClick={() => onDelete(image)}>
+                      삭제
+                    </button>
+                  </>
+                )}
                 <button type="button" className="gal-btn" onClick={onClose}>
                   닫기
                 </button>

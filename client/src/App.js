@@ -10,7 +10,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import NavigateLayout from './Layouts/NavigateLayout';
 import ScrollToTop from "./Components/ScrollToTop";
 import HomePage from './Pages/Home';
-import ImageView from './Pages/ImageView';
+import Gallery from './Pages/Gallery';
 import CharacterHub from './Pages/CharacterHub';
 import CharacterPanel from './Pages/CharacterPanel';
 import Story from './Pages/Story';
@@ -29,7 +29,7 @@ function App() {
             }
           >
             <Route path="/" element={<HomePage />} />
-            <Route path="/image" element={<ImageView />} />
+            <Route path="/image" element={<Gallery />} />
             <Route path="/character" element={<CharacterHub />}>
               <Route path=":name" element={<CharacterPanel />} />
             </Route>

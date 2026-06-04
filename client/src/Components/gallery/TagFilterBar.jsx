@@ -110,13 +110,24 @@ function TagFilterBar({
             <span
               className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}`}
               key={t.id}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => handleDrop(t.id)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleDrop(t.id);
+              }}
             >
               <span
                 className="gal-chip-grip"
                 draggable
-                onDragStart={() => setDragId(t.id)}
+                onDragStart={(e) => {
+                  // Firefox는 setData가 없으면 드래그를 시작하지 않는다
+                  e.dataTransfer.setData('text/plain', t.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                  setDragId(t.id);
+                }}
                 onDragEnd={() => setDragId(null)}
                 role="button"
                 tabIndex={-1}

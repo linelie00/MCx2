@@ -1,4 +1,4 @@
-/* ===== StoryBookTest (책 넘김 프로토타입) ===== */
+/* ===== Story (책 넘김 뷰어) ===== */
 .booktest {
   width: 100%;
   min-height: calc(100vh - 50px);

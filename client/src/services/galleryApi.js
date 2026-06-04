@@ -67,7 +67,7 @@ export async function createTag(label) {
 
 export async function renameTag(id, label) {
   return asJson(
-    await fetch(`${API}/tags/${id}`, {
+    await fetch(`${API}/tags/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ label }),
@@ -76,7 +76,7 @@ export async function renameTag(id, label) {
 }
 
 export async function deleteTag(id) {
-  await asJson(await fetch(`${API}/tags/${id}`, { method: 'DELETE' }));
+  await asJson(await fetch(`${API}/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }));
 }
 
 const galleryApi = {

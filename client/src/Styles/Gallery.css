@@ -527,10 +527,23 @@
   color: #8a7a5c;
 }
 .gal-chip--manage {
-  cursor: grab;
+  user-select: none;
 }
 .gal-chip--manage.is-dragging {
   opacity: 0.4;
+}
+.gal-chip-grip {
+  display: inline-flex;
+  align-items: center;
+  cursor: grab;
+  color: #9c8a63;
+  font-size: 0.95rem;
+  line-height: 1;
+  letter-spacing: -2px;
+  padding-right: 2px;
+}
+.gal-chip-grip:active {
+  cursor: grabbing;
 }
 .gal-filepick-placeholder {
   font-family: 'Hahmlet', serif;

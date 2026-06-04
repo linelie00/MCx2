@@ -91,7 +91,7 @@ function TagFilterBar({
       </div>
 
       {inManage && (
-        <p className="gal-manage-hint">드래그로 순서 변경 · 이름 클릭 시 수정 · × 삭제</p>
+        <p className="gal-manage-hint">⠿ 손잡이를 드래그해 순서 변경 · 이름 클릭 시 수정 · × 삭제</p>
       )}
 
       <div className="gal-chips">
@@ -110,12 +110,21 @@ function TagFilterBar({
             <span
               className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}`}
               key={t.id}
-              draggable={editingId !== t.id}
-              onDragStart={() => setDragId(t.id)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop(t.id)}
-              onDragEnd={() => setDragId(null)}
             >
+              <span
+                className="gal-chip-grip"
+                draggable
+                onDragStart={() => setDragId(t.id)}
+                onDragEnd={() => setDragId(null)}
+                role="button"
+                tabIndex={-1}
+                aria-label="드래그하여 순서 변경"
+                title="드래그하여 순서 변경"
+              >
+                ⠿
+              </span>
               {editingId === t.id ? (
                 <input
                   className="gal-chip-edit"

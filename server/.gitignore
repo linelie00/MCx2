@@ -1,0 +1,9 @@
+# dependencies
+/node_modules
+
+# uploaded media (로컬 저장소 — 레포에 포함하지 않음)
+/uploads
+
+# env
+.env
+.env.local

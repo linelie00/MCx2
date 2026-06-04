@@ -6,12 +6,23 @@
  */
 import { useState } from 'react';
 
-function TagFilterBar({ tags, active, onToggle, onClear, canManage = false, onCreateTag, onRenameTag, onDeleteTag }) {
+function TagFilterBar({
+  tags,
+  active,
+  onToggle,
+  onClear,
+  canManage = false,
+  onCreateTag,
+  onRenameTag,
+  onDeleteTag,
+  onReorder,
+}) {
   const [query, setQuery] = useState('');
   const [manage, setManage] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editLabel, setEditLabel] = useState('');
+  const [dragId, setDragId] = useState(null);
 
   const q = query.trim().toLowerCase();
   const shown = q ? tags.filter((t) => t.label.toLowerCase().includes(q)) : tags;
@@ -45,6 +56,19 @@ function TagFilterBar({ tags, active, onToggle, onClear, canManage = false, onCr
     cancelEdit();
   };
 
+  // 드래그로 순서 변경: dragId를 targetId 위치로 이동
+  const handleDrop = (targetId) => {
+    if (!dragId || dragId === targetId) return setDragId(null);
+    const ids = tags.map((t) => t.id);
+    const from = ids.indexOf(dragId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return setDragId(null);
+    ids.splice(from, 1);
+    ids.splice(to, 0, dragId);
+    onReorder(ids);
+    return setDragId(null);
+  };
+
   return (
     <div className="gal-tagbar">
       <div className="gal-tagbar-top">
@@ -66,6 +90,10 @@ function TagFilterBar({ tags, active, onToggle, onClear, canManage = false, onCr
         )}
       </div>
 
+      {inManage && (
+        <p className="gal-manage-hint">드래그로 순서 변경 · 이름 클릭 시 수정 · × 삭제</p>
+      )}
+
       <div className="gal-chips">
         {!inManage && (
           <button
@@ -79,7 +107,15 @@ function TagFilterBar({ tags, active, onToggle, onClear, canManage = false, onCr
 
         {shown.map((t) =>
           inManage ? (
-            <span className="gal-chip gal-chip--manage" key={t.id}>
+            <span
+              className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}`}
+              key={t.id}
+              draggable={editingId !== t.id}
+              onDragStart={() => setDragId(t.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(t.id)}
+              onDragEnd={() => setDragId(null)}
+            >
               {editingId === t.id ? (
                 <input
                   className="gal-chip-edit"

@@ -4,6 +4,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const metaStore = require('../services/metaStore');
 const storage = require('../services/storageService');
 
@@ -36,29 +37,62 @@ exports.listImages = (req, res) => {
   res.json(images);
 };
 
-exports.createImage = async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'file is required' });
-  try {
-    const id = req.file.filename.replace(/\.[^.]+$/, '');
-    const tags = parseTags(req.body).slice(0, MAX_TAGS);
-    const media = await storage.processSaved(req.file, id);
+const fileId = (f) => f.filename.replace(/\.[^.]+$/, '');
 
-    const entry = {
-      id,
-      type: media.type,
-      url: media.url,
-      ...(media.poster ? { poster: media.poster } : {}),
-      width: media.width,
-      height: media.height,
-      tags,
-      createdAt: new Date().toISOString(),
-    };
+// 다중 업로드. group=true 이고 2장 이상이면 하나의 앨범(items[])으로 묶고,
+// 아니면 각각 개별 카드로 만든다. 응답은 생성된 엔트리 배열.
+exports.createImages = async (req, res) => {
+  const files = req.files || [];
+  if (files.length === 0) return res.status(400).json({ error: 'file(s) required' });
+  try {
+    const tags = parseTags(req.body).slice(0, MAX_TAGS);
+    const group = String(req.body.group) === 'true';
+    const now = () => new Date().toISOString();
+
+    // 모든 파일을 먼저 처리(치수 측정 + 영상 poster)
+    const medias = [];
+    for (const f of files) {
+      // eslint-disable-next-line no-await-in-loop
+      const m = await storage.processSaved(f, fileId(f));
+      medias.push(m);
+    }
 
     const data = metaStore.read();
-    data.images.unshift(entry);
+    let created = [];
+
+    if (group && medias.length > 1) {
+      const cover = medias[0];
+      const entry = {
+        id: crypto.randomUUID(),
+        type: cover.type,
+        url: cover.url,
+        ...(cover.poster ? { poster: cover.poster } : {}),
+        width: cover.width,
+        height: cover.height,
+        items: medias,
+        tags,
+        createdAt: now(),
+      };
+      data.images.unshift(entry);
+      created = [entry];
+    } else {
+      // 개별: 선택 순서를 유지하며 맨 앞에 추가
+      created = medias.map((m, i) => ({
+        id: fileId(files[i]),
+        type: m.type,
+        url: m.url,
+        ...(m.poster ? { poster: m.poster } : {}),
+        width: m.width,
+        height: m.height,
+        tags,
+        createdAt: now(),
+      }));
+      for (let i = created.length - 1; i >= 0; i -= 1) data.images.unshift(created[i]);
+    }
+
     ensureTags(data, tags);
     metaStore.write(data);
-    res.status(201).json(entry);
+    res.status(201).json(created);
   } catch (e) {
     res.status(500).json({ error: 'upload failed', detail: String(e.message || e) });
   }
@@ -108,6 +142,24 @@ exports.createTag = (req, res) => {
     metaStore.write(data);
   }
   res.status(201).json(data.tags.find((t) => t.id === id));
+};
+
+// 태그 순서 변경 — ids 배열 순서대로 재정렬(목록에 없는 태그는 뒤에 보존).
+exports.reorderTags = (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+  const data = metaStore.read();
+  const byId = new Map(data.tags.map((t) => [t.id, t]));
+  const ordered = [];
+  for (const id of ids) {
+    if (byId.has(id)) {
+      ordered.push(byId.get(id));
+      byId.delete(id);
+    }
+  }
+  for (const t of byId.values()) ordered.push(t); // 누락분 보존
+  data.tags = ordered;
+  metaStore.write(data);
+  res.json(data.tags);
 };
 
 // 태그 이름 변경 — id는 그대로 두고 label만 바꾼다(이미지는 id로 참조하므로 연결 유지).

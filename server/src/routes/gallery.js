@@ -24,10 +24,11 @@ router.get('/download/:name', ctrl.downloadFile);
 router.get('/tags', ctrl.listTags);
 
 // 쓰기 — 오너만 (requireOwner)
-router.post('/images', requireOwner, upload.single('file'), ctrl.createImage);
+router.post('/images', requireOwner, upload.array('files', 100), ctrl.createImages);
 router.delete('/images/:id', requireOwner, ctrl.deleteImage);
 router.patch('/images/:id', requireOwner, express.json(), ctrl.updateImageTags);
 router.post('/tags', requireOwner, express.json(), ctrl.createTag);
+router.patch('/tags/order', requireOwner, express.json(), ctrl.reorderTags); // ':id'보다 먼저
 router.patch('/tags/:id', requireOwner, express.json(), ctrl.renameTag);
 router.delete('/tags/:id', requireOwner, ctrl.deleteTag);
 

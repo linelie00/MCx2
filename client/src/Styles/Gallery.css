@@ -484,6 +484,54 @@
   max-height: 320px;
   object-fit: contain;
 }
+/* 다중 선택 미리보기 썸네일 */
+.gal-filepick-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.gal-filepick-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid #cbb88c;
+}
+
+/* 앨범 묶기 토글 */
+.gal-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  font-family: 'Hahmlet', serif;
+  font-size: 0.84rem;
+  color: #4a3c2a;
+  cursor: pointer;
+}
+.gal-group-hint {
+  margin-left: auto;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.74rem;
+  color: #8a7a5c;
+}
+
+/* 태그 관리 안내 + 드래그 칩 */
+.gal-manage-hint {
+  margin: 0 0 8px;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.74rem;
+  color: #8a7a5c;
+}
+.gal-chip--manage {
+  cursor: grab;
+}
+.gal-chip--manage.is-dragging {
+  opacity: 0.4;
+}
 .gal-filepick-placeholder {
   font-family: 'Hahmlet', serif;
   font-size: 0.85rem;

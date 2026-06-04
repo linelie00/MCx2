@@ -119,8 +119,16 @@ function Gallery() {
   }, []);
 
   const handleUpload = useCallback(async (payload) => {
-    const created = await galleryApi.uploadImage(payload);
-    setAllImages((prev) => [created, ...prev]);
+    const created = await galleryApi.uploadImages(payload); // 생성된 엔트리 배열
+    setAllImages((prev) => [...created, ...prev]);
+  }, []);
+
+  const handleReorderTags = useCallback(async (orderedIds) => {
+    setTags((prev) => {
+      const byId = Object.fromEntries(prev.map((t) => [t.id, t]));
+      return orderedIds.map((id) => byId[id]).filter(Boolean);
+    });
+    await galleryApi.reorderTags(orderedIds);
   }, []);
 
   const handleDelete = useCallback(async (image) => {
@@ -165,6 +173,7 @@ function Gallery() {
         onCreateTag={handleCreateTag}
         onRenameTag={handleRenameTag}
         onDeleteTag={handleDeleteTag}
+        onReorder={handleReorderTags}
       />
 
       {loading ? (

@@ -43,14 +43,16 @@ export async function fetchTags() {
 }
 
 // 업로드 — 실제 File을 multipart로 전송(치수/타입/poster는 서버가 처리)
-export async function uploadImage({ file, tags = [] }) {
+// 다중 업로드. group=true 이고 2장 이상이면 한 앨범으로 묶인다. 생성 엔트리 배열 반환.
+export async function uploadImages({ files, tags = [], group = false }) {
   const form = new FormData();
-  form.append('file', file);
+  for (const f of files) form.append('files', f);
   form.append('tags', JSON.stringify(tags));
+  form.append('group', String(group));
   const created = await asJson(
     await fetch(`${API}/images`, { method: 'POST', headers: { ...authHeaders() }, body: form })
   );
-  return withAbsUrls(created);
+  return created.map(withAbsUrls);
 }
 
 export async function deleteImage(id) {
@@ -94,6 +96,16 @@ export async function deleteTag(id) {
   );
 }
 
+export async function reorderTags(ids) {
+  return asJson(
+    await fetch(`${API}/tags/order`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ ids }),
+    })
+  );
+}
+
 // 미디어 url(절대/상대)에서 파일명을 뽑아 강제 다운로드용 엔드포인트 URL을 만든다.
 export function downloadUrl(mediaUrl) {
   const name = (mediaUrl || '').split('/').pop();
@@ -103,12 +115,13 @@ export function downloadUrl(mediaUrl) {
 const galleryApi = {
   fetchImages,
   fetchTags,
-  uploadImage,
+  uploadImages,
   deleteImage,
   updateImageTags,
   createTag,
   renameTag,
   deleteTag,
+  reorderTags,
   downloadUrl,
 };
 export default galleryApi;

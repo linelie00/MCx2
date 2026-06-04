@@ -1,0 +1,29 @@
+{
+  "tags": [
+    {
+      "id": "migel",
+      "label": "미겔"
+    },
+    {
+      "id": "matiam",
+      "label": "마티암"
+    },
+    {
+      "id": "mihearti",
+      "label": "미하티"
+    },
+    {
+      "id": "battle",
+      "label": "전투"
+    },
+    {
+      "id": "daily",
+      "label": "일상"
+    },
+    {
+      "id": "world",
+      "label": "세계관"
+    }
+  ],
+  "images": []
+}

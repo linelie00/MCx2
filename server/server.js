@@ -1,14 +1,7 @@
-const express = require('express')
-const cors = require('cors')
-const app = express()
-const port = 8000
+const app = require('./src/app');
 
-app.use(cors())
-
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-})
+const port = process.env.PORT || 8000;
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
+  console.log(`MIHEARTI API listening on port ${port}`);
+});

@@ -5,7 +5,7 @@
  */
 import { useMemo, useState } from 'react';
 
-const MAX_TAGS = 2;
+const MAX_TAGS = 10;
 
 function TagInput({ allTags, value, onChange, onCreate }) {
   const [text, setText] = useState('');

@@ -8,7 +8,7 @@
  *   - type: 'image' | 'video'  (생략 시 'image'. gif도 'image'로 둔다)
  *   - poster: 영상 전용. 그리드에 보여줄 첫 프레임 썸네일
  *   - width/height: 원본 픽셀. 메이슨리가 로드 전에 카드 자리를 잡아 레이아웃 밀림을 방지한다.
- *   - tags: tag.id 배열 (이미지당 1~2개)
+ *   - tags: tag.id 배열 (이미지당 최대 10개)
  * Tag   { id(slug), label }
  */
 import { images } from './constants/images';

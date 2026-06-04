@@ -44,7 +44,7 @@ function GalleryModal({ image, tagLabels = {}, allTags = [], onCreateTag, onSave
           <img className="gal-viewer-img" src={image.url} alt="" />
         )}
 
-        <div className="gal-viewer-bar">
+        <div className={`gal-viewer-bar${editing ? ' gal-viewer-bar--editing' : ''}`}>
           <div className="gal-viewer-tags">
             {editing ? (
               <TagInput allTags={allTags} value={draftTags} onChange={setDraftTags} onCreate={onCreateTag} />

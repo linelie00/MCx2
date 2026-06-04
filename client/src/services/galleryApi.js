@@ -6,6 +6,8 @@
  */
 import { mockImages, mockTags } from '../Data/gallery';
 
+const MAX_TAGS = 10; // 이미지당 최대 태그 수
+
 let images = mockImages.map((i) => ({ ...i, createdAt: i.createdAt || new Date().toISOString() }));
 let tags = [...mockTags];
 
@@ -36,7 +38,7 @@ export async function uploadImage({ url, width, height, tags: imgTags = [] }) {
     url,
     width,
     height,
-    tags: imgTags.slice(0, 2),
+    tags: imgTags.slice(0, MAX_TAGS),
     createdAt: new Date().toISOString(),
   };
   images = [img, ...images];
@@ -50,7 +52,7 @@ export async function deleteImage(id) {
 
 export async function updateImageTags(id, nextTags) {
   await delay();
-  images = images.map((i) => (i.id === id ? { ...i, tags: nextTags.slice(0, 2) } : i));
+  images = images.map((i) => (i.id === id ? { ...i, tags: nextTags.slice(0, MAX_TAGS) } : i));
   return images.find((i) => i.id === id);
 }
 

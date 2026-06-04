@@ -215,6 +215,20 @@
   gap: 12px;
   padding: 10px 14px;
 }
+/* 태그 편집 시: 입력칸이 한 줄을 차지하고 버튼은 그 아래 우측 정렬 */
+.gal-viewer-bar--editing {
+  flex-direction: column;
+  align-items: stretch;
+}
+.gal-viewer-bar--editing .gal-viewer-actions {
+  justify-content: flex-end;
+}
+.gal-viewer-bar--editing .gal-viewer-tags {
+  display: block;
+}
+.gal-viewer-tags .gal-taginput {
+  width: 100%;
+}
 .gal-viewer-tags {
   display: flex;
   flex-wrap: wrap;

@@ -5,6 +5,8 @@
 const metaStore = require('../services/metaStore');
 const storage = require('../services/storageService');
 
+const MAX_TAGS = 10; // 이미지당 최대 태그 수
+
 const slug = (label) =>
   label.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w가-힣-]/g, '') || `tag-${Date.now()}`;
 
@@ -36,7 +38,7 @@ exports.createImage = async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'file is required' });
   try {
     const id = req.file.filename.replace(/\.[^.]+$/, '');
-    const tags = parseTags(req.body).slice(0, 2);
+    const tags = parseTags(req.body).slice(0, MAX_TAGS);
     const media = await storage.processSaved(req.file, id);
 
     const entry = {
@@ -74,7 +76,7 @@ exports.updateImageTags = (req, res) => {
   const data = metaStore.read();
   const image = data.images.find((i) => i.id === req.params.id);
   if (!image) return res.status(404).json({ error: 'not found' });
-  const tags = (Array.isArray(req.body.tags) ? req.body.tags : []).slice(0, 2);
+  const tags = (Array.isArray(req.body.tags) ? req.body.tags : []).slice(0, MAX_TAGS);
   image.tags = tags;
   ensureTags(data, tags);
   metaStore.write(data);

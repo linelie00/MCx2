@@ -23,7 +23,8 @@ function TagFilterBar({
   const [editingId, setEditingId] = useState(null);
   const [editLabel, setEditLabel] = useState('');
   const [dragId, setDragId] = useState(null);
-  const [overId, setOverId] = useState(null);
+  const [over, setOver] = useState(null); // { id, after } — 어느 칩의 앞/뒤에 삽입할지
+  const overRef = useRef(null); // onUp(stale 클로저)에서 최종값 참조용
   const chipRefs = useRef(new Map()); // id -> 칩 DOM
   const prevRects = useRef(new Map()); // id -> 직전 위치(FLIP)
 
@@ -31,16 +32,12 @@ function TagFilterBar({
   const shown = q ? tags.filter((t) => t.label.toLowerCase().includes(q)) : tags;
   const inManage = manage && canManage; // 권한이 없으면 관리 모드를 강제 해제
 
-  // 드래그 중에는 미리보기 순서로 렌더 → 끌고 있는 칩이 들어갈 자리가 실시간으로 비워진다
+  // 드래그 중에는 미리보기 순서로 렌더 → 끌고 있는 칩이 들어갈 자리가 실시간으로 비워진다.
+  // over가 null이면 원래 순서 그대로(원위치 복귀 가능).
   const renderList = (() => {
-    if (!inManage || !dragId || !overId || dragId === overId) return shown;
-    const arr = shown.slice();
-    const from = arr.findIndex((t) => t.id === dragId);
-    const to = arr.findIndex((t) => t.id === overId);
-    if (from < 0 || to < 0) return shown;
-    const [moved] = arr.splice(from, 1);
-    arr.splice(to, 0, moved);
-    return arr;
+    if (!inManage || !dragId) return shown;
+    const byId = new Map(shown.map((t) => [t.id, t]));
+    return orderWith(dragId, over).map((id) => byId.get(id)).filter(Boolean);
   })();
 
   // FLIP: 칩 위치가 바뀌면 부드럽게 미끄러지게 한다(사이가 벌어지는 느낌)
@@ -117,38 +114,46 @@ function TagFilterBar({
     cancelEdit();
   };
 
-  // sourceId 태그를 targetId 위치로 이동
-  const moveTag = (sourceId, targetId) => {
-    if (!sourceId || sourceId === targetId) return;
-    const ids = tags.map((t) => t.id);
-    const from = ids.indexOf(sourceId);
-    const to = ids.indexOf(targetId);
-    if (from < 0 || to < 0) return;
-    ids.splice(from, 1);
-    ids.splice(to, 0, sourceId);
-    onReorder(ids);
-  };
+  // dragId를 제거한 목록에서 over(앞/뒤 삽입점) 기준으로 재배열한 id 배열을 만든다.
+  // over가 null이면 원래 순서(= 원위치 복귀 가능). 함수 선언이라 renderList보다 위에서 호출 가능(호이스팅).
+  function orderWith(dragged, ov) {
+    const others = shown.filter((t) => t.id !== dragged);
+    if (!ov) return shown.map((t) => t.id);
+    let idx = others.findIndex((t) => t.id === ov.id);
+    if (idx < 0) return shown.map((t) => t.id);
+    if (ov.after) idx += 1;
+    const ids = others.map((t) => t.id);
+    ids.splice(idx, 0, dragged);
+    return ids;
+  }
 
   // 포인터(마우스/터치) 기반 드래그 — 네이티브 DnD에 의존하지 않는다.
   const startPointerDrag = (e, id) => {
     e.preventDefault();
     setDragId(id);
-    const tagUnder = (ev) => {
+    overRef.current = null;
+    setOver(null);
+    const onMove = (ev) => {
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const chip = el && el.closest('[data-tagid]');
-      return chip ? chip.getAttribute('data-tagid') : null;
+      if (!chip) return; // 칩 밖이면 현재 미리보기 유지
+      const overId = chip.getAttribute('data-tagid');
+      if (overId === id) return; // 드래그 중인 칩 자신 위면 유지(자기 자신은 타깃 제외)
+      const rect = chip.getBoundingClientRect();
+      const after = ev.clientX > rect.left + rect.width / 2; // 칩의 좌/우 절반으로 앞·뒤 결정
+      const next = { id: overId, after };
+      overRef.current = next;
+      setOver(next);
     };
-    const onMove = (ev) => {
-      const u = tagUnder(ev);
-      if (u && u !== id) setOverId(u); // 자기 자신 위에선 미리보기를 흔들지 않음
-    };
-    const onUp = (ev) => {
+    const onUp = () => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
-      const target = tagUnder(ev);
-      if (target && target !== id) moveTag(id, target);
+      const ids = orderWith(id, overRef.current);
+      const orig = shown.map((t) => t.id);
+      if (JSON.stringify(ids) !== JSON.stringify(orig)) onReorder(ids);
       setDragId(null);
-      setOverId(null);
+      setOver(null);
+      overRef.current = null;
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
@@ -202,16 +207,18 @@ function TagFilterBar({
                 else m.delete(t.id);
               }}
             >
-              <span
-                className="gal-chip-grip"
-                onPointerDown={(e) => startPointerDrag(e, t.id)}
-                role="button"
-                tabIndex={-1}
-                aria-label="드래그하여 순서 변경"
-                title="드래그하여 순서 변경"
-              >
-                ⠿
-              </span>
+              {!q && (
+                <span
+                  className="gal-chip-grip"
+                  onPointerDown={(e) => startPointerDrag(e, t.id)}
+                  role="button"
+                  tabIndex={-1}
+                  aria-label="드래그하여 순서 변경"
+                  title="드래그하여 순서 변경"
+                >
+                  ⠿
+                </span>
+              )}
               {editingId === t.id ? (
                 <input
                   className="gal-chip-edit"

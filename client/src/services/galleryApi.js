@@ -1,67 +1,81 @@
 /**
- * galleryApi.js — 갤러리 데이터 접근 계층
+ * galleryApi.js — 갤러리 데이터 접근 계층 (Express API 연결)
  *
- * 현재는 목 데이터를 메모리에 두고 Promise로 응답한다(서버 없이 UI 검증용).
- * 추후 fetch('/api/gallery/*') 구현으로 이 파일만 교체하면 컴포넌트는 그대로 동작한다.
+ * 서버는 url/poster를 '/uploads/..' 상대 경로로 돌려준다. 프론트(:3000)와 서버(:8000)가
+ * 다른 출처이므로 절대 URL로 바꿔 <img src>/<video src>가 동작하게 한다.
+ * 저장소를 바꿔도 이 파일의 계약만 유지하면 컴포넌트는 그대로다.
  */
-import { mockImages, mockTags } from '../Data/gallery';
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:8000';
+const API = `${API_BASE}/api/gallery`;
 
-const MAX_TAGS = 10; // 이미지당 최대 태그 수
+// 상대 경로(/uploads/..)를 절대 URL로
+const abs = (u) => (u && u.startsWith('/') ? `${API_BASE}${u}` : u);
+const withAbsUrls = (img) => ({
+  ...img,
+  url: abs(img.url),
+  ...(img.poster ? { poster: abs(img.poster) } : {}),
+});
 
-let images = mockImages.map((i) => ({ ...i, createdAt: i.createdAt || new Date().toISOString() }));
-let tags = [...mockTags];
+async function asJson(res) {
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text().catch(() => '')}`);
+  return res.status === 204 ? null : res.json();
+}
 
-const delay = (ms = 150) => new Promise((res) => setTimeout(res, ms));
-const slug = (label) =>
-  label.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^\w가-힣-]/g, '') || `tag-${Date.now()}`;
-const uid = () =>
-  (typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `g-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-
-// 태그로 필터링한 이미지 목록 (tag 없으면 전체)
 export async function fetchImages({ tag } = {}) {
-  await delay();
-  return tag ? images.filter((i) => i.tags.includes(tag)) : images.slice();
+  const qs = tag ? `?tag=${encodeURIComponent(tag)}` : '';
+  const list = await asJson(await fetch(`${API}/images${qs}`));
+  return list.map(withAbsUrls);
 }
 
 export async function fetchTags() {
-  await delay();
-  return tags.slice();
+  return asJson(await fetch(`${API}/tags`));
 }
 
-// 업로드 — UI 단계에서는 blob URL + 클라이언트 측정 치수를 그대로 저장
-export async function uploadImage({ url, width, height, tags: imgTags = [] }) {
-  await delay();
-  const img = {
-    id: uid(),
-    url,
-    width,
-    height,
-    tags: imgTags.slice(0, MAX_TAGS),
-    createdAt: new Date().toISOString(),
-  };
-  images = [img, ...images];
-  return img;
+// 업로드 — 실제 File을 multipart로 전송(치수/타입/poster는 서버가 처리)
+export async function uploadImage({ file, tags = [] }) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('tags', JSON.stringify(tags));
+  const created = await asJson(await fetch(`${API}/images`, { method: 'POST', body: form }));
+  return withAbsUrls(created);
 }
 
 export async function deleteImage(id) {
-  await delay();
-  images = images.filter((i) => i.id !== id);
+  await asJson(await fetch(`${API}/images/${id}`, { method: 'DELETE' }));
 }
 
 export async function updateImageTags(id, nextTags) {
-  await delay();
-  images = images.map((i) => (i.id === id ? { ...i, tags: nextTags.slice(0, MAX_TAGS) } : i));
-  return images.find((i) => i.id === id);
+  const updated = await asJson(
+    await fetch(`${API}/images/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: nextTags }),
+    })
+  );
+  return withAbsUrls(updated);
 }
 
 export async function createTag(label) {
-  await delay();
-  const id = slug(label);
-  if (!tags.some((t) => t.id === id)) tags = [...tags, { id, label: label.trim() }];
-  return tags.find((t) => t.id === id);
+  return asJson(
+    await fetch(`${API}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    })
+  );
 }
 
-const galleryApi = { fetchImages, fetchTags, uploadImage, deleteImage, updateImageTags, createTag };
+export async function deleteTag(id) {
+  await asJson(await fetch(`${API}/tags/${id}`, { method: 'DELETE' }));
+}
+
+const galleryApi = {
+  fetchImages,
+  fetchTags,
+  uploadImage,
+  deleteImage,
+  updateImageTags,
+  createTag,
+  deleteTag,
+};
 export default galleryApi;

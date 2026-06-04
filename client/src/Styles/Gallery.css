@@ -53,7 +53,71 @@
 .gal-chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+/* 태그 관리 토글 버튼 */
+.gal-tagmanage {
+  margin-left: auto;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.78rem;
+  padding: 6px 12px;
+  color: #6b5b40;
+  background: transparent;
+  border: 1px solid #cbb88c;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.gal-tagmanage.is-active {
+  color: #f3ead4;
+  background: #8a7a5c;
+  border-color: #8a7a5c;
+}
+
+/* 관리 모드 칩(삭제 ×) */
+.gal-chip--manage {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.82rem;
+  padding: 6px 8px 6px 14px;
+  color: #6b5b40;
+  background: #f3ead4;
+  border: 1px solid #cbb88c;
+  border-radius: 999px;
+}
+.gal-chip-x {
+  border: none;
+  background: none;
+  color: #9c8a63;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.gal-chip-x:hover {
+  color: #7a2e22;
+}
+
+/* 새 태그 추가 */
+.gal-tagadd {
+  display: inline-flex;
+  gap: 6px;
+}
+.gal-tagadd-field {
+  font-family: 'Hahmlet', serif;
+  font-size: 0.8rem;
+  padding: 5px 12px;
+  color: #2c2620;
+  background: #fff;
+  border: 1px solid #cbb88c;
+  border-radius: 999px;
+  width: 110px;
+}
+.gal-chip--add {
+  border-style: dashed;
 }
 .gal-chip {
   font-family: 'NexonWarhaven', serif;

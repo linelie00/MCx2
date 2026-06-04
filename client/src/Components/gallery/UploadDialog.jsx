@@ -1,7 +1,7 @@
 /**
- * UploadDialog — 이미지 추가 모달
- * 파일 선택 → 미리보기 + 원본 치수 측정(naturalWidth/Height) → 태그 지정 → 저장.
- * UI 단계: 선택 파일을 blob URL로 저장한다(서버 연결 시 multipart 업로드로 교체).
+ * UploadDialog — 이미지/영상 추가 모달
+ * 파일 선택 → 미리보기 → 태그 지정 → 실제 File을 서버로 전송(FormData).
+ * 원본 치수·타입·영상 poster는 서버가 처리한다.
  */
 import { useEffect, useState } from 'react';
 import TagInput from './TagInput';
@@ -9,9 +9,10 @@ import TagInput from './TagInput';
 function UploadDialog({ allTags, onCreateTag, onSubmit, onClose }) {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState('');
-  const [dims, setDims] = useState(null);
   const [tags, setTags] = useState([]);
   const [busy, setBusy] = useState(false);
+
+  const isVideo = file && file.type.startsWith('video/');
 
   useEffect(() => {
     if (!file) return undefined;
@@ -22,47 +23,40 @@ function UploadDialog({ allTags, onCreateTag, onSubmit, onClose }) {
 
   const handleFile = (e) => {
     const f = e.target.files?.[0];
-    if (f) {
-      setFile(f);
-      setDims(null);
-    }
+    if (f) setFile(f);
   };
 
-  const handleImgLoad = (e) => {
-    setDims({ width: e.target.naturalWidth, height: e.target.naturalHeight });
-  };
-
-  const canSave = file && dims && !busy;
+  const canSave = file && !busy;
 
   const handleSave = async () => {
     if (!canSave) return;
     setBusy(true);
-    // blob URL은 모달 unmount 시 revoke되므로, 저장용으로 새 URL을 만든다.
-    const persistUrl = URL.createObjectURL(file);
-    await onSubmit({ url: persistUrl, width: dims.width, height: dims.height, tags });
-    setBusy(false);
-    onClose();
+    try {
+      await onSubmit({ file, tags });
+      onClose();
+    } catch (err) {
+      setBusy(false);
+      alert(`업로드 실패: ${err.message}`);
+    }
   };
 
   return (
     <div className="gal-overlay" onClick={onClose}>
       <div className="gal-dialog" onClick={(e) => e.stopPropagation()}>
-        <h3 className="gal-dialog-title">이미지 추가</h3>
+        <h3 className="gal-dialog-title">이미지 / 영상 추가</h3>
 
         <label className="gal-filepick">
-          {preview ? (
-            <img className="gal-filepick-preview" src={preview} alt="미리보기" onLoad={handleImgLoad} />
+          {!preview ? (
+            <span className="gal-filepick-placeholder">클릭하여 파일 선택</span>
+          ) : isVideo ? (
+            <video className="gal-filepick-preview" src={preview} controls />
           ) : (
-            <span className="gal-filepick-placeholder">클릭하여 이미지 선택</span>
+            <img className="gal-filepick-preview" src={preview} alt="미리보기" />
           )}
-          <input type="file" accept="image/*" onChange={handleFile} hidden />
+          <input type="file" accept="image/*,video/*" onChange={handleFile} hidden />
         </label>
 
-        {dims && (
-          <p className="gal-dialog-meta">
-            {dims.width} × {dims.height}px
-          </p>
-        )}
+        {file && <p className="gal-dialog-meta">{file.name}</p>}
 
         <TagInput allTags={allTags} value={tags} onChange={setTags} onCreate={onCreateTag} />
 
@@ -71,7 +65,7 @@ function UploadDialog({ allTags, onCreateTag, onSubmit, onClose }) {
             취소
           </button>
           <button type="button" className="gal-btn gal-btn--primary" onClick={handleSave} disabled={!canSave}>
-            {busy ? '저장 중…' : '추가'}
+            {busy ? '업로드 중…' : '추가'}
           </button>
         </div>
       </div>

@@ -1,14 +1,32 @@
 /**
- * TagFilterBar — 상단 태그 필터
- * - '전체'(선택 없음)가 기본. 칩을 누르면 다중 선택(AND: 고른 태그를 모두 가진 이미지만).
- * - 태그가 많아질 수 있어 검색창으로 칩 목록을 좁힌다.
+ * TagFilterBar — 상단 태그 필터 + 태그 관리
+ * - 기본 모드: '전체'(선택 없음)가 기본, 칩 다중 선택(AND: 고른 태그를 모두 가진 이미지만).
+ * - 검색창으로 칩 목록을 좁힌다(태그가 많아질 수 있어).
+ * - '태그 관리' 모드: 칩에 ×(삭제), 하단에 새 태그 추가 입력.
  */
 import { useState } from 'react';
 
-function TagFilterBar({ tags, active, onToggle, onClear }) {
+function TagFilterBar({ tags, active, onToggle, onClear, onCreateTag, onDeleteTag }) {
   const [query, setQuery] = useState('');
+  const [manage, setManage] = useState(false);
+  const [newTag, setNewTag] = useState('');
+
   const q = query.trim().toLowerCase();
   const shown = q ? tags.filter((t) => t.label.toLowerCase().includes(q)) : tags;
+
+  const handleDelete = (tag) => {
+    if (window.confirm(`'${tag.label}' 태그를 삭제할까요?\n모든 이미지에서 이 태그가 제거됩니다.`)) {
+      onDeleteTag(tag.id);
+    }
+  };
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    const label = newTag.trim();
+    if (!label) return;
+    await onCreateTag(label);
+    setNewTag('');
+  };
 
   return (
     <div className="gal-tagbar">
@@ -19,30 +37,67 @@ function TagFilterBar({ tags, active, onToggle, onClear }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="태그 검색…"
         />
-        {active.length > 0 && (
-          <span className="gal-tagbar-info">{active.length}개 선택</span>
-        )}
+        {!manage && active.length > 0 && <span className="gal-tagbar-info">{active.length}개 선택</span>}
+        <button
+          type="button"
+          className={`gal-tagmanage${manage ? ' is-active' : ''}`}
+          onClick={() => setManage((m) => !m)}
+        >
+          {manage ? '완료' : '태그 관리'}
+        </button>
       </div>
 
       <div className="gal-chips">
-        <button
-          type="button"
-          className={`gal-chip${active.length === 0 ? ' is-active' : ''}`}
-          onClick={onClear}
-        >
-          전체
-        </button>
-        {shown.map((t) => (
+        {!manage && (
           <button
-            key={t.id}
             type="button"
-            className={`gal-chip${active.includes(t.id) ? ' is-active' : ''}`}
-            onClick={() => onToggle(t.id)}
+            className={`gal-chip${active.length === 0 ? ' is-active' : ''}`}
+            onClick={onClear}
           >
-            {t.label}
+            전체
           </button>
-        ))}
-        {shown.length === 0 && <span className="gal-tagbar-info">검색 결과 없음</span>}
+        )}
+
+        {shown.map((t) =>
+          manage ? (
+            <span className="gal-chip gal-chip--manage" key={t.id}>
+              {t.label}
+              <button
+                type="button"
+                className="gal-chip-x"
+                onClick={() => handleDelete(t)}
+                aria-label={`${t.label} 삭제`}
+              >
+                ×
+              </button>
+            </span>
+          ) : (
+            <button
+              key={t.id}
+              type="button"
+              className={`gal-chip${active.includes(t.id) ? ' is-active' : ''}`}
+              onClick={() => onToggle(t.id)}
+            >
+              {t.label}
+            </button>
+          )
+        )}
+
+        {!manage && shown.length === 0 && <span className="gal-tagbar-info">검색 결과 없음</span>}
+
+        {manage && (
+          <form className="gal-tagadd" onSubmit={handleAdd}>
+            <input
+              className="gal-tagadd-field"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              placeholder="새 태그"
+            />
+            <button type="submit" className="gal-chip gal-chip--add">
+              + 추가
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

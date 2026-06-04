@@ -87,6 +87,15 @@ function Gallery() {
     return tag;
   }, []);
 
+  const handleDeleteTag = useCallback(async (tagId) => {
+    await galleryApi.deleteTag(tagId);
+    setTags((prev) => prev.filter((t) => t.id !== tagId));
+    setAllImages((prev) =>
+      prev.map((i) => (i.tags.includes(tagId) ? { ...i, tags: i.tags.filter((t) => t !== tagId) } : i))
+    );
+    setActiveTags((prev) => prev.filter((t) => t !== tagId));
+  }, []);
+
   const handleUpload = useCallback(async (payload) => {
     const created = await galleryApi.uploadImage(payload);
     setAllImages((prev) => [created, ...prev]);
@@ -113,7 +122,14 @@ function Gallery() {
         </button>
       </header>
 
-      <TagFilterBar tags={tags} active={activeTags} onToggle={toggleTag} onClear={clearTags} />
+      <TagFilterBar
+        tags={tags}
+        active={activeTags}
+        onToggle={toggleTag}
+        onClear={clearTags}
+        onCreateTag={handleCreateTag}
+        onDeleteTag={handleDeleteTag}
+      />
 
       {loading ? (
         <p className="gal-empty">불러오는 중…</p>

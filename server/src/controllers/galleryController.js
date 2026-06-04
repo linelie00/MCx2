@@ -98,3 +98,15 @@ exports.createTag = (req, res) => {
   }
   res.status(201).json(data.tags.find((t) => t.id === id));
 };
+
+// 태그 삭제 — 목록에서 제거하고 모든 이미지의 tags에서도 떼어낸다(이미지는 유지).
+exports.deleteTag = (req, res) => {
+  const { id } = req.params;
+  const data = metaStore.read();
+  data.tags = data.tags.filter((t) => t.id !== id);
+  data.images = data.images.map((img) =>
+    img.tags.includes(id) ? { ...img, tags: img.tags.filter((t) => t !== id) } : img
+  );
+  metaStore.write(data);
+  res.status(204).end();
+};

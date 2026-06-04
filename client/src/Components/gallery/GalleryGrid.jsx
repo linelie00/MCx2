@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import GalleryCard from './GalleryCard';
+import { cardRatio } from './galleryLayout';
 
 // 화면 폭 → 컬럼 수 (기존 breakpoints와 동일)
 function colCountFor(w) {
@@ -36,7 +37,7 @@ function GalleryGrid({ items, tagLabels, hasMore, onLoadMore, onOpen }) {
   const columns = useMemo(() => {
     const cols = Array.from({ length: colCount }, () => ({ items: [], h: 0 }));
     for (const img of items) {
-      const ratio = img.width ? img.height / img.width : 1; // 단위 폭 기준 상대 높이
+      const ratio = cardRatio(img); // 카드 실제 렌더 높이(상한 적용)와 일치
       let target = cols[0];
       for (const c of cols) if (c.h < target.h) target = c;
       target.items.push(img);

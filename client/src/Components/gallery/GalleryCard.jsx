@@ -3,6 +3,8 @@
  * width/height로 aspect-ratio 박스를 잡아 이미지 로드 전에도 자리를 확보(레이아웃 밀림 방지).
  * 영상(type:'video')은 그리드에선 poster + ▶ 배지만 보여주고 재생은 모달에서 한다.
  */
+import { cardRatio } from './galleryLayout';
+
 function GalleryCard({ image, tagLabels = {}, onOpen }) {
   const isVideo = image.type === 'video';
   const thumb = isVideo ? image.poster || image.url : image.url;
@@ -12,7 +14,7 @@ function GalleryCard({ image, tagLabels = {}, onOpen }) {
     <button
       type="button"
       className="gal-card"
-      style={{ aspectRatio: `${image.width} / ${image.height}` }}
+      style={{ aspectRatio: `1 / ${cardRatio(image)}` }}
       onClick={() => onOpen(image)}
     >
       <img className="gal-card-img" src={thumb} alt="" loading="lazy" />

@@ -99,6 +99,19 @@ exports.createTag = (req, res) => {
   res.status(201).json(data.tags.find((t) => t.id === id));
 };
 
+// 태그 이름 변경 — id는 그대로 두고 label만 바꾼다(이미지는 id로 참조하므로 연결 유지).
+exports.renameTag = (req, res) => {
+  const { id } = req.params;
+  const label = (req.body.label || '').trim();
+  if (!label) return res.status(400).json({ error: 'label is required' });
+  const data = metaStore.read();
+  const tag = data.tags.find((t) => t.id === id);
+  if (!tag) return res.status(404).json({ error: 'not found' });
+  tag.label = label;
+  metaStore.write(data);
+  res.json(tag);
+};
+
 // 태그 삭제 — 목록에서 제거하고 모든 이미지의 tags에서도 떼어낸다(이미지는 유지).
 exports.deleteTag = (req, res) => {
   const { id } = req.params;

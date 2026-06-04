@@ -65,6 +65,16 @@ export async function createTag(label) {
   );
 }
 
+export async function renameTag(id, label) {
+  return asJson(
+    await fetch(`${API}/tags/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label }),
+    })
+  );
+}
+
 export async function deleteTag(id) {
   await asJson(await fetch(`${API}/tags/${id}`, { method: 'DELETE' }));
 }
@@ -76,6 +86,7 @@ const galleryApi = {
   deleteImage,
   updateImageTags,
   createTag,
+  renameTag,
   deleteTag,
 };
 export default galleryApi;

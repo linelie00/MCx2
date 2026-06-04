@@ -87,6 +87,11 @@ function Gallery() {
     return tag;
   }, []);
 
+  const handleRenameTag = useCallback(async (tagId, label) => {
+    const updated = await galleryApi.renameTag(tagId, label);
+    setTags((prev) => prev.map((t) => (t.id === tagId ? updated : t)));
+  }, []);
+
   const handleDeleteTag = useCallback(async (tagId) => {
     await galleryApi.deleteTag(tagId);
     setTags((prev) => prev.filter((t) => t.id !== tagId));
@@ -128,6 +133,7 @@ function Gallery() {
         onToggle={toggleTag}
         onClear={clearTags}
         onCreateTag={handleCreateTag}
+        onRenameTag={handleRenameTag}
         onDeleteTag={handleDeleteTag}
       />
 

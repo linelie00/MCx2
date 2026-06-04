@@ -24,6 +24,7 @@ router.patch('/images/:id', express.json(), ctrl.updateImageTags);
 
 router.get('/tags', ctrl.listTags);
 router.post('/tags', express.json(), ctrl.createTag);
+router.patch('/tags/:id', express.json(), ctrl.renameTag);
 router.delete('/tags/:id', ctrl.deleteTag);
 
 module.exports = router;

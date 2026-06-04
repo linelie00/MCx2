@@ -88,6 +88,25 @@
   border: 1px solid #cbb88c;
   border-radius: 999px;
 }
+/* 관리 칩 내부: 이름(클릭→편집) / 편집 입력 */
+.gal-chip-label {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+}
+.gal-chip-edit {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.82rem;
+  width: 84px;
+  padding: 1px 4px;
+  color: #2c2620;
+  background: #fff;
+  border: 1px solid #b9a672;
+  border-radius: 4px;
+}
 .gal-chip-x {
   border: none;
   background: none;

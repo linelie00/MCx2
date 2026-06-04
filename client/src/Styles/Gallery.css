@@ -529,14 +529,13 @@
 .gal-chip--manage {
   user-select: none;
 }
-/* 끌고 있는 칩은 같은 크기의 빈 점선 자리로 보이게(자리가 비워지는 느낌) */
+/* 끌고 있는 칩은 들린 느낌으로 보이게(이동 애니메이션은 FLIP이 담당) */
 .gal-chip--manage.is-dragging {
-  background: transparent;
-  border-style: dashed;
-  border-color: #b9a672;
-}
-.gal-chip--manage.is-dragging > * {
-  visibility: hidden;
+  background: #ece0c2;
+  border-color: #8a7a5c;
+  box-shadow: 0 6px 14px -6px rgba(60, 46, 34, 0.55);
+  position: relative;
+  z-index: 2;
 }
 .gal-chip-grip {
   display: inline-flex;

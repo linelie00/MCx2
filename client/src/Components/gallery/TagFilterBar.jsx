@@ -4,7 +4,7 @@
  * - 검색창으로 칩 목록을 좁힌다(태그가 많아질 수 있어).
  * - '태그 관리' 모드: 칩 클릭 시 이름 편집(rename), ×(삭제), 하단에 새 태그 추가 입력.
  */
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 function TagFilterBar({
   tags,
@@ -24,6 +24,8 @@ function TagFilterBar({
   const [editLabel, setEditLabel] = useState('');
   const [dragId, setDragId] = useState(null);
   const [overId, setOverId] = useState(null);
+  const chipRefs = useRef(new Map()); // id -> 칩 DOM
+  const prevRects = useRef(new Map()); // id -> 직전 위치(FLIP)
 
   const q = query.trim().toLowerCase();
   const shown = q ? tags.filter((t) => t.label.toLowerCase().includes(q)) : tags;
@@ -40,6 +42,52 @@ function TagFilterBar({
     arr.splice(to, 0, moved);
     return arr;
   })();
+
+  // FLIP: 칩 위치가 바뀌면 부드럽게 미끄러지게 한다(사이가 벌어지는 느낌)
+  useLayoutEffect(() => {
+    const refs = chipRefs.current;
+    if (!inManage) {
+      prevRects.current = new Map();
+      return;
+    }
+    // 1) 잔여 transform 제거 후 실제 위치 측정
+    refs.forEach((el) => {
+      if (el) {
+        el.style.transition = 'none';
+        el.style.transform = '';
+      }
+    });
+    const newRects = new Map();
+    refs.forEach((el, id) => {
+      if (el) newRects.set(id, el.getBoundingClientRect());
+    });
+    // 2) 직전 위치에서 현재 위치로 역변환 적용
+    let animated = false;
+    refs.forEach((el, id) => {
+      const prev = prevRects.current.get(id);
+      const cur = newRects.get(id);
+      if (el && prev && cur) {
+        const dx = prev.left - cur.left;
+        const dy = prev.top - cur.top;
+        if (dx || dy) {
+          el.style.transform = `translate(${dx}px, ${dy}px)`;
+          animated = true;
+        }
+      }
+    });
+    // 3) 다음 프레임에 원위치로 트랜지션 → 미끄러짐
+    if (animated) {
+      requestAnimationFrame(() => {
+        refs.forEach((el) => {
+          if (el && el.style.transform) {
+            el.style.transition = 'transform 160ms ease';
+            el.style.transform = '';
+          }
+        });
+      });
+    }
+    prevRects.current = newRects;
+  });
 
   const handleDelete = (tag) => {
     if (window.confirm(`'${tag.label}' 태그를 삭제할까요?\n모든 이미지에서 이 태그가 제거됩니다.`)) {
@@ -148,6 +196,11 @@ function TagFilterBar({
               className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}`}
               key={t.id}
               data-tagid={t.id}
+              ref={(el) => {
+                const m = chipRefs.current;
+                if (el) m.set(t.id, el);
+                else m.delete(t.id);
+              }}
             >
               <span
                 className="gal-chip-grip"

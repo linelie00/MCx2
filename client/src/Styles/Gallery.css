@@ -281,15 +281,82 @@
   border-radius: 4px;
   overflow: hidden;
 }
-/* 이미지/영상: 남는 영역 안에서 비율 유지하며 축소(잘리지 않음) */
-.gal-viewer-img {
-  display: block;
-  width: 100%;
-  flex: 0 1 auto; /* 늘리지 않고(짧은 이미지 여백 방지) 넘칠 때만 비율 유지하며 축소 */
+/* 미디어 영역: 남는 공간 안에서 비율 유지하며 축소(잘리지 않음). 앨범 네비의 기준(relative) */
+.gal-viewer-media {
+  position: relative;
+  flex: 0 1 auto; /* 늘리지 않고(짧은 이미지 여백 방지) 넘칠 때만 축소 */
   min-height: 0;
-  object-fit: contain;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: #2c2620;
   border-radius: 4px 4px 0 0;
+  overflow: hidden;
+}
+.gal-viewer-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* 앨범 넘김 버튼 */
+.gal-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: #f3ead4;
+  background: rgba(28, 22, 16, 0.42);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.gal-nav:hover:not(:disabled) {
+  background: rgba(28, 22, 16, 0.66);
+}
+.gal-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.gal-nav--prev {
+  left: 0;
+  border-radius: 0 4px 4px 0;
+}
+.gal-nav--next {
+  right: 0;
+  border-radius: 4px 0 0 4px;
+}
+.gal-viewer-counter {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.76rem;
+  padding: 3px 12px;
+  color: #f3ead4;
+  background: rgba(28, 22, 16, 0.6);
+  border-radius: 999px;
+}
+
+/* 카드: 앨범 장수 배지 */
+.gal-card-count {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.72rem;
+  padding: 3px 9px;
+  color: #f3ead4;
+  background: rgba(46, 38, 28, 0.82);
+  border-radius: 999px;
 }
 .gal-viewer-bar {
   flex: 0 0 auto;

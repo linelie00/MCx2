@@ -14,6 +14,15 @@ const withAbsUrls = (img) => ({
   ...img,
   url: abs(img.url),
   ...(img.poster ? { poster: abs(img.poster) } : {}),
+  ...(Array.isArray(img.items)
+    ? {
+        items: img.items.map((it) => ({
+          ...it,
+          url: abs(it.url),
+          ...(it.poster ? { poster: abs(it.poster) } : {}),
+        })),
+      }
+    : {}),
 });
 
 async function asJson(res) {

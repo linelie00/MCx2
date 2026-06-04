@@ -75,9 +75,17 @@ async function processSaved(file, id) {
 }
 
 function removeFiles(image) {
-  const names = [];
-  if (image.url) names.push(path.basename(image.url));
-  if (image.poster) names.push(path.basename(image.poster));
+  const names = new Set();
+  const add = (u) => u && names.add(path.basename(u));
+  add(image.url);
+  add(image.poster);
+  // 앨범이면 묶인 모든 항목의 파일/포스터까지 제거
+  if (Array.isArray(image.items)) {
+    for (const it of image.items) {
+      add(it.url);
+      add(it.poster);
+    }
+  }
   for (const name of names) {
     fs.promises.unlink(path.join(UPLOADS_DIR, name)).catch(() => {});
   }

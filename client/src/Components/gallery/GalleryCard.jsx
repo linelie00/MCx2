@@ -6,6 +6,7 @@
 function GalleryCard({ image, tagLabels = {}, onOpen }) {
   const isVideo = image.type === 'video';
   const thumb = isVideo ? image.poster || image.url : image.url;
+  const albumCount = Array.isArray(image.items) ? image.items.length : 0;
 
   return (
     <button
@@ -19,6 +20,12 @@ function GalleryCard({ image, tagLabels = {}, onOpen }) {
       {isVideo && (
         <span className="gal-card-play" aria-hidden="true">
           ▶
+        </span>
+      )}
+
+      {albumCount > 1 && (
+        <span className="gal-card-count" aria-label={`${albumCount}장 앨범`}>
+          ▣ {albumCount}
         </span>
       )}
 

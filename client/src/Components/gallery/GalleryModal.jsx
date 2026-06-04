@@ -1,30 +1,47 @@
 /**
  * GalleryModal — 카드 클릭 시 확대 보기
- * 이미지/영상 표시 + 태그 보기·수정 + 삭제. 오버레이/ESC로 닫는다.
+ * 단일 이미지/영상 표시 + 태그 보기·수정 + 삭제.
+ * 앨범(items 보유)이면 ‹ › / 키보드 ←→ 로 넘겨 본다. 오버레이/ESC로 닫는다.
  */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import TagInput from './TagInput';
 
 function GalleryModal({ image, tagLabels = {}, allTags = [], onCreateTag, onSaveTags, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
   const [draftTags, setDraftTags] = useState([]);
+  const [idx, setIdx] = useState(0);
 
+  const items = Array.isArray(image?.items) ? image.items : null;
+  const isAlbum = !!items && items.length > 1;
+  const count = items ? items.length : 0;
+
+  const prev = useCallback(() => setIdx((i) => Math.max(0, i - 1)), []);
+  const next = useCallback(() => setIdx((i) => Math.min(count - 1, i + 1)), [count]);
+
+  // 키보드: ESC 닫기 / 앨범이면 ←→ 이동(편집 중엔 텍스트 입력 우선)
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') return onClose();
+      if (editing) return undefined;
+      if (isAlbum && e.key === 'ArrowLeft') prev();
+      if (isAlbum && e.key === 'ArrowRight') next();
+      return undefined;
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, editing, isAlbum, prev, next]);
 
-  // 다른 이미지로 바뀌면 편집 상태 초기화
+  // 다른 카드로 바뀌면 편집/인덱스 초기화
   useEffect(() => {
     setEditing(false);
+    setIdx(0);
     setDraftTags(image ? image.tags : []);
   }, [image]);
 
   if (!image) return null;
-  const isVideo = image.type === 'video';
+
+  const current = items ? items[idx] : image;
+  const isVideo = current.type === 'video';
 
   const startEdit = () => {
     setDraftTags(image.tags);
@@ -38,11 +55,39 @@ function GalleryModal({ image, tagLabels = {}, allTags = [], onCreateTag, onSave
   return (
     <div className="gal-overlay" onClick={onClose}>
       <div className="gal-viewer" onClick={(e) => e.stopPropagation()}>
-        {isVideo ? (
-          <video className="gal-viewer-img" src={image.url} poster={image.poster} controls autoPlay />
-        ) : (
-          <img className="gal-viewer-img" src={image.url} alt="" />
-        )}
+        <div className="gal-viewer-media">
+          {isVideo ? (
+            <video className="gal-viewer-img" src={current.url} poster={current.poster} controls autoPlay />
+          ) : (
+            <img className="gal-viewer-img" src={current.url} alt="" />
+          )}
+
+          {isAlbum && (
+            <>
+              <button
+                type="button"
+                className="gal-nav gal-nav--prev"
+                onClick={prev}
+                disabled={idx === 0}
+                aria-label="이전"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className="gal-nav gal-nav--next"
+                onClick={next}
+                disabled={idx === count - 1}
+                aria-label="다음"
+              >
+                ›
+              </button>
+              <span className="gal-viewer-counter">
+                {idx + 1} / {count}
+              </span>
+            </>
+          )}
+        </div>
 
         <div className={`gal-viewer-bar${editing ? ' gal-viewer-bar--editing' : ''}`}>
           <div className="gal-viewer-tags">

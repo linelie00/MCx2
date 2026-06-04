@@ -23,6 +23,7 @@ function TagFilterBar({
   const [editingId, setEditingId] = useState(null);
   const [editLabel, setEditLabel] = useState('');
   const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
 
   const q = query.trim().toLowerCase();
   const shown = q ? tags.filter((t) => t.label.toLowerCase().includes(q)) : tags;
@@ -56,17 +57,38 @@ function TagFilterBar({
     cancelEdit();
   };
 
-  // 드래그로 순서 변경: dragId를 targetId 위치로 이동
-  const handleDrop = (targetId) => {
-    if (!dragId || dragId === targetId) return setDragId(null);
+  // sourceId 태그를 targetId 위치로 이동
+  const moveTag = (sourceId, targetId) => {
+    if (!sourceId || sourceId === targetId) return;
     const ids = tags.map((t) => t.id);
-    const from = ids.indexOf(dragId);
+    const from = ids.indexOf(sourceId);
     const to = ids.indexOf(targetId);
-    if (from < 0 || to < 0) return setDragId(null);
+    if (from < 0 || to < 0) return;
     ids.splice(from, 1);
-    ids.splice(to, 0, dragId);
+    ids.splice(to, 0, sourceId);
     onReorder(ids);
-    return setDragId(null);
+  };
+
+  // 포인터(마우스/터치) 기반 드래그 — 네이티브 DnD에 의존하지 않는다.
+  const startPointerDrag = (e, id) => {
+    e.preventDefault();
+    setDragId(id);
+    const tagUnder = (ev) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const chip = el && el.closest('[data-tagid]');
+      return chip ? chip.getAttribute('data-tagid') : null;
+    };
+    const onMove = (ev) => setOverId(tagUnder(ev));
+    const onUp = (ev) => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      const target = tagUnder(ev);
+      if (target) moveTag(id, target);
+      setDragId(null);
+      setOverId(null);
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
   };
 
   return (
@@ -108,27 +130,15 @@ function TagFilterBar({
         {shown.map((t) =>
           inManage ? (
             <span
-              className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}`}
+              className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}${
+                overId === t.id && dragId && dragId !== t.id ? ' is-over' : ''
+              }`}
               key={t.id}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                handleDrop(t.id);
-              }}
+              data-tagid={t.id}
             >
               <span
                 className="gal-chip-grip"
-                draggable
-                onDragStart={(e) => {
-                  // Firefox는 setData가 없으면 드래그를 시작하지 않는다
-                  e.dataTransfer.setData('text/plain', t.id);
-                  e.dataTransfer.effectAllowed = 'move';
-                  setDragId(t.id);
-                }}
-                onDragEnd={() => setDragId(null)}
+                onPointerDown={(e) => startPointerDrag(e, t.id)}
                 role="button"
                 tabIndex={-1}
                 aria-label="드래그하여 순서 변경"

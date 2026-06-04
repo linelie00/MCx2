@@ -532,6 +532,9 @@
 .gal-chip--manage.is-dragging {
   opacity: 0.4;
 }
+.gal-chip--manage.is-over {
+  box-shadow: -3px 0 0 0 #8a7a5c; /* 이 칩 앞에 놓임을 표시 */
+}
 .gal-chip-grip {
   display: inline-flex;
   align-items: center;
@@ -541,6 +544,7 @@
   line-height: 1;
   letter-spacing: -2px;
   padding-right: 2px;
+  touch-action: none; /* 터치 드래그 시 스크롤 방지 */
 }
 .gal-chip-grip:active {
   cursor: grabbing;

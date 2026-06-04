@@ -29,6 +29,18 @@ function TagFilterBar({
   const shown = q ? tags.filter((t) => t.label.toLowerCase().includes(q)) : tags;
   const inManage = manage && canManage; // 권한이 없으면 관리 모드를 강제 해제
 
+  // 드래그 중에는 미리보기 순서로 렌더 → 끌고 있는 칩이 들어갈 자리가 실시간으로 비워진다
+  const renderList = (() => {
+    if (!inManage || !dragId || !overId || dragId === overId) return shown;
+    const arr = shown.slice();
+    const from = arr.findIndex((t) => t.id === dragId);
+    const to = arr.findIndex((t) => t.id === overId);
+    if (from < 0 || to < 0) return shown;
+    const [moved] = arr.splice(from, 1);
+    arr.splice(to, 0, moved);
+    return arr;
+  })();
+
   const handleDelete = (tag) => {
     if (window.confirm(`'${tag.label}' 태그를 삭제할까요?\n모든 이미지에서 이 태그가 제거됩니다.`)) {
       onDeleteTag(tag.id);
@@ -78,12 +90,15 @@ function TagFilterBar({
       const chip = el && el.closest('[data-tagid]');
       return chip ? chip.getAttribute('data-tagid') : null;
     };
-    const onMove = (ev) => setOverId(tagUnder(ev));
+    const onMove = (ev) => {
+      const u = tagUnder(ev);
+      if (u && u !== id) setOverId(u); // 자기 자신 위에선 미리보기를 흔들지 않음
+    };
     const onUp = (ev) => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
       const target = tagUnder(ev);
-      if (target) moveTag(id, target);
+      if (target && target !== id) moveTag(id, target);
       setDragId(null);
       setOverId(null);
     };
@@ -127,12 +142,10 @@ function TagFilterBar({
           </button>
         )}
 
-        {shown.map((t) =>
+        {renderList.map((t) =>
           inManage ? (
             <span
-              className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}${
-                overId === t.id && dragId && dragId !== t.id ? ' is-over' : ''
-              }`}
+              className={`gal-chip gal-chip--manage${dragId === t.id ? ' is-dragging' : ''}`}
               key={t.id}
               data-tagid={t.id}
             >

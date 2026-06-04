@@ -529,11 +529,14 @@
 .gal-chip--manage {
   user-select: none;
 }
+/* 끌고 있는 칩은 같은 크기의 빈 점선 자리로 보이게(자리가 비워지는 느낌) */
 .gal-chip--manage.is-dragging {
-  opacity: 0.4;
+  background: transparent;
+  border-style: dashed;
+  border-color: #b9a672;
 }
-.gal-chip--manage.is-over {
-  box-shadow: -3px 0 0 0 #8a7a5c; /* 이 칩 앞에 놓임을 표시 */
+.gal-chip--manage.is-dragging > * {
+  visibility: hidden;
 }
 .gal-chip-grip {
   display: inline-flex;

@@ -9,6 +9,7 @@ const { requireOwner } = require('../middleware/requireOwner');
 const router = express.Router();
 
 router.get('/', ctrl.list);
+router.get('/challenge', ctrl.challenge);
 router.post('/', express.json(), ctrl.create);
 router.delete('/:id', requireOwner, ctrl.remove);
 

@@ -20,9 +20,17 @@ function Guestbook() {
   const [entries, setEntries] = useState([]);
   const [nick, setNick] = useState('');
   const [message, setMessage] = useState('');
+  const [hp, setHp] = useState(''); // 허니팟(사람은 비워둠)
+  const [challenge, setChallenge] = useState(null); // { id, question }
+  const [answer, setAnswer] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const { isOwner } = useOwner();
+
+  const loadChallenge = () => {
+    setAnswer('');
+    guestbookApi.fetchChallenge().then(setChallenge).catch(() => setChallenge(null));
+  };
 
   useEffect(() => {
     let alive = true;
@@ -35,26 +43,37 @@ function Guestbook() {
         }
       })
       .catch(() => alive && setLoading(false));
+    loadChallenge();
     return () => {
       alive = false;
     };
   }, []);
 
-  const canSubmit = nick.trim() && message.trim() && !busy;
+  const canSubmit = nick.trim() && message.trim() && answer.trim() && !busy;
 
   const submit = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
     setBusy(true);
     try {
-      const created = await guestbookApi.addEntry({ nick: nick.trim(), message: message.trim() });
+      const created = await guestbookApi.addEntry({
+        nick: nick.trim(),
+        message: message.trim(),
+        hp,
+        challengeId: challenge?.id,
+        answer: answer.trim(),
+      });
+      if (!created || created.discarded) return; // 허니팟 등으로 버려진 경우
       setEntries((prev) => [created, ...prev]);
       setNick('');
       setMessage('');
+      loadChallenge(); // 캡차는 1회용 → 새 문제
     } catch (err) {
-      window.alert(`등록 실패: ${err.message}`);
+      window.alert(err.message);
+      if (err.captcha) loadChallenge(); // 캡차 오류면 새 문제로 갱신
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const remove = async (entry) => {
@@ -84,13 +103,38 @@ function Guestbook() {
           maxLength={MSG_MAX}
           rows={3}
         />
+
+        {/* 허니팟 — 사람에겐 안 보임. 봇이 채우면 서버가 걸러낸다 */}
+        <input
+          className="gb-hp"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          value={hp}
+          onChange={(e) => setHp(e.target.value)}
+        />
+
         <div className="gb-form-foot">
-          <span className="gb-count">
-            {message.length}/{MSG_MAX}
-          </span>
-          <button type="submit" className="gb-submit" disabled={!canSubmit}>
-            {busy ? '남기는 중…' : '남기기'}
-          </button>
+          <label className="gb-captcha">
+            스팸 방지: <strong>{challenge ? `${challenge.question} =` : '…'}</strong>
+            <input
+              className="gb-answer"
+              type="text"
+              inputMode="numeric"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="?"
+              aria-label="계산 결과"
+            />
+          </label>
+          <div className="gb-foot-right">
+            <span className="gb-count">
+              {message.length}/{MSG_MAX}
+            </span>
+            <button type="submit" className="gb-submit" disabled={!canSubmit}>
+              {busy ? '남기는 중…' : '남기기'}
+            </button>
+          </div>
         </div>
       </form>
 

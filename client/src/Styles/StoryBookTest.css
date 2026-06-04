@@ -267,6 +267,42 @@
   text-align: center;
 }
 
+/* ----- 모바일: 단일 페이지 (넘김 모션 없음, 좌/우 탭 이동) ----- */
+.page--single {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 3px;
+}
+
+/* 페이지 좌/우 절반 탭 영역 (이전/다음) */
+.booktest-tap {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 6;
+  -webkit-tap-highlight-color: transparent;
+}
+.booktest-tap--prev { left: 0; }
+.booktest-tap--next { right: 0; }
+.booktest-tap:disabled { cursor: default; }
+
 @media (max-width: 767px) {
   .bp-text { font-size: 0.8rem; }
+
+  /* 책을 한 페이지(1748:2480) 비율로 */
+  .book--mobile {
+    width: min(440px, 92vw);
+    aspect-ratio: 1748 / 2480;
+  }
+  /* 측정용 sizer 도 단일 페이지 폭에 맞춰 조판 반영 */
+  .book--mobile .page--sizer { width: 100%; }
 }

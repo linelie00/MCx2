@@ -8,7 +8,7 @@
  * - 페이지 타입: 'divider'(도비라) / 'content'(본문) / 'blank'(정렬용 공백)
  * - 흰 종이 양면 + 3D 넘김, 상단 타임라인(현재 세션 강조, 클릭 시 넘김 이동)
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import '../Styles/Story.css'; // 상단 타임라인 스타일 재사용
 import '../Styles/StoryBookTest.css';
 import { stories } from '../Data/stories';
@@ -227,10 +227,22 @@ export default function StoryBookTest() {
 
   const [book, setBook] = useState({ pages: [], dividerBySid: {} });
   const [view, setView] = useState({ spread: 0 });
+  const [mobilePage, setMobilePage] = useState(0); // 모바일: 단일 페이지 인덱스
   const [dims, setDims] = useState(null);
   const [ready, setReady] = useState(false);
   const [flip, setFlip] = useState(null);
   const [animate, setAnimate] = useState(false);
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
+
+  // 모바일 여부 감지 (양면 ↔ 단일 페이지 전환)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   // 폰트 로드 후 측정
   useEffect(() => {
@@ -273,6 +285,26 @@ export default function StoryBookTest() {
   const safeSpread = Math.min(view.spread, lastSpread);
   const canNext = safeSpread < lastSpread && !flip;
   const canPrev = safeSpread > 0 && !flip;
+
+  // 모바일: 빈/투명 페이지(정렬용)를 제외하고 한 장씩 넘긴다
+  const mobilePages = useMemo(
+    () => pages.filter((p) => p.type !== 'blank' && p.type !== 'cover-blank'),
+    [pages]
+  );
+  const lastMobile = Math.max(0, mobilePages.length - 1);
+  const safeMobile = Math.min(mobilePage, lastMobile);
+  const goNextMobile = useCallback(
+    () => setMobilePage((p) => Math.min(p + 1, lastMobile)),
+    [lastMobile]
+  );
+  const goPrevMobile = useCallback(() => setMobilePage((p) => Math.max(p - 1, 0)), []);
+  const jumpToMobile = useCallback(
+    (sid) => {
+      const idx = mobilePages.findIndex((p) => p.type === 'divider' && p.sid === sid);
+      if (idx >= 0) setMobilePage(idx);
+    },
+    [mobilePages]
+  );
 
   // flip 시작 → 다음 프레임에 애니메이션
   useEffect(() => {
@@ -353,15 +385,17 @@ export default function StoryBookTest() {
   // 키보드 ← →
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'ArrowRight') goNext();
-      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') (isMobile ? goNextMobile : goNext)();
+      if (e.key === 'ArrowLeft') (isMobile ? goPrevMobile : goPrev)();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [goNext, goPrev]);
+  }, [isMobile, goNext, goPrev, goNextMobile, goPrevMobile]);
 
   const pageSid = (i) => (pages[i] && pages[i].sid) || null;
-  const currentSid = pageSid(safeSpread) || pageSid(safeSpread + 1) || null;
+  const currentSid = isMobile
+    ? (mobilePages[safeMobile] && mobilePages[safeMobile].sid) || null
+    : pageSid(safeSpread) || pageSid(safeSpread + 1) || null;
 
   const leftPage = flip ? flip.staticLeft : pages[safeSpread];
   const rightPage = flip ? flip.staticRight : pages[safeSpread + 1];
@@ -375,21 +409,50 @@ export default function StoryBookTest() {
 
   return (
     <div className="booktest">
-      <StoryTimeline sessions={stories} activeId={currentSid} onSelect={jumpTo} />
+      <StoryTimeline
+        sessions={stories}
+        activeId={currentSid}
+        onSelect={isMobile ? jumpToMobile : jumpTo}
+      />
 
       <div className="booktest-stage">
-        <div className="book">
-          <div className={`page page--left${pageMod(leftPage)}`}><PageBody page={leftPage} /></div>
-          <div className={`page page--right${pageMod(rightPage)}`}><PageBody page={rightPage} /></div>
+        <div className={`book${isMobile ? ' book--mobile' : ''}`}>
+          {isMobile ? (
+            <>
+              {/* 모바일: 단일 페이지 + 좌/우 탭으로 이동 (넘김 모션 없음) */}
+              <div className={`page page--single${pageMod(mobilePages[safeMobile])}`}>
+                <PageBody page={mobilePages[safeMobile]} />
+              </div>
+              <button
+                type="button"
+                className="booktest-tap booktest-tap--prev"
+                onClick={goPrevMobile}
+                disabled={safeMobile <= 0}
+                aria-label="이전 페이지"
+              />
+              <button
+                type="button"
+                className="booktest-tap booktest-tap--next"
+                onClick={goNextMobile}
+                disabled={safeMobile >= lastMobile}
+                aria-label="다음 페이지"
+              />
+            </>
+          ) : (
+            <>
+              <div className={`page page--left${pageMod(leftPage)}`}><PageBody page={leftPage} /></div>
+              <div className={`page page--right${pageMod(rightPage)}`}><PageBody page={rightPage} /></div>
 
-          {flip && (
-            <div
-              className={`page-flip page-flip--${flip.dir} ${animate ? 'is-animating' : ''}`}
-              onTransitionEnd={onFlipEnd}
-            >
-              <div className={`page-face page-face--front${pageMod(flip.front)}`}><PageBody page={flip.front} /></div>
-              <div className={`page-face page-face--back${pageMod(flip.back)}`}><PageBody page={flip.back} /></div>
-            </div>
+              {flip && (
+                <div
+                  className={`page-flip page-flip--${flip.dir} ${animate ? 'is-animating' : ''}`}
+                  onTransitionEnd={onFlipEnd}
+                >
+                  <div className={`page-face page-face--front${pageMod(flip.front)}`}><PageBody page={flip.front} /></div>
+                  <div className={`page-face page-face--back${pageMod(flip.back)}`}><PageBody page={flip.back} /></div>
+                </div>
+              )}
+            </>
           )}
 
           {/* 페이지 치수 측정용 (보이지 않음) */}
@@ -399,9 +462,19 @@ export default function StoryBookTest() {
         </div>
 
         <div className="booktest-controls">
-          <button type="button" onClick={goPrev} disabled={!canPrev}>‹ 이전</button>
-          <span className="booktest-page">{Math.floor(safeSpread / 2) + 1} / {totalSpreads}</span>
-          <button type="button" onClick={goNext} disabled={!canNext}>다음 ›</button>
+          {isMobile ? (
+            <>
+              <button type="button" onClick={goPrevMobile} disabled={safeMobile <= 0}>‹ 이전</button>
+              <span className="booktest-page">{safeMobile + 1} / {mobilePages.length}</span>
+              <button type="button" onClick={goNextMobile} disabled={safeMobile >= lastMobile}>다음 ›</button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={goPrev} disabled={!canPrev}>‹ 이전</button>
+              <span className="booktest-page">{Math.floor(safeSpread / 2) + 1} / {totalSpreads}</span>
+              <button type="button" onClick={goNext} disabled={!canNext}>다음 ›</button>
+            </>
+          )}
         </div>
       </div>
 

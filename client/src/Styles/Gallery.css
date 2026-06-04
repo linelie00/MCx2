@@ -27,23 +27,22 @@
   align-items: center;
   gap: 10px;
 }
-.gal-lock {
-  width: 38px;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
+.gal-login {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.82rem;
+  padding: 7px 14px;
+  color: #6b5b40;
   background: #f3ead4;
   border: 1px solid #a8946a;
-  border-radius: 50%;
+  border-radius: 2px;
   cursor: pointer;
   transition: background 0.15s ease;
 }
-.gal-lock:hover {
+.gal-login:hover {
   background: #e9dec3;
 }
-.gal-lock.is-unlocked {
+.gal-login.is-owner {
+  color: #4a3c2a;
   background: #e6d7b4;
   border-color: #8a7a5c;
 }

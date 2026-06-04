@@ -48,7 +48,7 @@ function Gallery() {
       lock();
       return;
     }
-    const key = window.prompt('오너 패스코드를 입력하세요');
+    const key = window.prompt('관리자 패스코드를 입력하세요');
     if (!key) return;
     try {
       await unlock(key.trim());
@@ -147,12 +147,11 @@ function Gallery() {
           )}
           <button
             type="button"
-            className={`gal-lock${isOwner ? ' is-unlocked' : ''}`}
+            className={`gal-login${isOwner ? ' is-owner' : ''}`}
             onClick={handleLockToggle}
-            title={isOwner ? `${ownerLabel} · 잠그기` : '오너 잠금 해제'}
-            aria-label={isOwner ? '잠그기' : '오너 잠금 해제'}
+            title={isOwner ? `${ownerLabel} · 로그아웃` : '관리자 로그인'}
           >
-            {isOwner ? '🔓' : '🔒'}
+            {isOwner ? `${ownerLabel} · 로그아웃` : '관리자 로그인'}
           </button>
         </div>
       </header>

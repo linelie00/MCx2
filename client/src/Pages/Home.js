@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import '../Styles/Home.css';
 import { images } from '../Data/constants/images';
 import StickyRevealLines from '../Components/StickyRevealLines.js';
+import Guestbook from '../Components/guestbook/Guestbook';
 
 const Home = () => {
   const stickyRef = useRef(null); // .stickydiv
@@ -124,6 +125,7 @@ const Home = () => {
             className="srl--center"
           />
       </section>
+      <Guestbook />
     </>
   );
 };

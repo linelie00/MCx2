@@ -1,0 +1,159 @@
+/* ===== Guestbook (Home 하단 방명록) ===== */
+.guestbook {
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 60px clamp(16px, 5vw, 40px) 100px;
+}
+
+.gb-title {
+  margin: 0;
+  font-family: 'OldLondon', serif;
+  font-size: clamp(1.8rem, 5vw, 2.6rem);
+  color: #4a3c2a;
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+.gb-sub {
+  margin: 2px 0 28px;
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.82rem;
+  color: #8a7a5c;
+  text-align: center;
+  letter-spacing: 0.3em;
+}
+
+/* ----- 작성 폼 ----- */
+.gb-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  background: #fcfbf8;
+  border: 1px solid #cbb88c;
+  border-radius: 4px;
+  box-shadow: 0 8px 18px -14px rgba(60, 46, 34, 0.4);
+}
+.gb-nick,
+.gb-msg {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'Hahmlet', serif;
+  color: #2c2620;
+  background: #fff;
+  border: 1px solid #cbb88c;
+  border-radius: 3px;
+  padding: 9px 12px;
+}
+.gb-nick {
+  font-size: 0.86rem;
+}
+.gb-msg {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 64px;
+}
+.gb-nick:focus,
+.gb-msg:focus {
+  outline: none;
+  border-color: #8a7a5c;
+}
+.gb-form-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.gb-count {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.72rem;
+  color: #a99b7d;
+}
+.gb-submit {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.86rem;
+  padding: 8px 22px;
+  color: #f3ead4;
+  background: #5e4f37;
+  border: 1px solid #5e4f37;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.gb-submit:hover:not(:disabled) {
+  background: #4a3c2a;
+}
+.gb-submit:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ----- 목록 ----- */
+.gb-list {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gb-empty {
+  font-family: 'Hahmlet', serif;
+  font-size: 0.88rem;
+  color: #8a7a5c;
+  text-align: center;
+  padding: 30px 0;
+}
+.gb-entry {
+  padding: 14px 16px;
+  background: #fbf7ec;
+  border: 1px solid #e0d2ad;
+  border-left: 3px solid #b9a672;
+  border-radius: 3px;
+}
+.gb-entry-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.gb-entry-nick {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #4a3c2a;
+}
+.gb-entry-date {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.74rem;
+  color: #a99b7d;
+}
+.gb-del {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: #b07a6e;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.gb-del:hover {
+  color: #7a2e22;
+}
+.gb-entry-msg {
+  margin: 0;
+  font-family: 'Hahmlet', serif;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: #2c2620;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 767px) {
+  .guestbook {
+    padding-top: 40px;
+  }
+}

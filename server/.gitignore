@@ -4,6 +4,9 @@
 # uploaded media (로컬 저장소 — 레포에 포함하지 않음)
 /uploads
 
+# 라이브 갤러리 데이터 (gallery.seed.json 이 기본값, 실데이터는 추적 안 함)
+/src/data/gallery.json
+
 # env
 .env
 .env.local

@@ -7,8 +7,17 @@ const fs = require('fs');
 const path = require('path');
 
 const FILE = path.join(__dirname, '../data/gallery.json');
+const SEED = path.join(__dirname, '../data/gallery.seed.json');
 
 function read() {
+  // 최초 실행(새 클론 등): gallery.json 이 없으면 시드로 초기화
+  if (!fs.existsSync(FILE) && fs.existsSync(SEED)) {
+    try {
+      fs.copyFileSync(SEED, FILE);
+    } catch (e) {
+      /* 무시: 아래 read에서 빈 데이터로 폴백 */
+    }
+  }
   try {
     const raw = fs.readFileSync(FILE, 'utf-8');
     const data = JSON.parse(raw);

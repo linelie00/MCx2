@@ -22,6 +22,8 @@ router.post('/images', upload.single('file'), ctrl.createImage);
 router.delete('/images/:id', ctrl.deleteImage);
 router.patch('/images/:id', express.json(), ctrl.updateImageTags);
 
+router.get('/download/:name', ctrl.downloadFile);
+
 router.get('/tags', ctrl.listTags);
 router.post('/tags', express.json(), ctrl.createTag);
 router.patch('/tags/:id', express.json(), ctrl.renameTag);

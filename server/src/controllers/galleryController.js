@@ -2,6 +2,8 @@
  * galleryController — 갤러리 API 로직
  * 메타데이터는 metaStore(gallery.json), 파일은 storageService(uploads/)가 담당.
  */
+const fs = require('fs');
+const path = require('path');
 const metaStore = require('../services/metaStore');
 const storage = require('../services/storageService');
 
@@ -81,6 +83,15 @@ exports.updateImageTags = (req, res) => {
   ensureTags(data, tags);
   metaStore.write(data);
   res.json(image);
+};
+
+// 파일 다운로드 — Content-Disposition: attachment 로 강제 다운로드(영상 포함 스트리밍).
+// 파일명 기반이라 앨범의 현재 항목 파일도 그대로 받을 수 있다.
+exports.downloadFile = (req, res) => {
+  const name = path.basename(req.params.name); // 경로 탈출 방지
+  const filePath = path.join(storage.UPLOADS_DIR, name);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'not found' });
+  return res.download(filePath, name);
 };
 
 exports.listTags = (req, res) => {

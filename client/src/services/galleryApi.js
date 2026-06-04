@@ -88,6 +88,12 @@ export async function deleteTag(id) {
   await asJson(await fetch(`${API}/tags/${encodeURIComponent(id)}`, { method: 'DELETE' }));
 }
 
+// 미디어 url(절대/상대)에서 파일명을 뽑아 강제 다운로드용 엔드포인트 URL을 만든다.
+export function downloadUrl(mediaUrl) {
+  const name = (mediaUrl || '').split('/').pop();
+  return `${API}/download/${encodeURIComponent(name)}`;
+}
+
 const galleryApi = {
   fetchImages,
   fetchTags,
@@ -97,5 +103,6 @@ const galleryApi = {
   createTag,
   renameTag,
   deleteTag,
+  downloadUrl,
 };
 export default galleryApi;

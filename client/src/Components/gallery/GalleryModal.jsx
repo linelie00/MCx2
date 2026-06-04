@@ -5,6 +5,7 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import TagInput from './TagInput';
+import { downloadUrl } from '../../services/galleryApi';
 
 function GalleryModal({ image, tagLabels = {}, allTags = [], onCreateTag, onSaveTags, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
@@ -61,6 +62,16 @@ function GalleryModal({ image, tagLabels = {}, allTags = [], onCreateTag, onSave
           ) : (
             <img className="gal-viewer-img" src={current.url} alt="" />
           )}
+
+          <a
+            className="gal-tool gal-tool--download"
+            href={downloadUrl(current.url)}
+            download
+            aria-label="다운로드"
+            title="다운로드"
+          >
+            ⬇
+          </a>
 
           {isAlbum && (
             <>

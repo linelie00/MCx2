@@ -176,7 +176,7 @@
 .gal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1000; /* 네비 바보다 위에 와서 겹침 방지 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -190,35 +190,37 @@
   display: flex;
   flex-direction: column;
   max-width: min(900px, 92vw);
-  max-height: 90vh;
+  max-height: 100%; /* 오버레이 패딩 안쪽(=화면 높이-여백)으로 제한 */
   background: #fcfbf8;
   border: 1px solid #cbb88c;
   border-radius: 4px;
-  /* overflow visible: 태그 수정 시 자동완성 드롭다운이 잘리지 않도록 */
+  overflow: hidden;
 }
+/* 이미지/영상: 남는 영역 안에서 비율 유지하며 축소(잘리지 않음) */
 .gal-viewer-img {
   display: block;
-  max-width: 100%;
-  max-height: calc(90vh - 56px);
+  width: 100%;
+  flex: 0 1 auto; /* 늘리지 않고(짧은 이미지 여백 방지) 넘칠 때만 비율 유지하며 축소 */
+  min-height: 0;
   object-fit: contain;
   background: #2c2620;
   border-radius: 4px 4px 0 0;
 }
-.gal-viewer-tags {
-  flex: 1 1 auto;
-  min-width: 0;
-}
 .gal-viewer-bar {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
 }
-/* 태그 편집 시: 입력칸이 한 줄을 차지하고 버튼은 그 아래 우측 정렬 */
+/* 태그 편집 시: 입력칸이 한 줄을 차지하고 버튼은 그 아래 우측 정렬.
+   바가 길어져도 모달 밖으로 나가지 않도록 내부 스크롤로 제한 */
 .gal-viewer-bar--editing {
   flex-direction: column;
   align-items: stretch;
+  max-height: 55%;
+  overflow-y: auto;
 }
 .gal-viewer-bar--editing .gal-viewer-actions {
   justify-content: flex-end;
@@ -350,18 +352,14 @@
   color: #a99b7d;
 }
 .gal-taginput-suggest {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
   margin-top: 4px;
-  z-index: 2;
   display: flex;
   flex-direction: column;
+  max-height: 160px;
+  overflow-y: auto;
   background: #fcfbf8;
   border: 1px solid #cbb88c;
   border-radius: 3px;
-  overflow: hidden;
   box-shadow: 0 8px 18px -10px rgba(60, 46, 34, 0.45);
 }
 .gal-taginput-suggest-item {

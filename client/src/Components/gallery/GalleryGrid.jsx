@@ -67,11 +67,13 @@ function GalleryGrid({ items, tagLabels, hasMore, onLoadMore, onOpen }) {
     if (!hasMore) return undefined;
     const el = sentinelRef.current;
     if (!el) return undefined;
+    // 화면 높이의 2배만큼 미리 로드 → 불규칙한 로딩 경계가 화면에 들어오지 않게
+    const lookahead = Math.max(1200, Math.round((window.innerHeight || 800) * 2));
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) onLoadMore();
       },
-      { rootMargin: '800px 0px' } // 바닥에 닿기 전에 미리 로드
+      { rootMargin: `${lookahead}px 0px` }
     );
     io.observe(el);
     return () => io.disconnect();

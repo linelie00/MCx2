@@ -7,7 +7,7 @@
  * 다음 카드를 "현재 가장 짧은 컬럼"에 넣어 컬럼들을 고르게 채운다.
  * (그리디 분배라 항목을 뒤에 덧붙여도 앞 배치가 바뀌지 않아 깜빡임이 없다.)
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import GalleryCard from './GalleryCard';
 import { cardRatio } from './galleryLayout';
 
@@ -29,22 +29,39 @@ function useColumnCount() {
   return n;
 }
 
+const CARD_GAP = 16; // .gal-card margin-bottom 과 동일
+
 function GalleryGrid({ items, tagLabels, hasMore, onLoadMore, onOpen }) {
   const sentinelRef = useRef(null);
+  const masonryRef = useRef(null);
   const colCount = useColumnCount();
+  const [colWidth, setColWidth] = useState(0);
 
-  // 가장 짧은 컬럼에 카드를 배치(높이 균형)
+  // 컬럼 폭 실측(간격을 비율로 환산해 균형 계산에 반영). 첫 페인트 전에 측정.
+  useLayoutEffect(() => {
+    const el = masonryRef.current;
+    if (!el) return undefined;
+    const measure = () => setColWidth(el.clientWidth / colCount);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [colCount]);
+
+  // 가장 짧은 컬럼에 카드를 배치(높이 균형). 카드 높이에 간격을 더해
+  // '카드 수가 많은 컬럼이 실제로는 더 길어지는' 누적 오차를 보정한다.
   const columns = useMemo(() => {
+    const gapUnits = colWidth ? CARD_GAP / colWidth : 0.07; // 간격을 컬럼폭 대비 비율로
     const cols = Array.from({ length: colCount }, () => ({ items: [], h: 0 }));
     for (const img of items) {
-      const ratio = cardRatio(img); // 카드 실제 렌더 높이(상한 적용)와 일치
+      const h = cardRatio(img) + gapUnits;
       let target = cols[0];
       for (const c of cols) if (c.h < target.h) target = c;
       target.items.push(img);
-      target.h += ratio;
+      target.h += h;
     }
     return cols.map((c) => c.items);
-  }, [items, colCount]);
+  }, [items, colCount, colWidth]);
 
   useEffect(() => {
     if (!hasMore) return undefined;
@@ -66,7 +83,7 @@ function GalleryGrid({ items, tagLabels, hasMore, onLoadMore, onOpen }) {
 
   return (
     <>
-      <div className="gal-masonry">
+      <div className="gal-masonry" ref={masonryRef}>
         {columns.map((col, ci) => (
           // eslint-disable-next-line react/no-array-index-key
           <div className="gal-masonry-col" key={ci}>

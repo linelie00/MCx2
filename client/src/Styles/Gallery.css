@@ -189,6 +189,8 @@
   margin-left: -16px; /* 컬럼 padding 상쇄 */
 }
 .gal-masonry-col {
+  flex: 1 1 0; /* 모든 컬럼 동일 너비(내용량과 무관) */
+  min-width: 0; /* flex 아이템이 내용 때문에 안 줄어드는 것 방지 */
   padding-left: 16px;
   background-clip: padding-box;
 }

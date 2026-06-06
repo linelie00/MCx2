@@ -12,7 +12,7 @@ import GalleryGrid from '../Components/gallery/GalleryGrid';
 import GalleryModal from '../Components/gallery/GalleryModal';
 import UploadDialog from '../Components/gallery/UploadDialog';
 
-const PAGE = 12; // 무한스크롤 한 번에 늘릴 카드 수
+const PAGE = 24; // 무한스크롤 한 번에 늘릴 카드 수(첫 화면을 충분히 채움)
 
 // seed 기반 결정적 셔플 — 같은 seed면 순서가 고정돼 무한스크롤 중 흔들리지 않는다.
 function seededShuffle(list, seed) {

@@ -203,7 +203,7 @@
   border: 1px solid #d8c9a4;
   border-radius: 3px;
   overflow: hidden;
-  background: #fcfbf8;
+  background: #efe7d3; /* 로드 전 자리표시(양피지 톤) */
   cursor: pointer;
   box-shadow: 0 6px 14px -10px rgba(60, 46, 34, 0.4);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
@@ -217,6 +217,11 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.gal-card.is-loaded .gal-card-img {
+  opacity: 1;
 }
 
 /* 영상 카드 재생 배지 */

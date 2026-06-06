@@ -349,9 +349,12 @@
   border: none;
   text-decoration: none;
   cursor: pointer;
-  /* 밝고 어두운 이미지 위 모두에서 보이도록 외곽 그림자 */
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
-  opacity: 0.9;
+  /* 흰 배경/어두운 배경 모두에서 보이도록: 아이콘 둘레에 얇고 진한 외곽선 + 부드러운 그림자 */
+  filter:
+    drop-shadow(0 0 1px rgba(0, 0, 0, 0.85))
+    drop-shadow(0 0 1px rgba(0, 0, 0, 0.6))
+    drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+  opacity: 0.95;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 .gal-tool:hover {

@@ -76,7 +76,7 @@ function GalleryModal({ image, tagLabels = {}, allTags = [], canEdit = false, on
               height="22"
               fill="none"
               stroke="currentColor"
-              strokeWidth="1.4"
+              strokeWidth="1.8"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"

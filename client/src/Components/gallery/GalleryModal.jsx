@@ -70,7 +70,21 @@ function GalleryModal({ image, tagLabels = {}, allTags = [], canEdit = false, on
             aria-label="다운로드"
             title="다운로드"
           >
-            ⬇
+            <svg
+              viewBox="0 0 24 24"
+              width="22"
+              height="22"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 3v12" />
+              <path d="M7 11l5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
           </a>
 
           {isAlbum && (

@@ -1,7 +1,10 @@
 # ARCHITECTURE
 
 미하티(MIHEARTI) 프로젝트의 현재 구조와 규약을 정리한 문서입니다.
-리팩터링 진행에 따라 갱신합니다. (최종 갱신: 2026-05-31)
+리팩터링 진행에 따라 갱신합니다. (최종 갱신: 2026-06-08)
+
+> 이 문서는 **client/src(프론트엔드) 구조와 규약**을 다룹니다.
+> 갤러리·스토리·방명록 등 기능 흐름과 **백엔드(Express API)** 는 `FEATURES.md` 참고.
 
 ## 폴더 구조 (client/src)
 
@@ -9,37 +12,60 @@
 client/src/
 ├── Assets/
 │   ├── Font/            폰트 (Pretendard, NexonWarhaven, OldLondon, Quentin, Hahmlet)
-│   └── Images/          이미지 (webp 우선, png/jpg/svg 병존)
+│   └── Images/          이미지 (webp 우선, png/jpg/svg 병존; story/ 삽화)
 ├── Components/
-│   ├── common/          공통 재사용 컴포넌트 (신규)
-│   │   ├── InfoItem.jsx          라벨/값 정보 항목 (CharacterPanel에서 사용 중)
-│   │   ├── ArticleContainer.jsx  반응형 콘텐츠 컨테이너 (아직 미적용)
-│   │   └── ResponsiveImage.jsx   aspect-ratio 기반 반응형 이미지 (아직 미적용)
+│   ├── common/
+│   │   └── InfoItem.jsx          라벨/값 정보 항목 (CharacterPanel에서 사용)
+│   ├── gallery/                  갤러리 UI
+│   │   ├── GalleryGrid.jsx       균형 메이슨리 + 무한스크롤
+│   │   ├── GalleryCard.jsx       카드(IO 지연로딩, 앨범/영상 배지)
+│   │   ├── GalleryModal.jsx      확대/앨범 캐러셀/다운로드/태그편집
+│   │   ├── TagFilterBar.jsx      태그 필터 + 관리(추가/이름변경/삭제/순서)
+│   │   ├── TagInput.jsx          노션식 태그 입력
+│   │   ├── UploadDialog.jsx      다중 업로드 + 앨범 묶기 토글
+│   │   └── galleryLayout.js      카드 비율 정책(MAX_CARD_RATIO)
+│   ├── guestbook/
+│   │   └── Guestbook.jsx         방명록(작성/목록 + 스팸방지)
+│   ├── story/
+│   │   └── StoryTimeline.jsx     스토리 상단 타임라인
 │   ├── NavigationBar.js
 │   ├── ScrollToTop.js
 │   └── StickyRevealLines.js
+├── contexts/
+│   └── OwnerContext.jsx          오너 권한 전역 상태 (useOwner)
+├── services/                     API/저장소 접근 계층
+│   ├── galleryApi.js             /api/gallery/* (상대→절대 url 변환)
+│   ├── guestbookApi.js           /api/guestbook/*
+│   └── ownerAuth.js              오너 패스코드(localStorage) + 검증
 ├── Data/
 │   ├── Characters.js    캐릭터 데이터 (색상/이미지는 constants 참조)
 │   ├── world.js         World 페이지 콘텐츠 (순서 있는 본문 블록 배열)
-│   └── constants/       신규: 중앙 상수
+│   ├── stories.js       스토리 본문 (scripts/TSV에서 생성)
+│   ├── storyImages.js   스토리 삽화 매핑
+│   └── constants/       중앙 상수
 │       ├── colors.js        캐릭터/테마 색상
 │       ├── images.js        이미지 import → 번들 URL 제공
 │       └── breakpoints.js   반응형 기준값 + getBreakpoint()
 ├── Layouts/
 │   └── NavigateLayout.js
 ├── Pages/
-│   ├── Home.js, World.js
+│   ├── Home.js          (하단에 방명록 포함), World.js
 │   ├── CharacterHub.js, CharacterPanel.js
-│   └── Story.js, ImageView.js, Playlist.js  (미구현)
+│   ├── Story.js         스토리 책 뷰어 (구현)
+│   ├── Gallery.js       갤러리 (/image, 구현)
+│   └── Playlist.js      (미구현)
 ├── Styles/
-│   ├── theme.css        신규: CSS 변수(색상/폰트/spacing), 기본 리셋
-│   ├── global.css       신규: 전역 요소 스타일, .content 래퍼
-│   ├── layout.css       신규: 공통 레이아웃 클래스
+│   ├── theme.css        CSS 변수(색상/폰트/spacing), 기본 리셋
+│   ├── global.css       전역 요소 스타일, .content 래퍼
 │   ├── App.css, Home.css, World.css, Character.css, Components.css
-│   └── index.css
-├── App.js               라우터 + CSS 로딩 진입점
+│   └── Story.css, StoryBook.css, Gallery.css, Guestbook.css
+├── App.js               라우터(+ OwnerProvider) + CSS 로딩 진입점
 └── index.js
 ```
+
+> 갤러리/방명록의 실데이터는 프론트가 아니라 **서버(Express)** 가 보관합니다.
+> 갤러리·태그·미디어는 `gallery.json` + `uploads/`, 방명록은 `guestbook.json`.
+> 정적 콘텐츠(캐릭터/월드/스토리)만 `Data/*.js`로 관리합니다. (상세: FEATURES.md)
 
 ## CSS 로딩 계층 (App.js 기준)
 
@@ -48,10 +74,9 @@ client/src/
 ```
 theme.css   → CSS 변수, 리셋 (가장 먼저)
 global.css  → 전역 요소/유틸
-layout.css  → 공통 레이아웃 클래스
 Font.css    → @font-face
 App.css     → 기존 전역 스타일
-(+ 각 페이지 CSS는 페이지 컴포넌트에서 import)
+(+ 각 페이지/기능 CSS는 해당 컴포넌트에서 import)
 ```
 
 ### 주의: position: sticky 와 overflow
@@ -88,4 +113,4 @@ App.css     → 기존 전역 스타일
 
 - `.info-item` / `.label` / `.value` 는 **Character.css가 소유**한다.
   특히 `.value { white-space: pre-line }` 가 캐릭터 본문 줄바꿈에 필수이므로,
-  layout.css 등 전역에서 같은 클래스를 재정의하지 않는다(cascade 충돌 방지).
+  전역 CSS에서 같은 클래스를 재정의하지 않는다(cascade 충돌 방지).

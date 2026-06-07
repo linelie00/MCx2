@@ -75,8 +75,8 @@ const CharacterPanel = () => {
 
         {/* 기본 정보 */}
         <div className="panel-body">
-          <img src={imgJ4W} className="stamp" />
-          <img src={imgJ4W} className="stamp stamp-reverse" />
+          <img src={imgJ4W} className="stamp" alt="" />
+          <img src={imgJ4W} className="stamp stamp-reverse" alt="" />
           <Tear className="tear-top" />
           <Tear className="tear-bottom" />
           <div className="panel-header">

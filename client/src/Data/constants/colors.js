@@ -21,7 +21,9 @@ export const themeColors = {
   white: '#ffffff',
 };
 
-export default {
+const colors = {
   characterColors,
   themeColors,
 };
+
+export default colors;

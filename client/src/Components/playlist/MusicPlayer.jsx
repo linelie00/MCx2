@@ -8,7 +8,19 @@ import { useEffect, useRef, useState } from 'react';
 import useYouTubeIframeApi from './useYouTubeIframeApi';
 import { fmtDuration } from './playlistUtils';
 
-function MusicPlayer({ track, hasPrev, hasNext, onPrev, onNext, onEnded, onClose }) {
+function MusicPlayer({
+  track,
+  hasPrev,
+  hasNext,
+  shuffle,
+  repeat,
+  onPrev,
+  onNext,
+  onEnded,
+  onToggleShuffle,
+  onCycleRepeat,
+  onClose,
+}) {
   const YT = useYouTubeIframeApi();
   const holderRef = useRef(null);
   const playerRef = useRef(null);
@@ -21,7 +33,7 @@ function MusicPlayer({ track, hasPrev, hasNext, onPrev, onNext, onEnded, onClose
   const [prog, setProg] = useState({ played: 0, duration: track.duration || 0 });
 
   trackRef.current = track;
-  cbRef.current = { onEnded, onNext };
+  cbRef.current = { onEnded, onNext, repeat };
 
   // API가 준비되면 플레이어를 한 번 생성(이후 곡 교체는 loadVideoById로).
   useEffect(() => {
@@ -33,8 +45,17 @@ function MusicPlayer({ track, hasPrev, hasNext, onPrev, onNext, onEnded, onClose
       playerVars: { autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1 },
       events: {
         onStateChange: (e) => {
-          if (e.data === YT.PlayerState.ENDED) cbRef.current.onEnded();
-          else if (e.data === YT.PlayerState.PLAYING) setPlaying(true);
+          if (e.data === YT.PlayerState.ENDED) {
+            if (cbRef.current.repeat === 'one') {
+              const p = playerRef.current;
+              if (p) {
+                p.seekTo(0, true);
+                p.playVideo();
+              }
+            } else {
+              cbRef.current.onEnded();
+            }
+          } else if (e.data === YT.PlayerState.PLAYING) setPlaying(true);
           else if (e.data === YT.PlayerState.PAUSED) setPlaying(false);
         },
       },
@@ -152,6 +173,15 @@ function MusicPlayer({ track, hasPrev, hasNext, onPrev, onNext, onEnded, onClose
         </div>
 
         <div className="pl-player-controls">
+          <button
+            type="button"
+            className={`pl-pbtn pl-pbtn--mode${shuffle ? ' is-active' : ''}`}
+            onClick={onToggleShuffle}
+            aria-pressed={shuffle}
+            title={shuffle ? '셔플 끄기' : '셔플'}
+          >
+            ⇄
+          </button>
           <button type="button" className="pl-pbtn" onClick={onPrev} disabled={!hasPrev} aria-label="이전 곡">
             ‹‹
           </button>
@@ -160,6 +190,14 @@ function MusicPlayer({ track, hasPrev, hasNext, onPrev, onNext, onEnded, onClose
           </button>
           <button type="button" className="pl-pbtn" onClick={onNext} disabled={!hasNext} aria-label="다음 곡">
             ››
+          </button>
+          <button
+            type="button"
+            className={`pl-pbtn pl-pbtn--mode${repeat !== 'off' ? ' is-active' : ''}`}
+            onClick={onCycleRepeat}
+            title={repeat === 'one' ? '한 곡 반복' : repeat === 'all' ? '전체 반복' : '반복 없음'}
+          >
+            {repeat === 'one' ? '↻1' : '↻'}
           </button>
         </div>
 

@@ -83,11 +83,33 @@
   font-size: 0.72rem;
   color: #a08c63;
 }
+.pl-section-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .pl-section-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+.pl-shuffle-play {
+  font-family: 'NexonWarhaven', serif;
+  font-size: 0.78rem;
+  padding: 6px 13px;
+  color: #6b5b40;
+  background: transparent;
+  border: 1px solid #cbb88c;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pl-shuffle-play:hover {
+  color: #4a3c2a;
+  background: #f3ead4;
 }
 .pl-section-empty {
   margin: 6px 0 0;
@@ -384,6 +406,18 @@
 }
 .pl-pbtn--play:hover:not(:disabled) {
   background: #4a3c2a;
+}
+/* 셔플/반복 토글 */
+.pl-pbtn--mode {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  font-size: 0.95rem;
+}
+.pl-pbtn--mode.is-active {
+  color: #f3ead4;
+  background: #8a7a5c;
+  border-color: #8a7a5c;
 }
 .pl-player-close {
   flex: 0 0 auto;

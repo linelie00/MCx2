@@ -10,6 +10,7 @@ function PlaylistSection({
   currentTrackId,
   canEdit,
   onPlayTrack,
+  onShufflePlay,
   onAddTrack,
   onEditPlaylist,
   onDeletePlaylist,
@@ -32,25 +33,38 @@ function PlaylistSection({
           <span className="pl-section-count">{tracks.length}곡</span>
         </div>
 
-        {canEdit && (
-          <div className="pl-section-actions">
-            <button type="button" className="pl-iconbtn" onClick={onMovePlaylist.up} disabled={isFirst} title="위로">
-              ▲
+        <div className="pl-section-right">
+          {tracks.length > 0 && (
+            <button
+              type="button"
+              className="pl-shuffle-play"
+              onClick={onShufflePlay}
+              title="이 재생목록을 셔플로 재생"
+            >
+              ⇄ 셔플 재생
             </button>
-            <button type="button" className="pl-iconbtn" onClick={onMovePlaylist.down} disabled={isLast} title="아래로">
-              ▼
-            </button>
-            <button type="button" className="pl-btn" onClick={onEditPlaylist}>
-              편집
-            </button>
-            <button type="button" className="pl-btn pl-btn--danger" onClick={onDeletePlaylist}>
-              삭제
-            </button>
-            <button type="button" className="pl-btn pl-btn--primary" onClick={onAddTrack}>
-              + 곡 추가
-            </button>
-          </div>
-        )}
+          )}
+
+          {canEdit && (
+            <div className="pl-section-actions">
+              <button type="button" className="pl-iconbtn" onClick={onMovePlaylist.up} disabled={isFirst} title="위로">
+                ▲
+              </button>
+              <button type="button" className="pl-iconbtn" onClick={onMovePlaylist.down} disabled={isLast} title="아래로">
+                ▼
+              </button>
+              <button type="button" className="pl-btn" onClick={onEditPlaylist}>
+                편집
+              </button>
+              <button type="button" className="pl-btn pl-btn--danger" onClick={onDeletePlaylist}>
+                삭제
+              </button>
+              <button type="button" className="pl-btn pl-btn--primary" onClick={onAddTrack}>
+                + 곡 추가
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {tracks.length === 0 ? (

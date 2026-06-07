@@ -3,7 +3,7 @@
 미하티(MIHEARTI)에 추가된 주요 기능과 백엔드 도입의 큰 흐름을 정리한 문서입니다.
 (최종 갱신: 2026-06-08)
 
-> 정적 페이지(Home/World/Character)에 이어, **갤러리·스토리 뷰어·방명록**과
+> 정적 페이지(Home/World/Character)에 이어, **갤러리·스토리 뷰어·방명록·플레이리스트**와
 > 이를 뒷받침하는 **Express API + 로컬 파일 저장소**가 추가되었습니다.
 
 ---
@@ -25,22 +25,28 @@ server/
     ├── app.js                 cors + /uploads 정적 + /api/* 라우트 등록
     ├── middleware/
     │   └── requireOwner.js    X-Owner-Key 검증 (쓰기 보호)
-    ├── routes/                gallery.js · auth.js · guestbook.js
-    ├── controllers/           galleryController.js · guestbookController.js
+    ├── routes/                gallery.js · auth.js · guestbook.js · playlist.js
+    ├── controllers/           galleryController.js · guestbookController.js · playlistController.js
     ├── services/
     │   ├── storageService.js  로컬 저장 + 치수 측정 + 영상 poster(ffmpeg)
     │   ├── metaStore.js       gallery.json 읽기/쓰기 (없으면 seed 복사)
-    │   └── guestbookStore.js  guestbook.json 읽기/쓰기
+    │   ├── guestbookStore.js  guestbook.json 읽기/쓰기
+    │   ├── playlistStore.js   playlists.json 읽기/쓰기 (없으면 seed 복사)
+    │   └── youtubeService.js  YouTube Data API v3 (videoId 추출 · 메타 조회 · 검색)
     └── data/
-        ├── gallery.seed.json  기본 태그 시드 (커밋)
-        ├── gallery.json       라이브 갤러리 데이터 (gitignore)
-        └── guestbook.json     라이브 방명록 데이터 (gitignore)
+        ├── gallery.seed.json     기본 태그 시드 (커밋)
+        ├── gallery.json          라이브 갤러리 데이터 (gitignore)
+        ├── guestbook.json        라이브 방명록 데이터 (gitignore)
+        ├── playlists.seed.json   빈 구조 시드 (커밋)
+        └── playlists.json        라이브 플레이리스트 데이터 (gitignore)
 ```
 
 ### 의존성
 
 `express`, `cors`, `dotenv`, `multer`(업로드), `image-size`(이미지 치수),
 `fluent-ffmpeg`+`ffmpeg-static`+`ffprobe-static`(영상 치수·poster).
+플레이리스트는 **새 의존성 없이** Node 전역 `fetch`로 YouTube Data API v3를 호출한다
+(재생은 클라이언트의 IFrame Player API, 키 불필요).
 
 ### API 요약
 
@@ -65,6 +71,18 @@ GET    /api/guestbook
 GET    /api/guestbook/challenge     산수 캡차 발급
 POST   /api/guestbook               허니팟·쿨다운·캡차 검증 후 저장
 DELETE /api/guestbook/:id           (owner)
+
+# 플레이리스트 (조회 공개, 쓰기/검색은 오너)
+GET    /api/playlist                          전체 재생목록(+캐싱 트랙)
+GET    /api/playlist/search?q=                (owner) 곡 이름 검색  ※ ':id'보다 먼저
+POST   /api/playlist                          (owner) 재생목록 생성
+PATCH  /api/playlist/order                     (owner) 재생목록 순서  ※ ':id'보다 먼저
+PATCH  /api/playlist/:id                        (owner) 제목/설명/accent
+DELETE /api/playlist/:id                        (owner)
+POST   /api/playlist/:id/tracks                 (owner) {url,note} → 메타 조회·저장
+PATCH  /api/playlist/:id/tracks/order           (owner) 트랙 순서  ※ ':trackId'보다 먼저
+PATCH  /api/playlist/:id/tracks/:trackId        (owner) note 수정
+DELETE /api/playlist/:id/tracks/:trackId        (owner)
 ```
 
 ---
@@ -171,27 +189,70 @@ npm run import -- "C:\\경로\\갤러리폴더"
 
 ---
 
-## 7. 데이터 관리 정책
+## 7. 플레이리스트 (/playlist)
 
-- **라이브 데이터는 git 추적에서 분리**: `gallery.json`, `guestbook.json`, `uploads/`는
-  `.gitignore`. git 작업(checkout/reset 등)에 사용자 데이터가 덮이지 않도록.
-- 기본값은 `gallery.seed.json`(커밋). 새 클론/파일 부재 시 `metaStore`가 시드를 자동 복사.
+오너가 자유롭게 만든 **테마별 재생목록**을 감상하는 음악 기록 보관소.
+`Pages/Playlist.js` + `Components/playlist/*` + `Styles/Playlist.css`.
+
+### 데이터 모델 (`playlists.json`)
+
+```txt
+Playlist { id, title, description?, accent('migel'|'matiam'|null), order, createdAt,
+           tracks:[ Track ] }
+Track    { id, videoId, title, channel, thumbnail, duration(초), note?, addedAt }
+```
+- 고정 테마 없음 — 시드는 빈 구조. 재생목록은 전부 오너가 UI에서 생성.
+- `accent`를 고르면 섹션 강조선이 캐릭터 색(`Data/constants/colors.js`)으로 표시된다.
+
+### 두 개의 YouTube API
+
+- **Data API v3 (서버, 키 필요)** — 곡 추가/검색 시에만 호출해 메타를 **캐싱**.
+  추가는 `videos.list`(1 unit/곡), 이름 검색은 `search.list`(100 units/검색).
+  페이지 로드는 캐싱 값만 쓰므로 **Data API 호출 0**.
+- **IFrame Player API (클라이언트, 키 불필요)** — 페이지 내 임베드 재생.
+
+### 곡 추가 (오너)
+
+- **이름으로 검색**: `search.list` 결과(썸네일·제목·채널)에서 골라 추가.
+  다이얼로그가 유지돼 여러 곡 연속 추가 가능. 고른 곡만 `videos.list`로 길이까지 채워 저장.
+- **링크 붙여넣기**: 유튜브 URL/ID를 직접 입력(`youtu.be`·`watch?v=`·`shorts`·순수 ID 파싱).
+- 검색은 할당량(100 units)을 쓰므로 **오너 전용**으로 막아 둠.
+
+### 재생 (공개)
+
+- 곡 클릭 → 하단 고정 플레이어가 임베드 재생, 곡이 끝나면 **자동으로 다음 곡**.
+- 이전/다음/일시정지, 닫기. 재생목록·곡 삭제로 현재 곡이 사라지면 플레이어를 닫는다.
+
+### 관리 (오너)
+
+- 재생목록 생성/편집(제목·설명·accent)/삭제/순서(▲▼).
+- 곡 메모(✎)/삭제(×)/순서(▲▼). 모든 쓰기는 `requireOwner`로 보호.
+
+---
+
+## 8. 데이터 관리 정책
+
+- **라이브 데이터는 git 추적에서 분리**: `gallery.json`, `guestbook.json`, `playlists.json`,
+  `uploads/`는 `.gitignore`. git 작업(checkout/reset 등)에 사용자 데이터가 덮이지 않도록.
+- 기본값은 `*.seed.json`(커밋). 새 클론/파일 부재 시 store가 시드를 자동 복사.
 - 백업이 필요하면 `server/src/data/*.json` + `server/uploads/`를 별도로 보관.
 
 ---
 
-## 8. 환경변수 (server/.env)
+## 9. 환경변수 (server/.env)
 
 ```txt
 OWNER_MATIAM_KEY=...   # 마티암오너 패스코드
 OWNER_MIGEL_KEY=...    # 미겔오너 패스코드
+YOUTUBE_API_KEY=...    # 플레이리스트 곡 추가/검색용 (YouTube Data API v3)
 # PORT=8000            # 선택
 ```
 `.env`는 git에 올리지 않으며(`.env.example`로 키 이름만 문서화), 변경 후 서버 재시작 필요.
+`YOUTUBE_API_KEY`가 없어도 **재생/조회는 정상**이고, 곡 추가/검색만 막힌다.
 
 ---
 
-## 9. 실행
+## 10. 실행
 
 ```bash
 # 클라이언트 (CRA, :3000)

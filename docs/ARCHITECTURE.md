@@ -26,6 +26,14 @@ client/src/
 │   │   └── galleryLayout.js      카드 비율 정책(MAX_CARD_RATIO)
 │   ├── guestbook/
 │   │   └── Guestbook.jsx         방명록(작성/목록 + 스팸방지)
+│   ├── playlist/                 플레이리스트 UI
+│   │   ├── PlaylistSection.jsx   재생목록 한 묶음(제목/곡 목록/오너 컨트롤)
+│   │   ├── TrackRow.jsx          곡 한 줄(썸네일·재생·메모/삭제/정렬)
+│   │   ├── MusicPlayer.jsx       하단 고정 플레이어(YouTube IFrame)
+│   │   ├── PlaylistDialog.jsx    재생목록 생성/편집
+│   │   ├── AddTrackDialog.jsx    곡 추가(이름 검색 / 링크)
+│   │   ├── useYouTubeIframeApi.js  IFrame API 1회 로드 훅
+│   │   └── playlistUtils.js      길이 포맷
 │   ├── story/
 │   │   └── StoryTimeline.jsx     스토리 상단 타임라인
 │   ├── NavigationBar.js
@@ -36,6 +44,7 @@ client/src/
 ├── services/                     API/저장소 접근 계층
 │   ├── galleryApi.js             /api/gallery/* (상대→절대 url 변환)
 │   ├── guestbookApi.js           /api/guestbook/*
+│   ├── playlistApi.js            /api/playlist/* (재생목록/곡/검색)
 │   └── ownerAuth.js              오너 패스코드(localStorage) + 검증
 ├── Data/
 │   ├── Characters.js    캐릭터 데이터 (색상/이미지는 constants 참조)
@@ -53,18 +62,19 @@ client/src/
 │   ├── CharacterHub.js, CharacterPanel.js
 │   ├── Story.js         스토리 책 뷰어 (구현)
 │   ├── Gallery.js       갤러리 (/image, 구현)
-│   └── Playlist.js      (미구현)
+│   └── Playlist.js      플레이리스트 (/playlist, 구현)
 ├── Styles/
 │   ├── theme.css        CSS 변수(색상/폰트/spacing), 기본 리셋
 │   ├── global.css       전역 요소 스타일, .content 래퍼
 │   ├── App.css, Home.css, World.css, Character.css, Components.css
-│   └── Story.css, StoryBook.css, Gallery.css, Guestbook.css
+│   └── Story.css, StoryBook.css, Gallery.css, Guestbook.css, Playlist.css
 ├── App.js               라우터(+ OwnerProvider) + CSS 로딩 진입점
 └── index.js
 ```
 
-> 갤러리/방명록의 실데이터는 프론트가 아니라 **서버(Express)** 가 보관합니다.
-> 갤러리·태그·미디어는 `gallery.json` + `uploads/`, 방명록은 `guestbook.json`.
+> 갤러리/방명록/플레이리스트의 실데이터는 프론트가 아니라 **서버(Express)** 가 보관합니다.
+> 갤러리·태그·미디어는 `gallery.json` + `uploads/`, 방명록은 `guestbook.json`,
+> 플레이리스트는 `playlists.json`(유튜브 메타 캐싱).
 > 정적 콘텐츠(캐릭터/월드/스토리)만 `Data/*.js`로 관리합니다. (상세: FEATURES.md)
 
 ## CSS 로딩 계층 (App.js 기준)

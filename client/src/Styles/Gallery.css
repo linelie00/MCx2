@@ -346,16 +346,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  background: rgba(58, 34, 16, 0.55); /* 고동색 반투명 */
+  color: #f3ead4;
+  background: rgba(46, 38, 28, 0.78); /* 태그 배경색(.gal-card-tag) */
   border: none;
   border-radius: 50%;
   text-decoration: none;
   cursor: pointer;
+  backdrop-filter: blur(2px);
   transition: background 0.15s ease;
 }
 .gal-tool:hover {
-  background: rgba(58, 34, 16, 0.78);
+  background: rgba(46, 38, 28, 0.92);
 }
 
 /* 앨범 넘김 버튼 */

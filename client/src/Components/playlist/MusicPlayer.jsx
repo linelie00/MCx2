@@ -1,26 +1,30 @@
 /**
- * MusicPlayer — 하단 고정 플레이어 (YouTube IFrame Player API)
- * 현재 트랙을 임베드로 재생하고, 곡이 끝나면 onEnded로 다음 곡을 부모에게 알린다.
- * 재생은 키가 필요 없다(임베드). 콜백은 ref로 최신값을 유지해 플레이어를 재생성하지 않는다.
- * 진행 바: 0.4초마다 재생 위치를 폴링해 표시하고, 클릭/드래그로 seekTo 한다.
+ * MusicPlayer — 전역 플레이어 UI (YouTube IFrame Player API)
+ * 재생 상태는 PlaybackContext에서 받아오고, 레이아웃에 상주해 페이지 전환에도 유지된다.
+ * variant: 'full'(=/playlist 하단 바) | 'mini'(=그 외 페이지 우하단 작은 카드).
+ * 같은 컴포넌트 인스턴스가 유지되므로(variant만 바뀜) iframe과 재생이 끊기지 않는다.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useYouTubeIframeApi from './useYouTubeIframeApi';
+import { usePlayback } from '../../contexts/PlaybackContext';
 import { fmtDuration } from './playlistUtils';
 
-function MusicPlayer({
-  track,
-  hasPrev,
-  hasNext,
-  shuffle,
-  repeat,
-  onPrev,
-  onNext,
-  onEnded,
-  onToggleShuffle,
-  onCycleRepeat,
-  onClose,
-}) {
+function MusicPlayer({ variant = 'full' }) {
+  const {
+    currentTrack: track,
+    hasPrev,
+    hasNext,
+    shuffle,
+    repeat,
+    prev,
+    next,
+    handleEnded,
+    toggleShuffle,
+    cycleRepeat,
+    stop,
+  } = usePlayback();
+  const navigate = useNavigate();
   const YT = useYouTubeIframeApi();
   const holderRef = useRef(null);
   const playerRef = useRef(null);
@@ -30,10 +34,12 @@ function MusicPlayer({
   const barRef = useRef(null);
   const scrubRef = useRef(false);
   const [playing, setPlaying] = useState(true);
-  const [prog, setProg] = useState({ played: 0, duration: track.duration || 0 });
+  const [prog, setProg] = useState({ played: 0, duration: track ? track.duration || 0 : 0 });
 
   trackRef.current = track;
-  cbRef.current = { onEnded, onNext, repeat };
+  cbRef.current = { handleEnded, repeat };
+
+  const videoId = track ? track.videoId : null;
 
   // API가 준비되면 플레이어를 한 번 생성(이후 곡 교체는 loadVideoById로).
   useEffect(() => {
@@ -53,7 +59,7 @@ function MusicPlayer({
                 p.playVideo();
               }
             } else {
-              cbRef.current.onEnded();
+              cbRef.current.handleEnded();
             }
           } else if (e.data === YT.PlayerState.PLAYING) setPlaying(true);
           else if (e.data === YT.PlayerState.PAUSED) setPlaying(false);
@@ -75,28 +81,30 @@ function MusicPlayer({
 
   // 트랙이 바뀌면 영상 교체(최초 생성분은 1회 건너뜀).
   useEffect(() => {
-    setProg({ played: 0, duration: track.duration || 0 });
+    setProg({ played: 0, duration: (track && track.duration) || 0 });
     const p = playerRef.current;
-    if (!p || !p.loadVideoById) return;
-    if (createdId.current === track.videoId) {
+    if (!p || !p.loadVideoById || !videoId) return;
+    if (createdId.current === videoId) {
       createdId.current = null;
       return;
     }
-    p.loadVideoById(track.videoId);
+    p.loadVideoById(videoId);
     setPlaying(true);
-  }, [track.videoId, track.duration]);
+  }, [videoId, track]);
 
   // 재생 위치 폴링(드래그 중에는 건너뜀).
   useEffect(() => {
     const id = setInterval(() => {
       const p = playerRef.current;
       if (!p || !p.getCurrentTime || scrubRef.current) return;
-      const d = (p.getDuration && p.getDuration()) || trackRef.current.duration || 0;
+      const d = (p.getDuration && p.getDuration()) || (trackRef.current && trackRef.current.duration) || 0;
       const c = p.getCurrentTime() || 0;
       setProg({ played: c, duration: d });
     }, 400);
     return () => clearInterval(id);
   }, []);
+
+  if (!track) return null;
 
   const togglePlay = () => {
     const p = playerRef.current;
@@ -118,7 +126,7 @@ function MusicPlayer({
     const p = playerRef.current;
     const d = (p && p.getDuration && p.getDuration()) || duration;
     if (p && p.seekTo && d) p.seekTo(ratio * d, true);
-    setProg((prev) => ({ played: ratio * (d || prev.duration), duration: d || prev.duration }));
+    setProg((cur) => ({ played: ratio * (d || cur.duration), duration: d || cur.duration }));
   };
   const onBarPointerDown = (e) => {
     e.preventDefault();
@@ -138,8 +146,11 @@ function MusicPlayer({
     document.addEventListener('pointerup', up);
   };
 
+  const isMini = variant === 'mini';
+  const openPlaylist = () => navigate('/playlist');
+
   return (
-    <div className="pl-player">
+    <div className={`pl-player pl-player--${variant}`}>
       <div
         className="pl-seek"
         ref={barRef}
@@ -160,7 +171,11 @@ function MusicPlayer({
           <div ref={holderRef} />
         </div>
 
-        <div className="pl-player-meta">
+        <div
+          className={`pl-player-meta${isMini ? ' is-clickable' : ''}`}
+          onClick={isMini ? openPlaylist : undefined}
+          title={isMini ? '플레이리스트로 이동' : undefined}
+        >
           <div className="pl-player-title" title={track.title}>
             {track.title}
           </div>
@@ -176,32 +191,32 @@ function MusicPlayer({
           <button
             type="button"
             className={`pl-pbtn pl-pbtn--mode${shuffle ? ' is-active' : ''}`}
-            onClick={onToggleShuffle}
+            onClick={toggleShuffle}
             aria-pressed={shuffle}
             title={shuffle ? '셔플 끄기' : '셔플'}
           >
             ⇄
           </button>
-          <button type="button" className="pl-pbtn" onClick={onPrev} disabled={!hasPrev} aria-label="이전 곡">
+          <button type="button" className="pl-pbtn pl-pbtn--prev" onClick={prev} disabled={!hasPrev} aria-label="이전 곡">
             ‹‹
           </button>
           <button type="button" className="pl-pbtn pl-pbtn--play" onClick={togglePlay} aria-label="재생/일시정지">
             {playing ? '❚❚' : '▶'}
           </button>
-          <button type="button" className="pl-pbtn" onClick={onNext} disabled={!hasNext} aria-label="다음 곡">
+          <button type="button" className="pl-pbtn pl-pbtn--next" onClick={next} disabled={!hasNext} aria-label="다음 곡">
             ››
           </button>
           <button
             type="button"
             className={`pl-pbtn pl-pbtn--mode${repeat !== 'off' ? ' is-active' : ''}`}
-            onClick={onCycleRepeat}
+            onClick={cycleRepeat}
             title={repeat === 'one' ? '한 곡 반복' : repeat === 'all' ? '전체 반복' : '반복 없음'}
           >
             {repeat === 'one' ? '↻1' : '↻'}
           </button>
         </div>
 
-        <button type="button" className="pl-player-close" onClick={onClose} aria-label="플레이어 닫기">
+        <button type="button" className="pl-player-close" onClick={stop} aria-label="플레이어 닫기">
           ×
         </button>
       </div>

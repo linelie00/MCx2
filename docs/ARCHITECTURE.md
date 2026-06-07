@@ -27,9 +27,10 @@ client/src/
 │   ├── guestbook/
 │   │   └── Guestbook.jsx         방명록(작성/목록 + 스팸방지)
 │   ├── playlist/                 플레이리스트 UI
+│   │   ├── GlobalPlayer.jsx      레이아웃 상주 플레이어(full/mini 선택)
+│   │   ├── MusicPlayer.jsx       플레이어 본체(YouTube IFrame, 시크/셔플/반복)
 │   │   ├── PlaylistSection.jsx   재생목록 한 묶음(제목/곡 목록/오너 컨트롤)
 │   │   ├── TrackRow.jsx          곡 한 줄(썸네일·재생·메모/삭제/정렬)
-│   │   ├── MusicPlayer.jsx       하단 고정 플레이어(YouTube IFrame)
 │   │   ├── PlaylistDialog.jsx    재생목록 생성/편집
 │   │   ├── AddTrackDialog.jsx    곡 추가(이름 검색 / 링크)
 │   │   ├── useYouTubeIframeApi.js  IFrame API 1회 로드 훅
@@ -40,7 +41,8 @@ client/src/
 │   ├── ScrollToTop.js
 │   └── StickyRevealLines.js
 ├── contexts/
-│   └── OwnerContext.jsx          오너 권한 전역 상태 (useOwner)
+│   ├── OwnerContext.jsx          오너 권한 전역 상태 (useOwner)
+│   └── PlaybackContext.jsx       음악 재생 전역 상태 (usePlayback, 페이지 전환에도 유지)
 ├── services/                     API/저장소 접근 계층
 │   ├── galleryApi.js             /api/gallery/* (상대→절대 url 변환)
 │   ├── guestbookApi.js           /api/guestbook/*

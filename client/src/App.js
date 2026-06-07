@@ -8,6 +8,7 @@ import './Styles/App.css';
 
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { OwnerProvider } from './contexts/OwnerContext';
+import { PlaybackProvider } from './contexts/PlaybackContext';
 import NavigateLayout from './Layouts/NavigateLayout';
 import ScrollToTop from "./Components/ScrollToTop";
 import HomePage from './Pages/Home';
@@ -22,6 +23,7 @@ function App() {
   return (
     <div className="App">
       <OwnerProvider>
+      <PlaybackProvider>
       <Router>
         <ScrollToTop />
         <Routes>
@@ -41,6 +43,7 @@ function App() {
           </Route>
         </Routes>
       </Router>
+      </PlaybackProvider>
       </OwnerProvider>
     </div>
   );

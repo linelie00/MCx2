@@ -230,6 +230,15 @@ Track    { id, videoId, title, channel, thumbnail, duration(초), note?, addedAt
   그 목록을 시작한다(바의 셔플 토글과 같은 상태를 공유).
 - 재생목록·곡 삭제로 현재 곡이 사라지면 플레이어를 닫는다.
 
+### 페이지 전환에도 유지 (전역 플레이어)
+
+- 재생 상태는 `contexts/PlaybackContext.jsx`(`usePlayback`)가 전역으로 보관하고,
+  플레이어는 `Components/playlist/GlobalPlayer.jsx`로 **레이아웃(`NavigateLayout`)에 상주**한다.
+  라우트 위에 mount되어 페이지를 옮겨도 **같은 인스턴스가 유지** → iframe/재생이 끊기지 않는다.
+- 큐는 재생 시작한 목록의 곡 배열을 **스냅샷**으로 들고 있어, 다른 페이지로 가거나 목록을 편집해도 유지.
+- 표시: `/playlist`에서는 **하단 전체 바(full)**, 그 외 페이지에서는 **우하단 미니 카드(mini)**.
+  미니는 썸네일·제목·재생/다음·닫기·얇은 진행 바만 보이고, 제목 클릭 시 `/playlist`로 이동한다.
+
 ### 관리 (오너)
 
 - 재생목록 생성/편집(제목·설명·accent)/삭제/순서(▲▼).

@@ -4,40 +4,26 @@
  * 곡 클릭 시 하단 플레이어(YouTube IFrame)로 재생하고, 끝나면 다음 곡으로 이어진다.
  * 곡 메타(제목/채널/썸네일/길이)는 서버가 추가 시 캐싱하므로 로드 시 추가 API 호출은 없다.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import '../Styles/Playlist.css';
 import * as playlistApi from '../services/playlistApi';
 import { useOwner } from '../contexts/OwnerContext';
+import { usePlayback } from '../contexts/PlaybackContext';
 import { characterColors } from '../Data/constants/colors';
 import PlaylistSection from '../Components/playlist/PlaylistSection';
-import MusicPlayer from '../Components/playlist/MusicPlayer';
 import PlaylistDialog from '../Components/playlist/PlaylistDialog';
 import AddTrackDialog from '../Components/playlist/AddTrackDialog';
 
 const accentColor = (accent) => (accent && characterColors[accent] ? characterColors[accent].primary : null);
 
-// 재생 순서 만들기. 셔플이면 현재 곡(first)을 맨 앞에 두고 나머지를 섞는다.
-function buildOrder(n, first, shuffleOn) {
-  if (!shuffleOn) return Array.from({ length: n }, (_, i) => i);
-  const rest = [];
-  for (let i = 0; i < n; i += 1) if (i !== first) rest.push(i);
-  for (let i = rest.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [rest[i], rest[j]] = [rest[j], rest[i]];
-  }
-  return [first, ...rest];
-}
-
 function Playlist() {
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [playing, setPlaying] = useState(null); // { playlistId, order:[trackIndex...], pos }
-  const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState('off'); // 'off' | 'all' | 'one'
   const [plDialog, setPlDialog] = useState(null); // null | { mode:'create' } | { mode:'edit', playlist }
   const [addTrackFor, setAddTrackFor] = useState(null); // playlist | null
 
   const { isOwner, ownerLabel, unlock, lock } = useOwner();
+  const playback = usePlayback();
 
   const handleLockToggle = useCallback(async () => {
     if (isOwner) {
@@ -69,69 +55,6 @@ function Playlist() {
     };
   }, []);
 
-  // 재생 중인 곡 도출
-  const playingList = useMemo(
-    () => (playing ? playlists.find((p) => p.id === playing.playlistId) : null),
-    [playing, playlists]
-  );
-  const currentIndex = playing ? playing.order[playing.pos] : -1;
-  const currentTrack = playingList ? playingList.tracks[currentIndex] : null;
-  const orderLen = playing ? playing.order.length : 0;
-  const hasPrev = !!playing && (playing.pos > 0 || repeat === 'all');
-  const hasNext = !!playing && (playing.pos < orderLen - 1 || repeat === 'all');
-
-  // 재생 대상이 사라지면(삭제 등) 플레이어를 닫는다.
-  useEffect(() => {
-    if (playing && !currentTrack) setPlaying(null);
-  }, [playing, currentTrack]);
-
-  const playTrack = (playlistId, trackIndex) => {
-    const list = playlists.find((p) => p.id === playlistId);
-    if (!list) return;
-    const order = buildOrder(list.tracks.length, trackIndex, shuffle);
-    setPlaying({ playlistId, order, pos: order.indexOf(trackIndex) });
-  };
-
-  // 하이브리드 진입점: 이 재생목록을 셔플 ON + 랜덤 첫 곡으로 시작(바 토글과 같은 전역 상태).
-  const shufflePlay = (playlistId) => {
-    const list = playlists.find((p) => p.id === playlistId);
-    if (!list || list.tracks.length === 0) return;
-    setShuffle(true);
-    const first = Math.floor(Math.random() * list.tracks.length);
-    setPlaying({ playlistId, order: buildOrder(list.tracks.length, first, true), pos: 0 });
-  };
-
-  // 한 칸 이동(범위를 벗어나면 repeat='all'일 때만 순환, 아니면 정지).
-  const advance = (dir) => {
-    setPlaying((p) => {
-      if (!p) return p;
-      const len = p.order.length;
-      let np = p.pos + dir;
-      if (np < 0 || np >= len) {
-        if (repeat === 'all') np = (np + len) % len;
-        else return p;
-      }
-      return { ...p, pos: np };
-    });
-  };
-  const goNext = () => advance(1);
-  const goPrev = () => advance(-1);
-  const onEnded = () => advance(1); // repeat='one'은 MusicPlayer가 곡 자체를 다시 재생
-
-  const toggleShuffle = () => {
-    const ns = !shuffle;
-    setShuffle(ns);
-    setPlaying((p) => {
-      if (!p) return p;
-      const list = playlists.find((x) => x.id === p.playlistId);
-      if (!list) return p;
-      const cur = p.order[p.pos];
-      const order = buildOrder(list.tracks.length, cur, ns);
-      return { playlistId: p.playlistId, order, pos: order.indexOf(cur) };
-    });
-  };
-  const cycleRepeat = () => setRepeat((r) => (r === 'off' ? 'all' : r === 'all' ? 'one' : 'off'));
-
   // ----- 오너: 재생목록 -----
   const handleCreatePlaylist = useCallback(async (payload) => {
     const created = await playlistApi.createPlaylist(payload);
@@ -147,11 +70,15 @@ function Playlist() {
     []
   );
 
-  const handleDeletePlaylist = useCallback(async (playlist) => {
-    if (!window.confirm(`‘${playlist.title}’ 재생목록을 삭제할까요?`)) return;
-    await playlistApi.deletePlaylist(playlist.id);
-    setPlaylists((prev) => prev.filter((p) => p.id !== playlist.id));
-  }, []);
+  const handleDeletePlaylist = useCallback(
+    async (playlist) => {
+      if (!window.confirm(`‘${playlist.title}’ 재생목록을 삭제할까요?`)) return;
+      await playlistApi.deletePlaylist(playlist.id);
+      setPlaylists((prev) => prev.filter((p) => p.id !== playlist.id));
+      if (playback.playlistId === playlist.id) playback.stop();
+    },
+    [playback]
+  );
 
   const movePlaylist = useCallback(async (index, dir) => {
     setPlaylists((prev) => {
@@ -210,7 +137,7 @@ function Playlist() {
   }, []);
 
   return (
-    <div className={`playlist${currentTrack ? ' has-player' : ''}`}>
+    <div className={`playlist${playback.currentTrack ? ' has-player' : ''}`}>
       <header className="pl-head">
         <h2 className="pl-title">Playlist</h2>
         <div className="pl-head-actions">
@@ -243,10 +170,12 @@ function Playlist() {
               key={playlist.id}
               playlist={playlist}
               accentColor={accentColor(playlist.accent)}
-              currentTrackId={playingList && playingList.id === playlist.id ? currentTrack?.id : null}
+              currentTrackId={
+                playback.playlistId === playlist.id && playback.currentTrack ? playback.currentTrack.id : null
+              }
               canEdit={isOwner}
-              onPlayTrack={(index) => playTrack(playlist.id, index)}
-              onShufflePlay={() => shufflePlay(playlist.id)}
+              onPlayTrack={(index) => playback.playPlaylist(playlist, index)}
+              onShufflePlay={() => playback.shufflePlayPlaylist(playlist)}
               onAddTrack={() => setAddTrackFor(playlist)}
               onEditPlaylist={() => setPlDialog({ mode: 'edit', playlist })}
               onDeletePlaylist={() => handleDeletePlaylist(playlist)}
@@ -259,22 +188,6 @@ function Playlist() {
             />
           ))}
         </div>
-      )}
-
-      {currentTrack && (
-        <MusicPlayer
-          track={currentTrack}
-          hasPrev={hasPrev}
-          hasNext={hasNext}
-          shuffle={shuffle}
-          repeat={repeat}
-          onPrev={goPrev}
-          onNext={goNext}
-          onEnded={onEnded}
-          onToggleShuffle={toggleShuffle}
-          onCycleRepeat={cycleRepeat}
-          onClose={() => setPlaying(null)}
-        />
       )}
 
       {plDialog && (

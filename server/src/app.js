@@ -3,7 +3,7 @@
  */
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+const { UPLOADS_DIR } = require('./config/paths');
 const galleryRoutes = require('./routes/gallery');
 const authRoutes = require('./routes/auth');
 const guestbookRoutes = require('./routes/guestbook');
@@ -23,8 +23,8 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .filter(Boolean);
 app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : undefined));
 
-// 업로드된 미디어 정적 서빙
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// 업로드된 미디어 정적 서빙 (DATA_DIR 볼륨 경로와 동일하게)
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // 인증(오너 확인) / 갤러리 / 방명록 API
 app.use('/api/auth', authRoutes);

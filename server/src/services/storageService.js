@@ -16,8 +16,7 @@ const imageSizeLib = require('image-size');
 ffmpeg.setFfmpegPath(ffmpegPath);
 ffmpeg.setFfprobePath(ffprobePath);
 
-const UPLOADS_DIR = path.join(__dirname, '../../uploads');
-fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+const { UPLOADS_DIR } = require('../config/paths');
 
 const MIME_EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp', 'video/mp4': '.mp4', 'video/quicktime': '.mov' };
 

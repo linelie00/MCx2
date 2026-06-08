@@ -23,6 +23,8 @@ server/
 ├── uploads/                   업로드된 미디어 파일 (gitignore)
 └── src/
     ├── app.js                 cors + /uploads 정적 + /api/* 라우트 등록
+    ├── config/
+    │   └── paths.js           데이터/업로드 경로 (DATA_DIR=볼륨 대응, 미설정 시 로컬)
     ├── middleware/
     │   └── requireOwner.js    X-Owner-Key 검증 (쓰기 보호)
     ├── routes/                gallery.js · auth.js · guestbook.js · playlist.js
@@ -278,3 +280,5 @@ cd client && npm install && npm start
 cd server && npm install && npm start   # 또는 npm run dev (--watch)
 ```
 프론트는 `REACT_APP_API_BASE`(기본 `http://localhost:8000`)로 서버에 연결합니다.
+
+**프로덕션 배포**(Netlify + Railway 영구 볼륨): `docs/DEPLOY.md` 참고.

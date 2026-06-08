@@ -5,9 +5,10 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { LIVE_DIR } = require('../config/paths');
 
-const FILE = path.join(__dirname, '../data/gallery.json');
-const SEED = path.join(__dirname, '../data/gallery.seed.json');
+const FILE = path.join(LIVE_DIR, 'gallery.json'); // 라이브(볼륨 가능)
+const SEED = path.join(__dirname, '../data/gallery.seed.json'); // 시드(레포)
 
 function read() {
   // 최초 실행(새 클론 등): gallery.json 이 없으면 시드로 초기화

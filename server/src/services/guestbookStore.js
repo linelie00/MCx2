@@ -4,8 +4,9 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { LIVE_DIR } = require('../config/paths');
 
-const FILE = path.join(__dirname, '../data/guestbook.json');
+const FILE = path.join(LIVE_DIR, 'guestbook.json');
 
 function read() {
   try {

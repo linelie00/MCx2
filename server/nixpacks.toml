@@ -1,0 +1,5 @@
+# Railway/Nixpacks 빌드 설정
+# 시스템 ffmpeg(+ffprobe) 설치 — 영상 썸네일/치수 생성용.
+# ffmpeg-static(optionalDependencies) 다운로드가 실패해도 이 시스템 바이너리로 동작한다.
+[phases.setup]
+aptPkgs = ["ffmpeg"]

@@ -9,12 +9,23 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('ffmpeg-static');
-const ffprobePath = require('ffprobe-static').path;
 const imageSizeLib = require('image-size');
 
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobePath);
+// ffmpeg/ffprobe 경로: 정적 바이너리(ffmpeg-static)가 설치·존재하면 사용하고,
+// 없으면(다운로드 실패 등) 설정하지 않아 fluent-ffmpeg가 시스템 PATH의 ffmpeg/ffprobe를 쓴다.
+// → ffmpeg-static 다운로드가 깨져도 빌드/실행이 멈추지 않는다.
+try {
+  const p = require('ffmpeg-static');
+  if (p && fs.existsSync(p)) ffmpeg.setFfmpegPath(p);
+} catch (e) {
+  /* 시스템 ffmpeg 사용 */
+}
+try {
+  const p = require('ffprobe-static').path;
+  if (p && fs.existsSync(p)) ffmpeg.setFfprobePath(p);
+} catch (e) {
+  /* 시스템 ffprobe 사용 */
+}
 
 const { UPLOADS_DIR } = require('../config/paths');
 

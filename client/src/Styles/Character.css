@@ -147,6 +147,13 @@
   font-style: italic;
   font-size: 1rem;
 }
+/* 한마디: 항상 가운데 정렬, 문장은 중간에서 안 끊기고(문장 단위로만 줄바꿈) */
+.panel-title h2 {
+  text-align: center;
+}
+.panel-title .quote-seg {
+  white-space: nowrap;
+}
 .panel-header {
   display: flex;
   flex-direction: row;

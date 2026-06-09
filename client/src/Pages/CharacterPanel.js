@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { useParams } from 'react-router-dom';
 import '../Styles/Character.css';
 import characters from '../Data/Characters.js';
@@ -12,6 +13,9 @@ const CharacterPanel = () => {
   if (!character) return <div>캐릭터 없음</div>;
 
   const desc = character.description;
+
+  // 한마디: 문장 단위 줄(좁으면 문장별로만 줄바꿈, 넓으면 한 줄)
+  const quoteLines = character.quotes?.length ? character.quotes : [character.title];
 
   const fields = [
     { key: "job", label: "칭호 혹은 직업" },
@@ -31,7 +35,16 @@ const CharacterPanel = () => {
 
         {/* 제목 */}
         <div className="panel-title">
-          <h2>"{character.title}"</h2>
+          <h2>
+            &quot;
+            {quoteLines.map((line, i) => (
+              <Fragment key={i}>
+                {i > 0 && ' '}
+                <span className="quote-seg">{line}</span>
+              </Fragment>
+            ))}
+            &quot;
+          </h2>
         </div>
         <div className="panel-appearance">
           <img src={character.appearance.image} alt={character.name} className="appearance-img"/>

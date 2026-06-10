@@ -6,6 +6,7 @@
  */
 const crypto = require('crypto');
 const store = require('../services/playlistStore');
+const storage = require('../services/storageService');
 const youtube = require('../services/youtubeService');
 
 const TITLE_MAX = 60;
@@ -16,6 +17,17 @@ const ACCENTS = ['migel', 'matiam'];
 const now = () => new Date().toISOString();
 const cleanAccent = (v) => (ACCENTS.includes(v) ? v : null);
 const findList = (data, id) => data.playlists.find((p) => p.id === id);
+const findTrack = (list, tid) => list.tracks.find((t) => t.id === tid);
+
+// 크롭 값 정리: 위치 0~100(%), 줌 1~5(배). 잘못된 값이면 기본값.
+const clampPct = (v, d) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : d;
+};
+const clampZoom = (v, d) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(5, Math.max(1, n)) : d;
+};
 
 // 공개 — 전체 재생목록(캐싱 트랙 포함). Data API 호출 없음.
 exports.list = (req, res) => {
@@ -124,9 +136,47 @@ exports.updateTrack = (req, res) => {
   const data = store.read();
   const list = findList(data, req.params.id);
   if (!list) return res.status(404).json({ error: 'not found' });
-  const track = list.tracks.find((t) => t.id === req.params.trackId);
+  const track = findTrack(list, req.params.trackId);
   if (!track) return res.status(404).json({ error: 'not found' });
   if (req.body.note != null) track.note = String(req.body.note).trim().slice(0, NOTE_MAX);
+  // 크롭 재조정(재업로드 없이): 이미지가 있을 때만 의미가 있다.
+  if (req.body.imageX != null) track.imageX = clampPct(req.body.imageX, track.imageX ?? 50);
+  if (req.body.imageY != null) track.imageY = clampPct(req.body.imageY, track.imageY ?? 50);
+  if (req.body.imageZoom != null) track.imageZoom = clampZoom(req.body.imageZoom, track.imageZoom ?? 1);
+  store.write(data);
+  return res.json(track);
+};
+
+// 트랙 LP 이미지 업로드(+크롭). 기존 이미지가 있으면 파일을 정리하고 교체한다.
+exports.setTrackImage = (req, res) => {
+  const data = store.read();
+  const list = findList(data, req.params.id);
+  if (!list) return res.status(404).json({ error: 'not found' });
+  const track = findTrack(list, req.params.trackId);
+  if (!track) return res.status(404).json({ error: 'not found' });
+  if (!req.file) return res.status(400).json({ error: '이미지 파일이 필요해요.' });
+
+  if (track.image) storage.removeFiles({ url: track.image });
+  track.image = `/uploads/${req.file.filename}`;
+  track.imageX = clampPct(req.body.imageX, 50);
+  track.imageY = clampPct(req.body.imageY, 50);
+  track.imageZoom = clampZoom(req.body.imageZoom, 1);
+  store.write(data);
+  return res.status(201).json(track);
+};
+
+// 트랙 LP 이미지 제거(파일 + 크롭 필드).
+exports.removeTrackImage = (req, res) => {
+  const data = store.read();
+  const list = findList(data, req.params.id);
+  if (!list) return res.status(404).json({ error: 'not found' });
+  const track = findTrack(list, req.params.trackId);
+  if (!track) return res.status(404).json({ error: 'not found' });
+  if (track.image) storage.removeFiles({ url: track.image });
+  delete track.image;
+  delete track.imageX;
+  delete track.imageY;
+  delete track.imageZoom;
   store.write(data);
   return res.json(track);
 };
@@ -135,9 +185,10 @@ exports.deleteTrack = (req, res) => {
   const data = store.read();
   const list = findList(data, req.params.id);
   if (!list) return res.status(404).json({ error: 'not found' });
-  const before = list.tracks.length;
+  const target = findTrack(list, req.params.trackId);
+  if (!target) return res.status(404).json({ error: 'not found' });
+  if (target.image) storage.removeFiles({ url: target.image }); // 업로드 이미지 정리
   list.tracks = list.tracks.filter((t) => t.id !== req.params.trackId);
-  if (list.tracks.length === before) return res.status(404).json({ error: 'not found' });
   store.write(data);
   return res.status(204).end();
 };

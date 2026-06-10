@@ -17,7 +17,7 @@ function PlaylistSection({
   onMovePlaylist,
   isFirst,
   isLast,
-  onEditNote,
+  onEditTrack,
   onDeleteTrack,
   onMoveTrack,
 }) {
@@ -79,7 +79,7 @@ function PlaylistSection({
               isCurrent={track.id === currentTrackId}
               canEdit={canEdit}
               onPlay={() => onPlayTrack(i)}
-              onEditNote={() => onEditNote(track)}
+              onEdit={() => onEditTrack(track)}
               onDelete={() => onDeleteTrack(track)}
               onMoveUp={() => onMoveTrack(i, -1)}
               onMoveDown={() => onMoveTrack(i, 1)}

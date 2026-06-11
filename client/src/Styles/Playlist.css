@@ -166,10 +166,6 @@
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
 }
-.pl-section.is-active .pl-iconbtn.is-set {
-  color: #f3ead4;
-  background: rgba(255, 255, 255, 0.12);
-}
 .pl-section.is-active .pl-btn {
   color: #f3ead4;
   background: rgba(255, 255, 255, 0.1);
@@ -384,11 +380,6 @@
 .pl-iconbtn--danger:hover:not(:disabled) {
   color: #7a2e22;
   background: #efdcd6;
-}
-/* LP 이미지가 설정된 트랙 표시 */
-.pl-iconbtn.is-set {
-  color: #5e4f37;
-  background: #ece0c2;
 }
 
 /* ----- 버튼 공통 ----- */
@@ -922,6 +913,20 @@
 }
 
 /* ----- 반응형 ----- */
+/* 태블릿: 액티브 섹션 LP를 조금 줄여 트랙 목록 공간 확보 */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .pl-section.is-active {
+    gap: 18px;
+  }
+  .pl-section-lp {
+    width: 168px;
+  }
+  .pl-section-lp .pl-lp--np {
+    width: 168px;
+    height: 168px;
+  }
+}
+
 @media (max-width: 767px) {
   .pl-title {
     font-size: 1.8rem;
@@ -934,6 +939,7 @@
   }
   .pl-section.is-active {
     flex-direction: column;
+    align-items: stretch; /* 세로 스택 시 목록이 전체 폭으로 — 오른쪽 잘림 방지 */
     gap: 14px;
   }
   .pl-section-lp {
@@ -954,13 +960,9 @@
     width: 88px;
     height: 50px;
   }
-  .pl-lp--np {
-    width: 120px;
-    height: 120px;
-  }
-  .pl-nowplaying {
-    gap: 16px;
-    margin-bottom: 20px;
+  .pl-section-lp .pl-nowplaying-title,
+  .pl-section-lp .pl-nowplaying-channel {
+    max-width: 100%;
   }
   .pl-player-row {
     gap: 10px;
@@ -976,5 +978,20 @@
   }
   .playlist.has-player {
     padding-bottom: 96px;
+  }
+}
+
+/* 좁은 폰: 하단 풀 플레이어 컨트롤이 넘치지 않게 셔플/반복 숨김
+   (셔플은 각 재생목록의 "셔플 재생"으로 대체 가능) + 썸네일 축소 */
+@media (max-width: 600px) {
+  .pl-player--full .pl-pbtn--mode {
+    display: none;
+  }
+  .pl-player--full .pl-player-video {
+    width: 60px;
+    height: 34px;
+  }
+  .pl-player--full .pl-player-controls {
+    gap: 4px;
   }
 }

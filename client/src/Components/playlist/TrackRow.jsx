@@ -42,12 +42,7 @@ function TrackRow({
           <button type="button" className="pl-iconbtn" onClick={onMoveDown} disabled={isLast} title="아래로">
             ▼
           </button>
-          <button
-            type="button"
-            className={`pl-iconbtn${track.image ? ' is-set' : ''}`}
-            onClick={onEdit}
-            title="곡 편집 (메모 · LP 이미지)"
-          >
+          <button type="button" className="pl-iconbtn" onClick={onEdit} title="곡 편집 (메모 · LP 이미지)">
             ✎
           </button>
           <button type="button" className="pl-iconbtn pl-iconbtn--danger" onClick={onDelete} title="삭제">

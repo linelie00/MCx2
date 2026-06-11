@@ -52,6 +52,149 @@
   border-radius: 4px;
   box-shadow: 0 6px 16px -12px rgba(60, 46, 34, 0.4);
 }
+
+/* ----- 액티브(지금 재생 중) 재생목록: 투명 + 블러된 LP 배경, LP 좌측 / 목록 우측 ----- */
+.pl-section.is-active {
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+  display: flex;
+  align-items: flex-start;
+  gap: 26px;
+}
+.pl-section-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px);
+  transform: scale(1.3); /* 블러 가장자리 가림 */
+  z-index: 0;
+}
+.pl-section.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* 어두운 스크림 — 어떤 LP 이미지(밝든 어둡든) 위에서도 밝은 글자가 보이게 */
+  background: linear-gradient(rgba(20, 15, 10, 0.5), rgba(20, 15, 10, 0.62));
+  z-index: 0;
+  pointer-events: none;
+}
+.pl-section-lp {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pl-section-lp .pl-lp--np {
+  width: 220px;
+  height: 220px;
+}
+.pl-section-lp .pl-nowplaying-label {
+  margin-top: 6px;
+}
+.pl-section-lp .pl-nowplaying-title,
+.pl-section-lp .pl-nowplaying-channel {
+  max-width: 220px;
+  text-align: center;
+}
+.pl-section-main {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 액티브 섹션: 밝은 글자/버튼/호버 (어두운 스크림 위, 어떤 배경에서도 가독) */
+.pl-section.is-active .pl-section-title,
+.pl-section.is-active .pl-nowplaying-title {
+  color: #f4ecd8;
+}
+.pl-section.is-active .pl-section-desc,
+.pl-section.is-active .pl-section-empty,
+.pl-section.is-active .pl-nowplaying-channel {
+  color: #d9cdb4;
+}
+.pl-section.is-active .pl-section-count,
+.pl-section.is-active .pl-nowplaying-label {
+  color: #cbb88c;
+}
+.pl-section.is-active .pl-section-head {
+  border-bottom-color: rgba(243, 234, 212, 0.22);
+}
+.pl-section.is-active .pl-track {
+  border-bottom-color: rgba(243, 234, 212, 0.14);
+}
+.pl-section.is-active .pl-track-title {
+  color: #f1e8d2;
+}
+.pl-section.is-active .pl-track-channel,
+.pl-section.is-active .pl-track-dur,
+.pl-section.is-active .pl-track-index {
+  color: #c4b691;
+}
+.pl-section.is-active .pl-track-note {
+  color: #e2cba4;
+}
+.pl-section.is-active .pl-track-thumb {
+  border-color: rgba(243, 234, 212, 0.3);
+}
+.pl-section.is-active .pl-track-main:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+.pl-section.is-active .pl-track.is-current {
+  background: rgba(255, 255, 255, 0.17);
+}
+/* 버튼/아이콘 — 밝은(어두운 배경용) 스타일 */
+.pl-section.is-active .pl-shuffle-play {
+  color: #f3ead4;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(243, 234, 212, 0.5);
+}
+.pl-section.is-active .pl-shuffle-play:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.pl-section.is-active .pl-iconbtn {
+  color: #d9cdb4;
+}
+.pl-section.is-active .pl-iconbtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.pl-section.is-active .pl-iconbtn.is-set {
+  color: #f3ead4;
+  background: rgba(255, 255, 255, 0.12);
+}
+.pl-section.is-active .pl-btn {
+  color: #f3ead4;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(243, 234, 212, 0.45);
+}
+.pl-section.is-active .pl-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+.pl-section.is-active .pl-btn--primary {
+  color: #2c2620;
+  background: #e6d7b4;
+  border-color: #e6d7b4;
+}
+.pl-section.is-active .pl-btn--primary:hover:not(:disabled) {
+  background: #f0e6c8;
+}
+.pl-section.is-active .pl-btn--danger {
+  color: #f3b4a8;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(240, 150, 135, 0.6);
+}
+.pl-section.is-active .pl-btn--danger:hover:not(:disabled) {
+  background: rgba(150, 55, 42, 0.4);
+}
+
 .pl-section-head {
   display: flex;
   align-items: flex-start;
@@ -788,6 +931,17 @@
   }
   .pl-section-actions {
     margin-top: 4px;
+  }
+  .pl-section.is-active {
+    flex-direction: column;
+    gap: 14px;
+  }
+  .pl-section-lp {
+    width: 100%;
+  }
+  .pl-section-lp .pl-lp--np {
+    width: 168px;
+    height: 168px;
   }
   .pl-track-thumb {
     width: 52px;

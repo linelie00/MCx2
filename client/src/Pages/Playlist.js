@@ -14,7 +14,6 @@ import PlaylistSection from '../Components/playlist/PlaylistSection';
 import PlaylistDialog from '../Components/playlist/PlaylistDialog';
 import AddTrackDialog from '../Components/playlist/AddTrackDialog';
 import TrackEditDialog from '../Components/playlist/TrackEditDialog';
-import NowPlayingLP from '../Components/playlist/NowPlayingLP';
 
 const accentColor = (accent) => (accent && characterColors[accent] ? characterColors[accent].primary : null);
 
@@ -160,6 +159,12 @@ function Playlist() {
     );
   }, []);
 
+  // 재생 중인 재생목록을 맨 위로(그때만). 나머지 순서는 유지.
+  const activeId = playback.playlistId;
+  const ordered = activeId
+    ? [...playlists].sort((a, b) => (a.id === activeId ? -1 : b.id === activeId ? 1 : 0))
+    : playlists;
+
   return (
     <div className={`playlist${playback.currentTrack ? ' has-player' : ''}`}>
       <header className="pl-head">
@@ -181,8 +186,6 @@ function Playlist() {
         </div>
       </header>
 
-      <NowPlayingLP />
-
       {loading ? (
         <p className="pl-empty">불러오는 중…</p>
       ) : playlists.length === 0 ? (
@@ -191,28 +194,33 @@ function Playlist() {
         </p>
       ) : (
         <div className="pl-list">
-          {playlists.map((playlist, i) => (
-            <PlaylistSection
-              key={playlist.id}
-              playlist={playlist}
-              accentColor={accentColor(playlist.accent)}
-              currentTrackId={
-                playback.playlistId === playlist.id && playback.currentTrack ? playback.currentTrack.id : null
-              }
-              canEdit={isOwner}
-              onPlayTrack={(index) => playback.playPlaylist(playlist, index)}
-              onShufflePlay={() => playback.shufflePlayPlaylist(playlist)}
-              onAddTrack={() => setAddTrackFor(playlist)}
-              onEditPlaylist={() => setPlDialog({ mode: 'edit', playlist })}
-              onDeletePlaylist={() => handleDeletePlaylist(playlist)}
-              onMovePlaylist={{ up: () => movePlaylist(i, -1), down: () => movePlaylist(i, 1) }}
-              isFirst={i === 0}
-              isLast={i === playlists.length - 1}
-              onEditTrack={(track) => setEditFor({ playlistId: playlist.id, track })}
-              onDeleteTrack={(track) => handleDeleteTrack(playlist.id, track)}
-              onMoveTrack={(index, dir) => moveTrack(playlist.id, index, dir)}
-            />
-          ))}
+          {ordered.map((playlist) => {
+            const origIndex = playlists.indexOf(playlist);
+            const active = playback.playlistId === playlist.id;
+            return (
+              <PlaylistSection
+                key={playlist.id}
+                playlist={playlist}
+                accentColor={accentColor(playlist.accent)}
+                currentTrackId={active && playback.currentTrack ? playback.currentTrack.id : null}
+                canEdit={isOwner}
+                isActive={active}
+                activeTrack={active ? playback.currentTrack : null}
+                isPlaying={playback.isPlaying}
+                onPlayTrack={(index) => playback.playPlaylist(playlist, index)}
+                onShufflePlay={() => playback.shufflePlayPlaylist(playlist)}
+                onAddTrack={() => setAddTrackFor(playlist)}
+                onEditPlaylist={() => setPlDialog({ mode: 'edit', playlist })}
+                onDeletePlaylist={() => handleDeletePlaylist(playlist)}
+                onMovePlaylist={{ up: () => movePlaylist(origIndex, -1), down: () => movePlaylist(origIndex, 1) }}
+                isFirst={origIndex === 0}
+                isLast={origIndex === playlists.length - 1}
+                onEditTrack={(track) => setEditFor({ playlistId: playlist.id, track })}
+                onDeleteTrack={(track) => handleDeleteTrack(playlist.id, track)}
+                onMoveTrack={(index, dir) => moveTrack(playlist.id, index, dir)}
+              />
+            );
+          })}
         </div>
       )}
 

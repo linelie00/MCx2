@@ -23,6 +23,7 @@ function MusicPlayer({ variant = 'full' }) {
     toggleShuffle,
     cycleRepeat,
     stop,
+    setPlaying: setCtxPlaying,
   } = usePlayback();
   const navigate = useNavigate();
   const YT = useYouTubeIframeApi();
@@ -103,6 +104,11 @@ function MusicPlayer({ variant = 'full' }) {
     }, 400);
     return () => clearInterval(id);
   }, []);
+
+  // 재생 상태를 컨텍스트에 공유(상단 "지금 재생 중" LP 회전용)
+  useEffect(() => {
+    setCtxPlaying(playing);
+  }, [playing, setCtxPlaying]);
 
   if (!track) return null;
 

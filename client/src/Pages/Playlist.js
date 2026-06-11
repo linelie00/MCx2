@@ -13,6 +13,7 @@ import { characterColors } from '../Data/constants/colors';
 import PlaylistSection from '../Components/playlist/PlaylistSection';
 import PlaylistDialog from '../Components/playlist/PlaylistDialog';
 import AddTrackDialog from '../Components/playlist/AddTrackDialog';
+import TrackEditDialog from '../Components/playlist/TrackEditDialog';
 
 const accentColor = (accent) => (accent && characterColors[accent] ? characterColors[accent].primary : null);
 
@@ -21,6 +22,7 @@ function Playlist() {
   const [loading, setLoading] = useState(true);
   const [plDialog, setPlDialog] = useState(null); // null | { mode:'create' } | { mode:'edit', playlist }
   const [addTrackFor, setAddTrackFor] = useState(null); // playlist | null
+  const [editFor, setEditFor] = useState(null); // { playlistId, track } | null
 
   const { isOwner, ownerLabel, unlock, lock } = useOwner();
   const playback = usePlayback();
@@ -103,17 +105,6 @@ function Playlist() {
     [addTrackFor]
   );
 
-  const handleEditNote = useCallback(async (playlistId, track) => {
-    const note = window.prompt('이 곡의 메모', track.note || '');
-    if (note === null) return;
-    const updated = await playlistApi.updateTrack(playlistId, track.id, { note });
-    setPlaylists((prev) =>
-      prev.map((p) =>
-        p.id === playlistId ? { ...p, tracks: p.tracks.map((t) => (t.id === track.id ? updated : t)) } : p
-      )
-    );
-  }, []);
-
   const handleDeleteTrack = useCallback(async (playlistId, track) => {
     if (!window.confirm('이 곡을 삭제할까요?')) return;
     await playlistApi.deleteTrack(playlistId, track.id);
@@ -121,6 +112,38 @@ function Playlist() {
       prev.map((p) => (p.id === playlistId ? { ...p, tracks: p.tracks.filter((t) => t.id !== track.id) } : p))
     );
   }, []);
+
+  // 트랙 상태의 한 곡 교체
+  const replaceTrack = useCallback((playlistId, updated) => {
+    setPlaylists((prev) =>
+      prev.map((p) =>
+        p.id === playlistId ? { ...p, tracks: p.tracks.map((t) => (t.id === updated.id ? updated : t)) } : p
+      )
+    );
+  }, []);
+
+  // 곡 편집 저장: 메모 + LP 이미지(업로드/크롭/삭제)
+  const handleSaveTrack = useCallback(
+    async (payload) => {
+      if (!editFor) return;
+      const { playlistId, track } = editFor;
+      if (payload.removeImage) {
+        await playlistApi.removeTrackImage(playlistId, track.id);
+      } else if (payload.file) {
+        await playlistApi.uploadTrackImage(playlistId, track.id, payload.file, payload.crop);
+      }
+      // 메모(+ 기존 이미지 유지 시 크롭) 갱신 — 최종 트랙 반환
+      const patch = { note: payload.note };
+      if (!payload.file && !payload.removeImage && track.image) {
+        patch.imageX = payload.crop.imageX;
+        patch.imageY = payload.crop.imageY;
+        patch.imageZoom = payload.crop.imageZoom;
+      }
+      const updated = await playlistApi.updateTrack(playlistId, track.id, patch);
+      replaceTrack(playlistId, updated);
+    },
+    [editFor, replaceTrack]
+  );
 
   const moveTrack = useCallback(async (playlistId, index, dir) => {
     setPlaylists((prev) =>
@@ -135,6 +158,12 @@ function Playlist() {
       })
     );
   }, []);
+
+  // 재생 중인 재생목록을 맨 위로(그때만). 나머지 순서는 유지.
+  const activeId = playback.playlistId;
+  const ordered = activeId
+    ? [...playlists].sort((a, b) => (a.id === activeId ? -1 : b.id === activeId ? 1 : 0))
+    : playlists;
 
   return (
     <div className={`playlist${playback.currentTrack ? ' has-player' : ''}`}>
@@ -165,28 +194,33 @@ function Playlist() {
         </p>
       ) : (
         <div className="pl-list">
-          {playlists.map((playlist, i) => (
-            <PlaylistSection
-              key={playlist.id}
-              playlist={playlist}
-              accentColor={accentColor(playlist.accent)}
-              currentTrackId={
-                playback.playlistId === playlist.id && playback.currentTrack ? playback.currentTrack.id : null
-              }
-              canEdit={isOwner}
-              onPlayTrack={(index) => playback.playPlaylist(playlist, index)}
-              onShufflePlay={() => playback.shufflePlayPlaylist(playlist)}
-              onAddTrack={() => setAddTrackFor(playlist)}
-              onEditPlaylist={() => setPlDialog({ mode: 'edit', playlist })}
-              onDeletePlaylist={() => handleDeletePlaylist(playlist)}
-              onMovePlaylist={{ up: () => movePlaylist(i, -1), down: () => movePlaylist(i, 1) }}
-              isFirst={i === 0}
-              isLast={i === playlists.length - 1}
-              onEditNote={(track) => handleEditNote(playlist.id, track)}
-              onDeleteTrack={(track) => handleDeleteTrack(playlist.id, track)}
-              onMoveTrack={(index, dir) => moveTrack(playlist.id, index, dir)}
-            />
-          ))}
+          {ordered.map((playlist) => {
+            const origIndex = playlists.indexOf(playlist);
+            const active = playback.playlistId === playlist.id;
+            return (
+              <PlaylistSection
+                key={playlist.id}
+                playlist={playlist}
+                accentColor={accentColor(playlist.accent)}
+                currentTrackId={active && playback.currentTrack ? playback.currentTrack.id : null}
+                canEdit={isOwner}
+                isActive={active}
+                activeTrack={active ? playback.currentTrack : null}
+                isPlaying={playback.isPlaying}
+                onPlayTrack={(index) => playback.playPlaylist(playlist, index)}
+                onShufflePlay={() => playback.shufflePlayPlaylist(playlist)}
+                onAddTrack={() => setAddTrackFor(playlist)}
+                onEditPlaylist={() => setPlDialog({ mode: 'edit', playlist })}
+                onDeletePlaylist={() => handleDeletePlaylist(playlist)}
+                onMovePlaylist={{ up: () => movePlaylist(origIndex, -1), down: () => movePlaylist(origIndex, 1) }}
+                isFirst={origIndex === 0}
+                isLast={origIndex === playlists.length - 1}
+                onEditTrack={(track) => setEditFor({ playlistId: playlist.id, track })}
+                onDeleteTrack={(track) => handleDeleteTrack(playlist.id, track)}
+                onMoveTrack={(index, dir) => moveTrack(playlist.id, index, dir)}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -207,6 +241,14 @@ function Playlist() {
           playlistTitle={addTrackFor.title}
           onSubmit={handleAddTrack}
           onClose={() => setAddTrackFor(null)}
+        />
+      )}
+
+      {editFor && (
+        <TrackEditDialog
+          track={editFor.track}
+          onSave={handleSaveTrack}
+          onClose={() => setEditFor(null)}
         />
       )}
     </div>

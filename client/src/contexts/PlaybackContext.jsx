@@ -26,6 +26,7 @@ export function PlaybackProvider({ children }) {
   const [queue, setQueue] = useState(null); // { playlistId, title, tracks, order, pos }
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState('off'); // 'off' | 'all' | 'one'
+  const [isPlaying, setIsPlaying] = useState(false); // 플레이어가 보고(MusicPlayer) 갱신
 
   const value = useMemo(() => {
     const currentTrack = queue ? queue.tracks[queue.order[queue.pos]] : null;
@@ -85,9 +86,14 @@ export function PlaybackProvider({ children }) {
       handleEnded: () => advance(1), // repeat='one'은 플레이어가 곡 자체를 다시 재생
       toggleShuffle,
       cycleRepeat: () => setRepeat((r) => (r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')),
-      stop: () => setQueue(null),
+      stop: () => {
+        setQueue(null);
+        setIsPlaying(false);
+      },
+      isPlaying,
+      setPlaying: setIsPlaying,
     };
-  }, [queue, shuffle, repeat]);
+  }, [queue, shuffle, repeat, isPlaying]);
 
   return <PlaybackContext.Provider value={value}>{children}</PlaybackContext.Provider>;
 }

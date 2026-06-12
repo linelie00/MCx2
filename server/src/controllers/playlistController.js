@@ -12,7 +12,8 @@ const youtube = require('../services/youtubeService');
 const TITLE_MAX = 60;
 const DESC_MAX = 300;
 const NOTE_MAX = 300;
-const ACCENTS = ['migel', 'matiam'];
+// 강조색 id (migel/matiam은 기존 데이터 하위호환용으로 유지)
+const ACCENTS = ['green', 'blue', 'gray', 'red', 'brown', 'gold', 'teal', 'purple', 'migel', 'matiam'];
 
 const now = () => new Date().toISOString();
 const cleanAccent = (v) => (ACCENTS.includes(v) ? v : null);

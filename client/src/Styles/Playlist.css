@@ -738,6 +738,35 @@
   border: 1px solid #cbb88c;
   border-radius: 3px;
 }
+/* 재생목록 강조색 선택 스와치 */
+.pl-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+.pl-swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--sw, #ccc);
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+.pl-swatch.is-sel {
+  box-shadow: 0 0 0 2px #fcfbf8, 0 0 0 4px #5e4f37; /* 선택 링 */
+}
+.pl-swatch--none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fcfbf8;
+  color: #9c8a63;
+  font-size: 0.78rem;
+  line-height: 1;
+}
 /* ----- LP 이미지 크롭 다이얼로그 ----- */
 .pl-crop {
   display: flex;

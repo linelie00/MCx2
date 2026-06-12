@@ -1,20 +1,18 @@
 /**
  * PlaylistDialog — 재생목록 생성/편집 (오너 전용)
- * 제목(필수) + 설명(선택) + accent 캐릭터 색(선택).
+ * 제목(필수) + 설명(선택) + 강조색(선택, 스와치에서 선택).
  */
 import { useState } from 'react';
+import { playlistAccents } from '../../Data/constants/colors';
 
-const ACCENTS = [
-  { value: '', label: '없음' },
-  { value: 'migel', label: '미겔' },
-  { value: 'matiam', label: '마티암' },
-];
+// 기존 캐릭터 accent 값(migel/matiam)을 새 색 id로 매핑(하위호환)
+const normalizeAccent = (a) => (a === 'migel' ? 'green' : a === 'matiam' ? 'blue' : a || '');
 
 function PlaylistDialog({ initial, onSubmit, onClose }) {
   const editing = !!initial;
   const [title, setTitle] = useState(initial?.title || '');
   const [description, setDescription] = useState(initial?.description || '');
-  const [accent, setAccent] = useState(initial?.accent || '');
+  const [accent, setAccent] = useState(normalizeAccent(initial?.accent));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -60,16 +58,31 @@ function PlaylistDialog({ initial, onSubmit, onClose }) {
           />
         </label>
 
-        <label className="pl-field">
-          <span className="pl-field-label">캐릭터 색 (선택)</span>
-          <select className="pl-field-input" value={accent} onChange={(e) => setAccent(e.target.value)}>
-            {ACCENTS.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label}
-              </option>
+        <div className="pl-field">
+          <span className="pl-field-label">색 (선택)</span>
+          <div className="pl-swatches">
+            <button
+              type="button"
+              className={`pl-swatch pl-swatch--none${accent === '' ? ' is-sel' : ''}`}
+              onClick={() => setAccent('')}
+              title="없음"
+              aria-label="없음"
+            >
+              ✕
+            </button>
+            {playlistAccents.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className={`pl-swatch${accent === c.id ? ' is-sel' : ''}`}
+                style={{ '--sw': c.hex }}
+                onClick={() => setAccent(c.id)}
+                title={c.label}
+                aria-label={c.label}
+              />
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
 
         {error ? <p className="pl-dialog-error">{error}</p> : null}
 

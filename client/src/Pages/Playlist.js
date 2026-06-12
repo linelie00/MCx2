@@ -9,13 +9,13 @@ import '../Styles/Playlist.css';
 import * as playlistApi from '../services/playlistApi';
 import { useOwner } from '../contexts/OwnerContext';
 import { usePlayback } from '../contexts/PlaybackContext';
-import { characterColors } from '../Data/constants/colors';
+import { playlistAccentHex } from '../Data/constants/colors';
 import PlaylistSection from '../Components/playlist/PlaylistSection';
 import PlaylistDialog from '../Components/playlist/PlaylistDialog';
 import AddTrackDialog from '../Components/playlist/AddTrackDialog';
 import TrackEditDialog from '../Components/playlist/TrackEditDialog';
 
-const accentColor = (accent) => (accent && characterColors[accent] ? characterColors[accent].primary : null);
+const accentColor = (accent) => playlistAccentHex[accent] || null;
 
 function Playlist() {
   const [playlists, setPlaylists] = useState([]);

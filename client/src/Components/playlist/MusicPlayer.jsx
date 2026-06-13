@@ -24,6 +24,7 @@ function MusicPlayer({ variant = 'full' }) {
     cycleRepeat,
     stop,
     setPlaying: setCtxPlaying,
+    setPlayerControl,
   } = usePlayback();
   const navigate = useNavigate();
   const YT = useYouTubeIframeApi();
@@ -109,6 +110,19 @@ function MusicPlayer({ variant = 'full' }) {
   useEffect(() => {
     setCtxPlaying(playing);
   }, [playing, setCtxPlaying]);
+
+  // 재생/일시정지 제어를 컨텍스트에 등록(액티브 섹션 컨트롤이 호출). 실제 플레이어 상태로 토글.
+  useEffect(() => {
+    setPlayerControl({
+      toggle: () => {
+        const p = playerRef.current;
+        if (!p || !p.getPlayerState) return;
+        if (p.getPlayerState() === 1) p.pauseVideo(); // 1 = 재생 중
+        else p.playVideo();
+      },
+    });
+    return () => setPlayerControl(null);
+  }, [setPlayerControl]);
 
   if (!track) return null;
 

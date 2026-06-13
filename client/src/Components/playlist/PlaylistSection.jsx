@@ -7,6 +7,7 @@
  * 우측에 트랙 목록을 배치한다.
  */
 import TrackRow from './TrackRow';
+import { usePlayback } from '../../contexts/PlaybackContext';
 
 function PlaylistSection({
   playlist,
@@ -30,6 +31,7 @@ function PlaylistSection({
 }) {
   const { tracks = [] } = playlist;
   const style = accentColor ? { '--pl-accent': accentColor } : undefined;
+  const { hasPrev, hasNext, prev, next, togglePlay } = usePlayback();
 
   // 액티브 모드 LP 아트(업로드 이미지 크롭 적용 > 썸네일 > 기본 음반)
   const artUrl = activeTrack ? activeTrack.image || activeTrack.thumbnail || null : null;
@@ -69,6 +71,18 @@ function PlaylistSection({
             </div>
           ) : null}
           {activeTrack && activeTrack.channel ? <div className="pl-nowplaying-channel">{activeTrack.channel}</div> : null}
+
+          <div className="pl-np-controls">
+            <button type="button" className="pl-npbtn" onClick={prev} disabled={!hasPrev} aria-label="이전 곡">
+              ‹‹
+            </button>
+            <button type="button" className="pl-npbtn pl-npbtn--play" onClick={togglePlay} aria-label="재생/일시정지">
+              {isPlaying ? '❚❚' : '▶'}
+            </button>
+            <button type="button" className="pl-npbtn" onClick={next} disabled={!hasNext} aria-label="다음 곡">
+              ››
+            </button>
+          </div>
         </div>
       ) : null}
 

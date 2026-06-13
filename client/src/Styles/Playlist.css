@@ -102,6 +102,40 @@
   max-width: 220px;
   text-align: center;
 }
+/* "지금 재생 중" LP 아래 재생 컨트롤(이전/일시정지/다음) */
+.pl-np-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.pl-npbtn {
+  min-width: 40px;
+  height: 40px;
+  padding: 0 10px;
+  font-size: 0.95rem;
+  color: #f3ead4;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(243, 234, 212, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.pl-npbtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+.pl-npbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pl-npbtn--play {
+  color: #2c2620;
+  background: #e6d7b4;
+  border-color: #e6d7b4;
+}
+.pl-npbtn--play:hover:not(:disabled) {
+  background: #f0e6c8;
+}
 .pl-section-main {
   position: relative;
   z-index: 1;

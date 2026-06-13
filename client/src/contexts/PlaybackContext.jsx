@@ -6,7 +6,7 @@
  * 큐는 재생을 시작한 재생목록의 곡 배열을 **스냅샷**으로 들고 있으므로,
  * 다른 페이지로 가거나 목록을 편집해도 현재 재생은 그대로 유지된다.
  */
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
 
 const PlaybackContext = createContext(null);
 
@@ -27,6 +27,7 @@ export function PlaybackProvider({ children }) {
   const [shuffle, setShuffle] = useState(false);
   const [repeat, setRepeat] = useState('off'); // 'off' | 'all' | 'one'
   const [isPlaying, setIsPlaying] = useState(false); // 플레이어가 보고(MusicPlayer) 갱신
+  const playerCtlRef = useRef(null); // MusicPlayer가 등록하는 재생 제어({ toggle })
 
   const value = useMemo(() => {
     const currentTrack = queue ? queue.tracks[queue.order[queue.pos]] : null;
@@ -92,6 +93,12 @@ export function PlaybackProvider({ children }) {
       },
       isPlaying,
       setPlaying: setIsPlaying,
+      setPlayerControl: (ctl) => {
+        playerCtlRef.current = ctl;
+      },
+      togglePlay: () => {
+        if (playerCtlRef.current && playerCtlRef.current.toggle) playerCtlRef.current.toggle();
+      },
     };
   }, [queue, shuffle, repeat, isPlaying]);
 

@@ -8,6 +8,7 @@ const galleryRoutes = require('./routes/gallery');
 const authRoutes = require('./routes/auth');
 const guestbookRoutes = require('./routes/guestbook');
 const playlistRoutes = require('./routes/playlist');
+const movieRoutes = require('./routes/movie');
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/gallery', galleryRoutes);
 app.use('/api/guestbook', guestbookRoutes);
 app.use('/api/playlist', playlistRoutes);
+app.use('/api/movie', movieRoutes);
 
 app.get('/', (req, res) => res.send('MIHEARTI API'));
 

@@ -1,0 +1,79 @@
+{
+  "movies": [
+    {
+      "id": "b007ecf2-7fe1-4123-95b7-1cc56575fbd9",
+      "title": "123212312312",
+      "director": "32131312",
+      "date": "2026-06-09",
+      "poster": "/uploads/5d06facf-57d4-4522-a533-b49f2379691d.png",
+      "ratings": {
+        "migel": {
+          "stars": 4,
+          "comment": "142351251345"
+        },
+        "matiam": {
+          "stars": 4,
+          "comment": "234523452354234523"
+        }
+      },
+      "createdAt": "2026-06-13T13:47:51.933Z"
+    },
+    {
+      "id": "7cdd44ef-3853-4f50-b66b-d2215ab09bd4",
+      "title": "344252435",
+      "director": "453245",
+      "date": "2026-06-08",
+      "poster": "/uploads/f0d8df34-decf-4431-9161-8ec16fe9cad9.jpg",
+      "hoverPosterImage": "/uploads/4fbe7c3a-3770-4afd-99e2-b1f1674ea993.jpg",
+      "ratings": {
+        "migel": {
+          "stars": 4,
+          "comment": "32452345234"
+        },
+        "matiam": {
+          "stars": 4,
+          "comment": "52352"
+        }
+      },
+      "createdAt": "2026-06-13T13:47:27.154Z"
+    },
+    {
+      "id": "8a2d40de-92c5-4b5d-bbd6-3af08efeb989",
+      "title": "12313212",
+      "director": "2312412",
+      "date": "2026-06-11",
+      "poster": "/uploads/3451c335-f3c4-4f5d-b8d8-a0a2f37691b3.png",
+      "hoverPosterImage": "/uploads/d78fc16e-01a8-4d3b-8884-e676d64df8f1.png",
+      "ratings": {
+        "migel": {
+          "stars": 4,
+          "comment": "4324321545111"
+        },
+        "matiam": {
+          "stars": 4,
+          "comment": "43525324321"
+        }
+      },
+      "createdAt": "2026-06-13T13:46:43.178Z"
+    },
+    {
+      "id": "7924955d-4d7c-4957-aab0-56a2c0a6efb3",
+      "title": "123123123",
+      "director": "123131",
+      "date": "2026-06-13",
+      "poster": "/uploads/9f818673-43c8-4937-a17a-09845591dded.png",
+      "hoverPosterImage": "/uploads/b53c9305-528a-411a-92b9-30a5cc4286f8.png",
+      "ratings": {
+        "migel": {
+          "stars": 4,
+          "comment": "2313123"
+        },
+        "matiam": {
+          "stars": 5,
+          "comment": "1231231223최고예요"
+        }
+      },
+      "createdAt": "2026-06-13T13:46:20.716Z"
+    }
+  ]
+}

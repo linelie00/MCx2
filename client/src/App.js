@@ -18,6 +18,7 @@ import CharacterPanel from './Pages/CharacterPanel';
 import Story from './Pages/Story';
 import World from './Pages/World';
 import Playlist from './Pages/Playlist';
+import Movie from './Pages/Movie';
 
 function App() {
   return (
@@ -40,6 +41,7 @@ function App() {
             <Route path="/story" element={<Story />} />
             <Route path="/world" element={<World />} />
             <Route path="/playlist" element={<Playlist />} />
+            <Route path="/movie" element={<Movie />} />
           </Route>
         </Routes>
       </Router>

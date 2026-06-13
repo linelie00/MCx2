@@ -41,6 +41,7 @@ function NavigationBar() {
         <Link to="/story" onClick={() => setMenuOpen(false)}>Story</Link>
         <Link to="/image" onClick={() => setMenuOpen(false)}>Gallery</Link>
         <Link to="/playlist" onClick={() => setMenuOpen(false)}>Playlist</Link>
+        <Link to="/movie" onClick={() => setMenuOpen(false)}>Movie</Link>
       </div>
       </div>
     </>

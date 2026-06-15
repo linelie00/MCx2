@@ -25,8 +25,9 @@ function Movie() {
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [editMovie, setEditMovie] = useState(null); // 캘린더에서 편집 중인 영화
+  const [selectedEditing, setSelectedEditing] = useState(false); // 티켓을 편집 모드로 열지
 
-  const { isOwner, ownerLabel, unlock, lock } = useOwner();
+  const { isOwner, ownerLabel, owner, unlock, lock } = useOwner();
 
   useEffect(() => {
     let alive = true;
@@ -47,6 +48,22 @@ function Movie() {
     [allMovies]
   );
   const takenDates = useMemo(() => allMovies.map((m) => m.date), [allMovies]);
+
+  // 로그인한 오너가 아직 코멘트를 남기지 않은 영화들(수정 가능한 API 영화만)
+  const pendingComments = useMemo(() => {
+    if (!owner) return [];
+    return allMovies.filter((m) => m.__api && !((m.ratings && m.ratings[owner] && m.ratings[owner].comment) || '').trim());
+  }, [allMovies, owner]);
+
+  // 티켓 열기 (편집 여부 지정)
+  const openTicket = useCallback((m, edit = false) => {
+    setSelected(m);
+    setSelectedEditing(edit);
+  }, []);
+  const closeTicket = useCallback(() => {
+    setSelected(null);
+    setSelectedEditing(false);
+  }, []);
 
   const handleLockToggle = useCallback(async () => {
     if (isOwner) return lock();
@@ -103,9 +120,30 @@ function Movie() {
         </div>
       </header>
 
+      {isOwner && pendingComments.length > 0 && (
+        <section className="movie__section">
+          <h2 className="movie__heading">코멘트가 필요한 영화</h2>
+          <p className="movie__hint">{ownerLabel}님이 아직 코멘트를 남기지 않았어요. 눌러서 바로 작성하세요.</p>
+          <ul className="movie__todo">
+            {pendingComments.map((m) => (
+              <li key={m.id}>
+                <button type="button" className="movie__todo-item" onClick={() => openTicket(m, true)}>
+                  <img className="movie__todo-poster" src={m.poster} alt="" />
+                  <span className="movie__todo-info">
+                    <span className="movie__todo-title">{m.title}</span>
+                    <span className="movie__todo-date">{m.date}</span>
+                  </span>
+                  <span className="movie__todo-cta">코멘트 작성</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="movie__section">
         <h2 className="movie__heading">최근 본 영화</h2>
-        <PosterCarousel movies={recent} />
+        <PosterCarousel movies={recent} onOpen={(m) => openTicket(m)} />
       </section>
 
       <section className="movie__section">
@@ -113,7 +151,7 @@ function Movie() {
         <p className="movie__hint">포스터가 있는 날짜를 누르면 티켓이 열려요.</p>
         <MovieCalendar
           moviesByDate={moviesByDate}
-          onSelect={setSelected}
+          onSelect={(m) => openTicket(m)}
           canEdit={isOwner}
           onEdit={setEditMovie}
         />
@@ -122,11 +160,12 @@ function Movie() {
       {selected && (
         <TicketModal
           movie={selected}
-          onClose={() => setSelected(null)}
+          onClose={closeTicket}
           canDelete={isOwner && !!selected.__api}
           onDelete={handleDelete}
           canEdit={isOwner && !!selected.__api}
           onSave={handleUpdate}
+          startEditing={selectedEditing}
         />
       )}
 

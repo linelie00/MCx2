@@ -134,6 +134,59 @@
   font-size: 0.85rem;
 }
 
+/* ===================== 코멘트 필요한 영화 ===================== */
+.movie__todo {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.movie__todo-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--mv-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.25s, background 0.25s;
+}
+.movie__todo-item:hover {
+  border-color: color-mix(in srgb, var(--mv-green) 60%, transparent);
+  background: rgba(255, 255, 255, 0.07);
+}
+.movie__todo-poster {
+  width: 40px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: none;
+}
+.movie__todo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.movie__todo-title {
+  font-size: 0.92rem;
+}
+.movie__todo-date {
+  font-size: 0.72rem;
+  color: var(--mv-dim);
+}
+.movie__todo-cta {
+  margin-left: 6px;
+  font-size: 0.72rem;
+  color: var(--mv-green);
+  white-space: nowrap;
+}
+
 /* ===================== 포스터 캐러셀 ===================== */
 .mv-carousel {
   position: relative;
@@ -493,23 +546,23 @@
 /* 커서를 따라갈 때도 살짝 지연을 둬 부드럽게 이어지도록 */
 .mv-ticket.is-tilting { transition: transform 0.35s cubic-bezier(0.23, 1, 0.32, 1); }
 
+/* 닫기(×) — 티켓 바깥 툴 영역에 항상 보이는 둥근 버튼 */
 .mv-ticket__close {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--mv-ink);
   font-size: 1.4rem;
   line-height: 1;
   cursor: pointer;
-  transition: background 0.25s;
+  transition: background 0.25s, border-color 0.25s;
 }
-.mv-ticket__close:hover { background: rgba(255, 255, 255, 0.18); }
+.mv-ticket__close:hover { background: rgba(255, 255, 255, 0.14); }
 
 /* 본권 */
 .mv-ticket__main {
@@ -714,20 +767,24 @@
   padding-top: 46px; /* 위쪽 툴 버튼 밴드(호버 시 노출) */
 }
 
-/* 티켓 바깥(위) 수정/삭제 — 평소 숨김, 래퍼 호버/포커스 시 노출 */
+/* 티켓 바깥(위) 닫기/수정/삭제 모음. ×는 항상, 수정/삭제는 호버 시 노출 */
 .mv-ticket-tools {
   position: absolute;
   top: 0;
   right: 0;
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+/* 수정/삭제만 평소 숨김 → 래퍼 호버/포커스 시 노출 */
+.mv-ticket__tool--reveal {
   opacity: 0;
   transform: translateY(6px);
   pointer-events: none;
-  transition: opacity 0.25s, transform 0.25s;
+  transition: opacity 0.25s, transform 0.25s, background 0.25s, border-color 0.25s;
 }
-.mv-ticket-wrap:hover .mv-ticket-tools,
-.mv-ticket-wrap:focus-within .mv-ticket-tools {
+.mv-ticket-wrap:hover .mv-ticket__tool--reveal,
+.mv-ticket-wrap:focus-within .mv-ticket__tool--reveal {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -802,6 +859,9 @@
   width: min(560px, 100%);
   max-height: 90vh;
   overflow-y: auto;
+  /* 스크롤은 유지하되 세로 스크롤바는 숨긴다 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   padding: 24px;
   border-radius: 16px;
   background: linear-gradient(150deg, #1b1d27, #121017);
@@ -809,6 +869,7 @@
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
   color: var(--mv-ink);
 }
+.amd-dialog::-webkit-scrollbar { display: none; }
 .amd-title {
   margin: 0 0 18px;
   font-family: var(--font-display);

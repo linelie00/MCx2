@@ -118,6 +118,13 @@
     width: 100%;
     z-index: 1000;
 
+    /* 링크가 많아져도 잘리지 않도록 중앙 정렬 + 줄바꿈 허용 */
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 2px 6px;
+
     transform: translateY(-100%);
     opacity: 0;
     pointer-events: none;
@@ -132,8 +139,9 @@
   }
 
   .nav-button a {
-    padding: 12px;
+    padding: 10px 12px;
     font-size: 16px;
+    white-space: nowrap; /* 라벨이 단어 중간에서 잘리지 않게 */
   }
 }
 

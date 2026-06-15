@@ -13,7 +13,7 @@ import StarRating from './StarRating';
 
 const AUTO_MS = 3500;
 
-function PosterCarousel({ movies = [] }) {
+function PosterCarousel({ movies = [], onOpen }) {
   const [active, setActive] = useState(0);
   const [hovered, setHovered] = useState(null); // 호버 중인 카드 index
   const timer = useRef(null);
@@ -53,7 +53,7 @@ function PosterCarousel({ movies = [] }) {
               }}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered((h) => (h === i ? null : h))}
-              onClick={() => go(i)}
+              onClick={() => (isActive ? onOpen && onOpen(m) : go(i))}
               aria-hidden={Math.abs(offset) > 2}
             >
               <div className="mv-poster__frame">

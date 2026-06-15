@@ -13,6 +13,7 @@
 // ===== Characters =====
 import migelPortrait from '../../Assets/Images/img_migel-portrait.webp';
 import migelFull from '../../Assets/Images/img_migel_1.webp';
+import migelFull2 from '../../Assets/Images/img_migel_2.webp';
 import migelWeapon from '../../Assets/Images/img_migel_weapon.webp';
 import matiamPortrait from '../../Assets/Images/img_matiam-portrait.webp';
 import matiamFull from '../../Assets/Images/img_matiam.webp';
@@ -34,6 +35,7 @@ export const images = {
     migel: {
       portrait: migelPortrait,
       full: migelFull,
+      full2: migelFull2,
       weapon: migelWeapon,
     },
     matiam: {

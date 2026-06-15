@@ -47,7 +47,17 @@ const CharacterPanel = () => {
           </h2>
         </div>
         <div className="panel-appearance">
-          <img src={character.appearance.image} alt={character.name} className="appearance-img"/>
+          <div className="appearance-figure">
+            <img src={character.appearance.image} alt={character.name} className="appearance-img" />
+            {character.appearance.hoverImage && (
+              <img
+                src={character.appearance.hoverImage}
+                alt=""
+                aria-hidden="true"
+                className="appearance-img appearance-img--hover"
+              />
+            )}
+          </div>
           <div className="panel-appearance-content">
             <div className="info-item">
               <span className="label">&#91;외관&#93;</span>

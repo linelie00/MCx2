@@ -121,7 +121,7 @@
     /* 링크가 많아져도 잘리지 않도록 중앙 정렬 + 줄바꿈 허용 */
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
     gap: 2px 6px;
 

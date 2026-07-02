@@ -583,7 +583,8 @@
 .mv-modal {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  /* 네비게이션 바(z-index 9999)보다 위에 둬서 상단 툴/닫기(×)가 가려지지 않게 */
+  z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -910,7 +911,7 @@
 .amd-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1100;
+  z-index: 10001;
   display: flex;
   align-items: center;
   justify-content: center;

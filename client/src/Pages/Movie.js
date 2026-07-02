@@ -42,7 +42,8 @@ function Movie() {
 
   // 정적 데모 + API 영화 결합 (id 충돌 없음: 데모는 mv-*, API는 uuid)
   const allMovies = useMemo(() => [...apiMovies, ...staticMovies], [apiMovies]);
-  const recent = useMemo(() => [...allMovies].sort(byDateDesc).slice(0, 5), [allMovies]);
+  const allSorted = useMemo(() => [...allMovies].sort(byDateDesc), [allMovies]);
+  const recent = useMemo(() => allSorted.slice(0, 5), [allSorted]);
   const moviesByDate = useMemo(
     () => allMovies.reduce((map, m) => ({ ...map, [m.date]: m }), {}),
     [allMovies]
@@ -145,6 +146,26 @@ function Movie() {
         <h2 className="movie__heading">최근 본 영화</h2>
         <PosterCarousel movies={recent} onOpen={(m) => openTicket(m)} />
       </section>
+
+      {allSorted.length > 0 && (
+        <section className="movie__section">
+          <h2 className="movie__heading">포스터 아카이브</h2>
+          <p className="movie__hint">그동안 본 영화 포스터예요. 스크롤해서 더 볼 수 있어요.</p>
+          <div className="movie__archive">
+            {allSorted.map((m) => (
+              <button
+                type="button"
+                key={m.id}
+                className="movie__archive-item"
+                onClick={() => openTicket(m)}
+                title={`${m.title} · ${m.date}`}
+              >
+                <img className="movie__archive-poster" src={m.poster} alt={`${m.title} 포스터`} loading="lazy" />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="movie__section">
         <h2 className="movie__heading">관람 캘린더</h2>

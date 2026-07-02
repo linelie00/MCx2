@@ -210,6 +210,7 @@
   border-radius: 999px;
 }
 .movie__archive-item {
+  position: relative;
   width: var(--arch-col);
   aspect-ratio: 2 / 3;
   padding: 0;
@@ -234,6 +235,16 @@
 }
 .movie__archive-item:hover .movie__archive-poster {
   filter: brightness(1) saturate(1.05);
+}
+/* 호버용 2번째 포스터 — 기본 포스터 위에 겹쳐 두고 호버 시 페이드 인 */
+.movie__archive-poster--hover {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.3s, filter 0.25s;
+}
+.movie__archive-item:hover .movie__archive-poster--hover {
+  opacity: 1;
 }
 
 @media (max-width: 600px) {

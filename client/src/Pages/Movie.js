@@ -161,6 +161,15 @@ function Movie() {
                 title={`${m.title} · ${m.date}`}
               >
                 <img className="movie__archive-poster" src={m.poster} alt={`${m.title} 포스터`} loading="lazy" />
+                {m.hoverPosterImage && (
+                  <img
+                    className="movie__archive-poster movie__archive-poster--hover"
+                    src={m.hoverPosterImage}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                  />
+                )}
               </button>
             ))}
           </div>

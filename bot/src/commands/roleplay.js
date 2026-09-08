@@ -2,56 +2,19 @@
  * /캐입 — 미겔·마티암과 주고받기
  *
  * 답은 웹훅으로 보낸다. 캐릭터 이름과 초상화를 달고 나와서 봇이 아니라 그 인물이
- * 말하는 것처럼 보인다.
- *
- * 웹훅의 avatarURL 은 URL 을 요구하는데 사이트 초상화는 번들 해시가 붙어 빌드마다
- * 파일명이 바뀐다. 그래서 URL 로 거는 대신 **웹훅을 만들 때 이미지를 아바타로 구워
- * 넣는다**(createWebhook 은 로컬 파일을 받는다). 외부 호스팅이 전혀 필요 없다.
+ * 말하는 것처럼 보인다. 웹훅 만들기는 discord/webhook.js 로 뺐다(요트 NPC 도 쓴다).
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import path from 'node:path';
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { speak, resetSession, usage, GeminiError } from '../ai/gemini.js';
 import { NAME, OTHER } from '../ai/persona.js';
+import { sayAs } from '../discord/webhook.js';
 import { ownerFor } from '../owners.js';
 import { fail, base, trunc } from '../embeds.js';
-
-const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
 
 const CHARACTER_CHOICES = [
   { name: '미겔', value: 'migel' },
   { name: '마티암', value: 'matiam' },
 ];
-
-/**
- * 채널 × 캐릭터마다 웹훅 하나. 한 번 만들면 재사용한다.
- * 봇이 재시작하면 캐시는 비지만, 채널에 이미 있는 웹훅을 찾아 쓰므로 새로 만들지 않는다.
- */
-const webhookCache = new Map();
-
-async function getWebhook(channel, character) {
-  const cacheKey = `${channel.id}:${character}`;
-  const hit = webhookCache.get(cacheKey);
-  if (hit) return hit;
-
-  const wanted = NAME[character];
-  const existing = await channel.fetchWebhooks();
-  let hook = existing.find((w) => w.name === wanted && w.owner?.id === channel.client.user.id);
-
-  if (!hook) {
-    const avatar = path.join(ASSETS, `${character}.png`);
-    hook = await channel.createWebhook({
-      name: wanted,
-      // 초상화가 없으면 아바타 없이라도 만든다. 이름만으로도 누가 말하는지는 보인다.
-      ...(fs.existsSync(avatar) ? { avatar } : {}),
-      reason: '캐입 핑퐁 — 캐릭터로 말하기',
-    });
-  }
-
-  webhookCache.set(cacheKey, hook);
-  return hook;
-}
 
 export default {
   data: new SlashCommandBuilder()
@@ -144,8 +107,7 @@ export default {
     }
 
     try {
-      const hook = await getWebhook(interaction.channel, character);
-      await hook.send({ content: trunc(reply, 2000) });
+      await sayAs(interaction.channel, character, reply);
     } catch (err) {
       // 웹훅을 못 만들면(권한 부족 등) 그냥 봇 메시지로 보낸다. 대답을 버리지는 않는다.
       console.warn('[캐입] 웹훅 실패, 일반 메시지로 대체:', err.message);

@@ -9,6 +9,7 @@ import config from './src/config.js';
 import { loadCommands } from './src/loadCommands.js';
 import { fail } from './src/embeds.js';
 import { checkOwnerKeys } from './src/api.js';
+import { checkBinaries } from './src/voice/ytsource.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -25,6 +26,8 @@ client.once('clientReady', async (c) => {
   // 실패하는 대신 배포 로그에서 바로 드러나게 하는 것이 목적이다. 실패해도 죽이지 않는다 —
   // 조회 기능은 키 없이도 동작해야 한다.
   await checkOwnerKeys();
+  // 재생용 바이너리도 확인한다. 없으면 소리 없이 곡만 넘어가는 형태로 조용히 실패한다.
+  await checkBinaries();
 });
 
 client.on('interactionCreate', async (interaction) => {

@@ -163,6 +163,13 @@ async function handleVoice(interaction, sub) {
       const send = (payload) => interaction.channel?.send(payload).catch(() => {});
       if (ev.type === 'playing') {
         send({ embeds: [base({ description: `▶ **${mdEscape(trunc(ev.track.title, 200))}**` })] });
+      } else if (ev.type === 'aborted') {
+        send({
+          embeds: [fail(
+            `연달아 재생에 실패해서 멈췄어요. 남은 ${ev.dropped}곡을 비웠습니다.\n`
+            + `\`\`\`\n${trunc(ev.reason, 400)}\n\`\`\``,
+          )],
+        });
       } else if (ev.type === 'failed') {
         send({
           embeds: [fail(

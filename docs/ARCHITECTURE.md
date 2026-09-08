@@ -4,7 +4,11 @@
 리팩터링 진행에 따라 갱신합니다. (최종 갱신: 2026-09-08)
 
 > 이 문서는 **client/src(프론트엔드) 구조와 규약**을 다룹니다.
-> 갤러리·스토리·방명록 등 기능 흐름과 **백엔드(Express API)** 는 `FEATURES.md` 참고.
+> 갤러리·스토리·방명록 등 기능 흐름과 **백엔드(Express API)**, **디스코드 봇(`bot/`)** 은
+> `FEATURES.md` 참고. 배포는 `DEPLOY.md`.
+>
+> 참고: `client/src/Data/` 의 캐릭터·대사·세계관은 봇도 쓴다. 고쳤으면
+> `node bot/scripts/build-content.mjs` 로 봇 쪽 데이터를 다시 생성해 커밋할 것.
 
 ## 폴더 구조 (client/src)
 

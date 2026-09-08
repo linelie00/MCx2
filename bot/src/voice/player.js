@@ -90,7 +90,9 @@ async function playNext(guildId) {
   }
 
   try {
-    const handle = openStream(next.videoId);
+    // openStream 은 첫 오디오 바이트가 나올 때까지 기다렸다가 돌려준다.
+    // 그래야 추출 실패가 "빈 스트림 → 즉시 다음 곡" 으로 조용히 넘어가지 않는다.
+    const handle = await openStream(next.videoId);
     s.handle = handle;
     s.current = next;
     clearIdle(s);
@@ -100,12 +102,28 @@ async function playNext(guildId) {
 
     // 실제로 소리가 나가는지 확인한다. 추출이 막히면 여기서 걸린다.
     await entersState(s.player, AudioPlayerStatus.Playing, 20_000);
+    s.fails = 0;   // 한 곡이라도 되면 연속 실패는 초기화
     s.onEvent?.({ type: 'playing', track: next });
   } catch (err) {
     const detail = (s.handle?.stderr || '').split('\n').filter(Boolean).slice(-2).join(' / ');
     stopCurrent(s);
+    const reason = detail || err.message;
+
     // 한 곡이 실패해도 큐를 죽이지 않는다. 건너뛰고 계속 간다.
-    s.onEvent?.({ type: 'failed', track: next, reason: detail || err.message });
+    //
+    // 다만 ffmpeg 가 없거나 유튜브가 막힌 경우엔 모든 곡이 같은 이유로 실패한다.
+    // 그때 곡마다 오류를 뱉으면 채널이 도배되므로, 연속 실패가 쌓이면 멈춘다.
+    s.fails = (s.fails || 0) + 1;
+    if (s.fails >= 3) {
+      const left = s.queue.length;
+      s.queue = [];
+      s.fails = 0;
+      s.onEvent?.({ type: 'aborted', track: next, reason, dropped: left });
+      armIdle(s, guildId);
+      return;
+    }
+
+    s.onEvent?.({ type: 'failed', track: next, reason });
     await playNext(guildId);
   }
 }

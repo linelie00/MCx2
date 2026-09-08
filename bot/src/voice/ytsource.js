@@ -9,7 +9,8 @@
  *   2. YTDLP_EXTRA_ARGS 조정 — 배포 없이 변수만 (예: --extractor-args youtube:player_client=android_vr)
  *   3. YT_COOKIES_B64 주입 — 반드시 버리는 구글 계정으로
  */
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import { PassThrough } from 'node:stream';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -59,7 +60,7 @@ const extraArgs = () =>
  *
  * 반환한 handle 은 반드시 destroy() 로 정리해야 한다. 안 그러면 좀비 프로세스가 쌓인다.
  */
-export function openStream(videoId) {
+export async function openStream(videoId) {
   const cookies = ensureCookies();
 
   const dl = spawn(ytdlpPath(), [
@@ -89,27 +90,71 @@ export function openStream(videoId) {
   dl.stdout.pipe(ff.stdin);
 
   // 곡을 넘기거나 멈추면 프로세스를 죽이는데, 그때 파이프 한쪽이 먼저 닫히며 EPIPE 가 난다.
-  // 정상적인 종료 과정이라 무시해야 한다. 스트림 에러는 아무도 안 듣고 있으면 프로세스를
-  // 통째로 죽이므로(uncaught), 파이프에 관여하는 스트림 전부에 핸들러를 달아 둔다.
+  // 그건 무시해야 하지만, spawn 자체의 실패(ENOENT 등)까지 삼키면 안 된다 —
+  // 실제로 그렇게 해서 "소리는 안 나는데 곡만 순식간에 넘어가는" 증상을 만들었다.
+  // 파이프 에러는 무시하고, 프로세스 에러는 기록해 둔다.
   const hush = () => {};
   dl.stdout.on('error', hush);
   dl.stderr.on('error', hush);
   ff.stdin.on('error', hush);
   ff.stdout.on('error', hush);
-  dl.on('error', hush);
-  ff.on('error', hush);
+
+  let spawnError = null;
+  dl.on('error', (e) => { spawnError = `yt-dlp 실행 실패: ${e.code || e.message}`; });
+  ff.on('error', (e) => { spawnError = `ffmpeg 실행 실패: ${e.code || e.message}`; });
 
   let destroyed = false;
+  const destroy = () => {
+    if (destroyed) return;
+    destroyed = true;
+    try { dl.kill('SIGKILL'); } catch { /* 이미 죽음 */ }
+    try { ff.kill('SIGKILL'); } catch { /* 이미 죽음 */ }
+  };
+
+  // 첫 오디오 바이트가 실제로 나오는지 여기서 확인한다.
+  //
+  // 그냥 ff.stdout 을 넘기면, 추출이 실패해 빈 스트림이 와도 플레이어는 "재생 시작 → 즉시 끝"
+  // 으로 보고 다음 곡으로 넘어간다. 7곡이 순식간에 지나가고 소리는 안 나는 게 그 증상이었다.
+  // 첫 바이트를 기다렸다가 넘기면 실패가 실패로 드러난다.
+  //
+  // 받은 첫 청크를 잃지 않도록 PassThrough 를 끼운다.
+  const out = new PassThrough();
+  ff.stdout.pipe(out);
+
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      fail(new Error('20초 안에 오디오가 나오지 않았어요.'));
+    }, 20_000);
+
+    const done = () => { clearTimeout(timer); cleanup(); };
+    const fail = (err) => {
+      done();
+      destroy();
+      const why = spawnError || stderr.split('\n').filter(Boolean).slice(-2).join(' / ');
+      reject(new Error(why || err.message));
+    };
+
+    const onData = () => { done(); resolve(); };
+    const onEnd = () => fail(new Error('오디오가 나오지 않았어요.'));
+
+    function cleanup() {
+      out.off('data', onData);
+      out.off('end', onEnd);
+      out.off('close', onEnd);
+      // 흘려보내기를 멈춰 첫 청크가 사라지지 않게 한다.
+      out.pause();
+    }
+
+    out.once('data', onData);
+    out.once('end', onEnd);
+    out.once('close', onEnd);
+  });
+
   return {
-    stream: ff.stdout,
+    stream: out,
     get stderr() { return stderr; },
     /** 어떤 경로로 끝나든 반드시 부른다 — skip/stop/error/퇴장 전부. */
-    destroy() {
-      if (destroyed) return;
-      destroyed = true;
-      try { dl.kill('SIGKILL'); } catch { /* 이미 죽음 */ }
-      try { ff.kill('SIGKILL'); } catch { /* 이미 죽음 */ }
-    },
+    destroy,
   };
 }
 
@@ -146,4 +191,32 @@ export async function resolve(input) {
   return { videoId: first.id, title: first.title, duration: first.duration };
 }
 
-export default { openStream, resolve };
+/**
+ * 부팅 시 yt-dlp 와 ffmpeg 가 실제로 실행되는지 확인한다.
+ *
+ * 둘 중 하나라도 없으면 재생은 "소리 없이 곡만 넘어가는" 형태로 조용히 실패한다.
+ * 배포 로그 첫 줄에서 드러나게 해 두는 편이 훨씬 낫다.
+ */
+export async function checkBinaries() {
+  const run = (cmd, args) => new Promise((res) => {
+    execFile(cmd, args, { timeout: 15_000 }, (err, stdout) => {
+      if (err) res({ ok: false, why: err.code || err.message });
+      else res({ ok: true, out: String(stdout).trim().split(/\r?\n/)[0] });
+    });
+  });
+
+  let yt;
+  try {
+    yt = await run(ytdlpPath(), ['--version']);
+  } catch (err) {
+    yt = { ok: false, why: err.message };
+  }
+  console.log(yt.ok ? `[voice] yt-dlp ${yt.out}` : `[voice] yt-dlp 사용 불가 — ${yt.why}`);
+
+  const ff = await run('ffmpeg', ['-version']);
+  console.log(ff.ok ? `[voice] ${ff.out.slice(0, 60)}` : `[voice] ffmpeg 사용 불가 — ${ff.why} (nixpacks.toml 의 aptPkgs 확인)`);
+
+  return yt.ok && ff.ok;
+}
+
+export default { openStream, resolve, checkBinaries };

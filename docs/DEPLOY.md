@@ -8,12 +8,15 @@
    │  https://mihearti.netlify.app        (정적 React, Netlify)
    │
    └─ fetch ─▶ https://<service>.up.railway.app   (Railway, 자동 HTTPS)
-                     │
-                     ▼
-               Node/Express (PORT 자동주입)
-               └─ DATA_DIR(/data, 영구 볼륨)
-                    ├─ uploads/        업로드 미디어
+                     │                              ▲
+                     ▼                              │ HTTP (같은 API)
+               Node/Express (PORT 자동주입)          │
+               └─ DATA_DIR(/data, 영구 볼륨)         │
+                    ├─ uploads/        업로드 미디어  │
                     └─ *.json          메타/방명록/플레이리스트
+                                                    │
+ 디스코드 ◀────────────────────────────────  디스코드 봇 (Railway, 같은 레포 bot/)
+                                              볼륨·도메인·PORT 없음
 ```
 
 > Railway는 HTTPS 도메인을 자동 제공하므로 도메인 구매·Caddy·pm2·방화벽이 불필요하다.
@@ -121,6 +124,39 @@ curl <API_URL>/api/playlist # [] 또는 데이터
 
 ---
 
+## 9. 디스코드 봇 서비스 (선택)
+
+같은 레포의 `bot/` 폴더를 **별도 서비스**로 올린다. 봇은 사이트 데이터를 전부 HTTP API 로만
+다루므로 볼륨이 필요 없고, API 서비스와 독립적으로 재시작된다.
+
+1. 같은 프로젝트에서 **New Service → GitHub Repo → 같은 레포**
+2. Settings → **Root Directory = `bot`**
+3. Settings → **Watch Paths = `/bot/**`**
+4. **기존 `server` 서비스에도 Watch Paths = `/server/**` 를 추가한다.**
+   안 하면 봇만 고쳐도 API 가 같이 재배포된다.
+5. Variables (자세한 목록은 `bot/.env.example`):
+```
+DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID
+DISCORD_USER_MIGEL, DISCORD_USER_MATIAM     디스코드 유저 ID (쓰기 권한 판단)
+MIHEARTI_API_BASE                            server 서비스의 공개 도메인
+OWNER_MIGEL_KEY, OWNER_MATIAM_KEY            server 와 같은 값
+GEMINI_API_KEY                               캐입 핑퐁용
+NIXPACKS_NODE_VERSION=22
+YOUTUBE_DL_FILENAME=yt-dlp_linux             ← 빌드 때 필요
+YOUTUBE_DL_SKIP_PYTHON_CHECK=1               ← 빌드 때 필요
+```
+6. **볼륨·공개 도메인·PORT 모두 불필요.** 워커 서비스로 둔다.
+7. 첫 배포 후 로컬에서 `cd bot && npm run register` 를 한 번 실행해 슬래시 명령을 등록한다.
+   (명령 이름·옵션을 바꿨을 때만 다시 실행)
+
+> Root Directory 를 `bot` 으로 두면 Railway 는 그 폴더만 내려받는다. 런타임에 `../client` 는
+> 존재하지 않으므로 캐릭터·대사 데이터는 생성해서 `bot/data/` 에 커밋해 둔다.
+> 원본(`client/src/Data/`)을 고쳤으면 `node bot/scripts/build-content.mjs` 를 다시 돌린다.
+
+자세한 운영·복구 방법은 `bot/README.md` 참고.
+
+---
+
 ## 트러블슈팅
 
 - **CORS 에러**: `CORS_ORIGIN`이 프론트 주소와 정확히 일치하는지(https, 끝 슬래시 없음). 변경 후 재배포.
@@ -130,3 +166,9 @@ curl <API_URL>/api/playlist # [] 또는 데이터
 - **방명록 쿨다운이 전체 공유됨**: `TRUST_PROXY=1` 설정 확인.
 - **영상 poster 생성 실패**: 로그에 ffmpeg 오류 시 — 이미지(jpg/png/webp)만 쓰면 영향 없음.
   영상이 필요하면 `ffmpeg-static`/`ffprobe-static`이 빌드 환경에서 동작하는지 로그로 확인.
+- **봇 배포가 "파이썬이 없다"며 실패**: `YOUTUBE_DL_SKIP_PYTHON_CHECK=1` 과
+  `YOUTUBE_DL_FILENAME=yt-dlp_linux` 를 봇 서비스 변수에 넣었는지 확인. 빌드 시점에 필요하다.
+- **봇이 사이트에 연결 못 함**: `MIHEARTI_API_BASE` 에 `https://` 가 붙어 있는지.
+  Railway 대시보드는 도메인을 스킴 없이 보여준다(봇이 보정하긴 하지만 로그로 확인할 것).
+- **봇 쓰기 명령이 401**: `cd bot && npm run check-keys` 로 패스코드가 서버와 같은지 확인.
+  사이트는 localStorage 만 보고 로그인 상태를 표시하므로, 값이 바뀌어도 로그인된 것처럼 보인다.

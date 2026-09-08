@@ -21,7 +21,7 @@ import { NAME } from '../ai/persona.js';
 import { sayAs } from '../discord/webhook.js';
 import * as state from '../yacht/state.js';
 import {
-  PREFIX, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
+  PREFIX, faces, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 } from '../yacht/render.js';
 import { base, fail } from '../embeds.js';
 
@@ -103,6 +103,20 @@ async function say(game, character, text) {
 }
 
 /**
+ * 굴린 결과를 채팅에 한 줄 남긴다.
+ *
+ * 캐릭터 웹훅이 아니라 봇 이름으로 보낸다 — 대사와 섞이면 어디까지가 그 사람이 한 말인지
+ * 알 수 없다. 앞 굴림에서 무엇을 쥐었는지도 같이 적어야 왜 이 눈이 됐는지 읽힌다.
+ */
+async function rolled(game, seat, nth, dice, kept) {
+  const head = `🎲 **${seat.name}** ${nth}번째`;
+  const tail = kept === null ? '' : (kept.length ? ` (${faces(kept)} 남기고)` : ' (전부 다시)');
+  await game.message.channel
+    .send({ content: `${head}${tail} — ${faces(dice)}` })
+    .catch((err) => console.warn('[요트] 굴림 알림 실패:', err.message));
+}
+
+/**
  * 판이 시작되면 NPC 가 한 마디씩.
  *
  * 말할 만한 순간은 판당 네 번쯤인데 대부분 중후반에 몰린다. 초반 몇 라운드가 통째로
@@ -134,8 +148,9 @@ async function openingLines(game) {
 /**
  * NPC 턴 한 개.
  *
- * 굴림은 전부 먼저 계산해 두고, 화면은 두 번만 고친다(굴린 직후 / 적은 직후).
- * 대사도 그 두 자리에 하나씩 붙는다 — 굴리면서 한 마디, 적으면서 한 마디.
+ * 판 자체는 두 번만 고친다(굴린 직후 / 적은 직후). 대신 굴릴 때마다 채팅에 한 줄씩
+ * 남겨서 과정이 보이게 한다 — 판만 고치면 뭘 쥐고 뭘 다시 굴렸는지가 순식간에 지나간다.
+ * 대사는 굴리면서 한 마디, 적으면서 한 마디.
  *
  * 턴을 통째로 계산한 뒤에 대사를 **한 번에** 받는 이유는 두 줄이 이어지게 하기
  * 위해서다. "5를 노려보지" 하고 굴린 다음 "결국 안 나왔군" 하고 적을 수 있다.
@@ -147,26 +162,33 @@ async function playNpcTurn(game, seat) {
 
   game.dice = rollDice();
   game.rollsLeft = MAX_ROLLS - 1;
-  game.trail = [`1번째 — \`${game.dice.join(' ')}\``];
+  game.trail = [`1번째 — ${faces(game.dice)}`];
   const story = [`첫 굴림: ${game.dice.join(' ')}`];
   state.touch(game);
   await draw(game);                       // 편집 ①
+  await rolled(game, seat, 1, game.dice, null);
 
-  // 나머지 굴림은 화면을 안 고치고 진행한다. 과정은 trail 에 쌓아 한 번에 보여준다.
+  // 굴릴 때마다 채팅으로 알린다. 판만 고치면 NPC 가 뭘 쥐고 뭘 다시 굴렸는지가
+  // 순식간에 지나가 버려서, 결과만 덩그러니 남고 과정이 안 보인다.
   while (game.rollsLeft > 0) {
     const held = chooseHold(seat.character, game.dice, seat.sheet, game.rollsLeft);
-    if (held.every(Boolean)) { story.push('더 굴리지 않고 이대로 가기로 했다.'); break; }
+    if (held.every(Boolean)) {
+      story.push('더 굴리지 않고 이대로 가기로 했다.');
+      break;
+    }
     const kept = game.dice.filter((_, i) => held[i]);
     game.dice = reroll(game.dice, held);
     game.rollsLeft -= 1;
     game.trail.push(
-      kept.length ? `　↳ \`${kept.join(' ')}\` 쥐고 다시` : '　↳ 전부 다시',
-      `${MAX_ROLLS - game.rollsLeft}번째 — \`${game.dice.join(' ')}\``,
+      kept.length ? `　↳ ${faces(kept)} 쥐고 다시` : '　↳ 전부 다시',
+      `${MAX_ROLLS - game.rollsLeft}번째 — ${faces(game.dice)}`,
     );
     story.push(
       kept.length ? `${kept.join(' ')} 만 쥐고 나머지를 다시 굴렸다.` : '전부 다시 굴렸다.',
       `그래서 ${game.dice.join(' ')} 이 됐다.`,
     );
+    await sleep(800);
+    await rolled(game, seat, MAX_ROLLS - game.rollsLeft, game.dice, kept);
   }
 
   const dice = [...game.dice];
@@ -478,7 +500,7 @@ async function handleTurn(interaction, game, action, arg) {
     }
     game.dice = game.dice ? reroll(game.dice, game.held) : rollDice();
     game.rollsLeft -= 1;
-    game.trail.push(`${MAX_ROLLS - game.rollsLeft}번째 — \`${game.dice.join(' ')}\``);
+    game.trail.push(`${MAX_ROLLS - game.rollsLeft}번째 — ${faces(game.dice)}`);
     state.touch(game);
     return false;
   }

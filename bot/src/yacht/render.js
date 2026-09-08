@@ -132,9 +132,18 @@ export function lobbyRows(game) {
 
 // ---------------------------------------------------------------- 진행 중
 
-/** 고정한 주사위는 [] 로 감싼다. 색만으로는 색각 이상이 있으면 구분이 안 된다. */
+/**
+ * 주사위 눈. 숫자보다 한눈에 들어온다.
+ * 유니코드 주사위 문자(U+2680~2685)라 별도 이모지 등록이 필요 없고, 폭도 한 칸이다.
+ */
+export const FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+/** 눈 다섯 개를 나란히. 채팅에 굴림 결과를 알릴 때도 쓴다. */
+export const faces = (dice) => dice.map((d) => FACES[d]).join(' ');
+
+/** 고정한 것은 [] 로 감싼다. 색만으로는 색각 이상이 있으면 구분이 안 된다. */
 const diceLine = (game) =>
-  game.dice.map((d, i) => (game.held[i] ? `[${d}]` : ` ${d} `)).join(' ');
+  game.dice.map((d, i) => (game.held[i] ? `[${FACES[d]}]` : ` ${FACES[d]} `)).join(' ');
 
 export function boardEmbed(game) {
   const seat = current(game);
@@ -143,7 +152,7 @@ export function boardEmbed(game) {
   // NPC 는 순식간에 두고 지나가므로, 직전에 무엇을 했는지 판에 남겨 둔다.
   if (game.lastMove) {
     const m = game.lastMove;
-    lines.push(`직전 · **${m.name}** \`${m.dice.join(' ')}\` → ${m.label} **${m.gained}점**`, '');
+    lines.push(`직전 · **${m.name}** ${faces(m.dice)} → ${m.label} **${m.gained}점**`, '');
   }
 
   if (game.dice) {
@@ -187,7 +196,7 @@ export function boardRows(game) {
 
   const rows = [
     new ActionRowBuilder().addComponents(...game.dice.map((d, i) =>
-      new ButtonBuilder().setCustomId(cid(game, 'hold', i)).setLabel(String(d))
+      new ButtonBuilder().setCustomId(cid(game, 'hold', i)).setLabel(`${FACES[d]} ${d}`)
         .setStyle(game.held[i] ? ButtonStyle.Success : ButtonStyle.Secondary)
         .setDisabled(game.rollsLeft === 0))),
   ];
@@ -240,5 +249,6 @@ export function resultEmbed(game) {
 }
 
 export default {
-  PREFIX, width, scoreTable, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
+  PREFIX, FACES, faces, width, scoreTable,
+  lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 };

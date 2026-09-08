@@ -94,34 +94,35 @@ export default {
       return;
     }
 
-    // 제약이 두 가지다: 메시지당 임베드 10개, 그리고 모든 임베드 글자수 합 6000자.
-    // 대사에 1500자가 넘는 줄이 있어서 5개만 담아도 6000자를 넘길 수 있다.
-    // 여유를 두고 5000자까지만 채우고, 못 담은 만큼은 개수로 알린다.
-    const BUDGET = 5000;
-    const embeds = [];
-    let used = 0;
-    let shown = 0;
+    // 결과는 임베드 하나에 모아 담는다.
+    //
+    // 처음엔 대사마다 임베드를 하나씩 만들었는데(6개), 디스코드가 그 페이로드에
+    // 일관되게 HTTP 500 을 돌려줬다. 형식 오류(DiscordAPIError)가 아니라 저쪽 서버
+    // 에러라 우리가 고칠 수 있는 건 모양뿐이었다. 한 덩어리로 보내면 문제도 없고
+    // 검색 결과로서 읽기도 낫다.
+    //
+    // 세션 로그라 한 줄이 1500자를 넘기도 한다. 검색 결과에서는 어느 대사인지만
+    // 알면 되므로 줄당 200자로 자른다. 전문은 /대사 랜덤 이나 사이트에서 본다.
+    const PER_LINE = 200;
+    const MAX = 5;
+    const shown = hits.slice(0, MAX);
 
-    for (const l of hits) {
-      if (embeds.length >= 5) break;
-      const text = trunc(l.text, 4096);
-      const footer = trunc([l.session, l.scene].filter(Boolean).join(' · '), 2048);
-      const cost = text.length + footer.length + NAME[l.speaker].length;
-      // 최소 한 개는 담는다. 첫 대사가 아무리 길어도 빈손으로 돌려보내지 않는다.
-      if (embeds.length && used + cost > BUDGET) break;
+    const body = shown
+      .map((l) => {
+        const where = [l.session, l.scene].filter(Boolean).join(' · ');
+        return `**${NAME[l.speaker]}** · ${where}\n${trunc(l.text, PER_LINE)}`;
+      })
+      .join('\n\n');
 
-      embeds.push(new EmbedBuilder()
-        .setColor(OWNER_META[l.speaker].color)
-        .setAuthor({ name: NAME[l.speaker] })
-        .setDescription(text)
-        .setFooter({ text: footer }));
-      used += cost;
-      shown += 1;
-    }
+    const more = hits.length > shown.length
+      ? `\n\n_그 외 ${hits.length - shown.length}줄이 더 있어요._`
+      : '';
 
-    if (hits.length > shown) {
-      embeds.push(base({ description: `그 외 ${hits.length - shown}줄이 더 있어요.` }));
-    }
-    await interaction.editReply({ embeds });
+    await interaction.editReply({
+      embeds: [base({
+        title: `"${trunc(term, 60)}" — ${hits.length}줄`,
+        description: trunc(body + more, 4096),
+      })],
+    });
   },
 };

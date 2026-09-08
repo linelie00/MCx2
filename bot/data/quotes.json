@@ -1,0 +1,1077 @@
+{
+  "_": "오늘의 대사 풀. 사람이 직접 편집하는 파일이며 build-content.mjs 가 덮어쓰지 않는다. type: line 은 한 줄, pair 는 원본에서 실제로 연달아 나온 주고받기. 괄호는 원본의 지문이며, 그게 있어야 살아나는 대사에만 남겼다.",
+  "quotes": [
+    {
+      "id": "q001",
+      "type": "line",
+      "speaker": "migel",
+      "text": "밟히는... 인생일 수 있다...? (우.)",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q002",
+      "type": "line",
+      "speaker": "migel",
+      "text": "호옷호옷! 그럼 모두를 밟고 다니겠습니다!!",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q003",
+      "type": "line",
+      "speaker": "migel",
+      "text": "마티씨는 머리라 죄송스러워서~ 암씨? 후후...",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q004",
+      "type": "line",
+      "speaker": "migel",
+      "text": "역시 몸이 찌뿌둥할 땐 검을 놀리는 게 최고죠!",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q005",
+      "type": "line",
+      "speaker": "migel",
+      "text": "더 월드 베스트 바드 미겔~?!",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q006",
+      "type": "line",
+      "speaker": "migel",
+      "text": "하긴, 저도 몸에 기억이 있다고 믿는 편입니다!",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q007",
+      "type": "line",
+      "speaker": "migel",
+      "text": "아무튼 마티씨도 소중하다구요~ 사라지시면 안됩니다요!!!",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q008",
+      "type": "line",
+      "speaker": "migel",
+      "text": "여러분, 안녕히 계세요~! 이 미겔은 춤과 행복을 찾아 떠납니다~!",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q009",
+      "type": "line",
+      "speaker": "migel",
+      "text": "안돼요, 마티암씨!!!!!!! 저랑 춤 춰주셔야 합니다!!!!!!!!!!!!!!",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q010",
+      "type": "line",
+      "speaker": "migel",
+      "text": "하지만... 저는 마티암씨가... 후우... 아닙니다... 가십시오, 보내드릴 테니....",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q011",
+      "type": "line",
+      "speaker": "migel",
+      "text": "괜찮다는 분이 눈물을 보이시니까 이 미겔, 놀라잖습니까~",
+      "session": "아낙시소스 숲"
+    },
+    {
+      "id": "q012",
+      "type": "line",
+      "speaker": "migel",
+      "text": "후후, 마티암씨께서 원하신다면요! 싹둑~ 잘라버립죠!",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q013",
+      "type": "line",
+      "speaker": "migel",
+      "text": "그렇게라도 해서 마티암씨의 사후세계에 들어갈 수 있다면야~ 언제든 노려드리지요!",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q014",
+      "type": "line",
+      "speaker": "migel",
+      "text": "'목이 붙는 마법은 없습니까요?'",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q015",
+      "type": "line",
+      "speaker": "migel",
+      "text": "제 검에는 힘이 있으니까요!",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q016",
+      "type": "line",
+      "speaker": "migel",
+      "text": "아하! 머리가 마티셨군요~! 잘 어울리는 이름이십니다.",
+      "session": "도브 돌라"
+    },
+    {
+      "id": "q017",
+      "type": "line",
+      "speaker": "migel",
+      "text": "그럼 실례하겠습니다! 야호!",
+      "session": "마계"
+    },
+    {
+      "id": "q018",
+      "type": "line",
+      "speaker": "migel",
+      "text": "호오... 글쎄요! 마계의 끝까지~?",
+      "session": "마계"
+    },
+    {
+      "id": "q019",
+      "type": "line",
+      "speaker": "migel",
+      "text": "하하, 그곳이 마티암씨의 사후세계라면 냉큼 먹어버릴텐데두요!",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q020",
+      "type": "line",
+      "speaker": "migel",
+      "text": "고향이란 늘 떠나고 싶은 존재... 저는 방랑 음유시인이니 공감합니다요!",
+      "session": "도브 돌라, 그 후"
+    },
+    {
+      "id": "q021",
+      "type": "line",
+      "speaker": "migel",
+      "text": "우왓~?! (암이 헹가래를 해주는 건가?)",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q022",
+      "type": "line",
+      "speaker": "migel",
+      "text": "... (검으로 마티암 찌르는 시늉한다. 그럼 다시 죽고 부활하십쇼!!!!)",
+      "session": "마계"
+    },
+    {
+      "id": "q023",
+      "type": "line",
+      "speaker": "migel",
+      "text": "(안경알이 뺏길 뻔 해서 웃음기 없는 얼굴로 당신을 본다.) 뭐하십니까, 마티암씨? (우.)",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q024",
+      "type": "line",
+      "speaker": "migel",
+      "text": "이이이래도 되는겁니까~?! (말은 그렇게 하면서도 팍팍 밟는다. 당신의 넓직한 등을 밟고 있으니... 어라, 이거 좀 좋을지도.)",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q025",
+      "type": "line",
+      "speaker": "migel",
+      "text": "우와~! (부럽다는 눈빛.)",
+      "session": "마계"
+    },
+    {
+      "id": "q026",
+      "type": "line",
+      "speaker": "migel",
+      "text": "결정했습니다! 마티암씨가 좋아하는 색감으로 팔을 채우고 싶군요~",
+      "session": "도브 돌라"
+    },
+    {
+      "id": "q027",
+      "type": "line",
+      "speaker": "migel",
+      "text": "제게 고향은 그저 눈뜬 곳에 불과한 지라. 별 볼일도 없는 곳이었습니다!",
+      "session": "도브 돌라, 그 후"
+    },
+    {
+      "id": "q028",
+      "type": "line",
+      "speaker": "migel",
+      "text": "그리웠던 건 아마 고향이 아니라 그 때 그 순간에 느꼈던 것들, 보고 들었던 것들이 아닐까 싶습니다.",
+      "session": "도브 돌라, 그 후"
+    },
+    {
+      "id": "q029",
+      "type": "line",
+      "speaker": "migel",
+      "text": "처음부터 죽지 않게 태어난 사람처럼 검을 휘두르지 않으셨습니까? 그 점이 참 마음에 들었지요!",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q030",
+      "type": "line",
+      "speaker": "migel",
+      "text": "마티야~ 암아~ 사이좋게 지내야한다~?",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q031",
+      "type": "line",
+      "speaker": "migel",
+      "text": "완벽함을 원하는 의지가, 숨을 참는다는 본능을 만들었지요.",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q032",
+      "type": "line",
+      "speaker": "migel",
+      "text": "빛나는 검날이 매력적이기도 하구요.",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q033",
+      "type": "line",
+      "speaker": "migel",
+      "text": "저 때문에 다치신다면 응당 책임지고 치료해드립죠!",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q034",
+      "type": "line",
+      "speaker": "migel",
+      "text": "이왕 노릴 거면 처음부터 심장을 노리셔야죠! 상대는 기꺼이 그리 할테니 말입니다.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q035",
+      "type": "line",
+      "speaker": "migel",
+      "text": "그야 목이 베이신 거지, 그곳에 검이 꽂히신 건 아니잖습니까.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q036",
+      "type": "line",
+      "speaker": "migel",
+      "text": "후후, 마티암 콜드듀가 되셨습니다~?",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q037",
+      "type": "line",
+      "speaker": "migel",
+      "text": "이렇게 쉽게 죽으실 줄 알았으면 그냥 제가 마티암씨 심장을 노릴 걸 그랬습니다~?",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q038",
+      "type": "line",
+      "speaker": "migel",
+      "text": "어쩌면 모든 것이 다 제 안에 있을지도 모르지요.",
+      "session": "마계"
+    },
+    {
+      "id": "q039",
+      "type": "line",
+      "speaker": "migel",
+      "text": "우와아아악!!!!! 끼얏호우~!!!!! 방금 천국?을 보고 왔을지두요~?!",
+      "session": "마계"
+    },
+    {
+      "id": "q040",
+      "type": "line",
+      "speaker": "migel",
+      "text": "저희 성정상 천국에 가긴 힘들지 않겠습니까~? 물론 초청해주신다면 가겠지만요!",
+      "session": "마계"
+    },
+    {
+      "id": "q041",
+      "type": "line",
+      "speaker": "migel",
+      "text": "과연 각자에게 정해진 결말이 있는 걸까요, 아니면 인형과 인형사 둘 다 선택의 자유가 있는걸까요~",
+      "session": "마계"
+    },
+    {
+      "id": "q042",
+      "type": "line",
+      "speaker": "migel",
+      "text": "함께 즐겁게 놀아볼까요? 석류도 나눠 먹으면서 말이지요!",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q043",
+      "type": "line",
+      "speaker": "migel",
+      "text": "녹색이 참 예쁘지요?",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q044",
+      "type": "line",
+      "speaker": "migel",
+      "text": "저는 어떤 분께 약한지 아십니까?",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q045",
+      "type": "line",
+      "speaker": "migel",
+      "text": "그럼 마티암씨께서 맞으실 겁니까~? 아니면 같이 피할까요? 쇽쇽!",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q046",
+      "type": "line",
+      "speaker": "migel",
+      "text": "무언가가 자신의 손을 잡고 끌어올렸죠. 그건 다름 아닌 인형사였답니다!",
+      "session": "마계"
+    },
+    {
+      "id": "q047",
+      "type": "line",
+      "speaker": "migel",
+      "text": "목이 떨어진 인형과 그를 사랑한 인형사~인형은 자신이 영영 망가져 사랑 받지 못할 거라 생각했다네~ 그래서 자기 목을 들고 인형사를 떠났네~",
+      "session": "마계"
+    },
+    {
+      "id": "q048",
+      "type": "line",
+      "speaker": "migel",
+      "text": "글쎄요, 과연 완전히 늦었을까요?",
+      "session": "마계"
+    },
+    {
+      "id": "q049",
+      "type": "line",
+      "speaker": "migel",
+      "text": "흠흠, 제 노래로 소생하실 수는 없지만 말입니다~",
+      "session": "마계"
+    },
+    {
+      "id": "q050",
+      "type": "line",
+      "speaker": "migel",
+      "text": "어떻습니까, 잘 어울리지요~? 후후, 어차피 또 기를 머리인데두요? 아까우십니까~?",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q051",
+      "type": "line",
+      "speaker": "migel",
+      "text": "당연한 말씀을~ 듀라한도 '진짜'로 죽는다는 사실을 모르셨단 말입니까~?",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q052",
+      "type": "line",
+      "speaker": "migel",
+      "text": "역시 검이 쥐었을 때 기분 좋지 않습니까?",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q053",
+      "type": "line",
+      "speaker": "migel",
+      "text": "우와! 마티암씨, 엄청 높으신 분 같습니다요~?",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q054",
+      "type": "line",
+      "speaker": "migel",
+      "text": "후후, 절 걱정해주신 거였습니까~?",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q055",
+      "type": "line",
+      "speaker": "migel",
+      "text": "후후, 미안합니다, 마티암씨... 건강한 놈이라...",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q056",
+      "type": "line",
+      "speaker": "migel",
+      "text": "얏호! 드디어 팔을 복구할 기회입니다~!",
+      "session": "도브 돌라"
+    },
+    {
+      "id": "q057",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "인생사 어떻게 될지 모르는 일 아니겠나.",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q058",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "혹은 밟는 인생일 수도 있지. 미래를 쟁취하게나!",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q059",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "마티와 암 중에 누굴 선택하겠나.",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q060",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "조금... 조금 더 세게.. 팍팍 밟게나!",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q061",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "무릉도원이군... 밑의 척추 쪽도 부탁하네.",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q062",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "내가 대신 사과하지. 암은 질투가 심해서 말이야. 날 한순간도 떼어놓지 않는다고.",
+      "session": "도브 돌라"
+    },
+    {
+      "id": "q063",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "머리-마티, 몸-암. 운율이 맞지 않나.",
+      "session": "도브 돌라"
+    },
+    {
+      "id": "q064",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "고향이란 늘 떠나고 싶은 존재 아니겠어.",
+      "session": "도브 돌라, 그 후"
+    },
+    {
+      "id": "q065",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "미겔의 노래는 오래 기억할 수 있어 좋지.",
+      "session": "주점 이니트"
+    },
+    {
+      "id": "q066",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그대의 칭호이자 불변의 진리이지.",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q067",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "셋이 추는 건 처음인데. 시작은 제대로 해야지.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q068",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "하하, 그대와 나는 생각보다 닮은 점이 많은 것 같군.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q069",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "미겔.. 내 힘으론 그대를 놀래킬 수 없을 것 같네.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q070",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "나보다 더 좋은 사람 만나 행복하길..",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q071",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "듀라한 재봉사도 죽을 때가 오는군. '진짜' 죽음 말이야.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q072",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그렇지만 난 정말 죽었고, 다시 살아났고... 머리는 그대로지. 나쁘지만은 않군.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q073",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "좋아한다는 기준을 잘 모르겠네. 이길 수 있다면, 도움이 된다면 무엇이든.",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q074",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "듀라한은.. 말까지 세트인 것 아나?",
+      "session": "마계"
+    },
+    {
+      "id": "q075",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "다들 좋은 밤 되길. 꿈에서 강을 본다면 절대 건너지 말게.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q076",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그렇다면 나를 불러. 그대가 석류를 먹지 않도록 잘 감시해주지.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q077",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "사랑은 쟁취하는 것이지.",
+      "session": "도브 돌라"
+    },
+    {
+      "id": "q078",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "모두의 위에 군림하세",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q079",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "(당신의 버클을 정중히 가리킨다) 더 월드 베스트 바드...",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q080",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "(한층 건강해진 당신을 바라본다) 심하게 건강하군..",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q081",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "여관 중독이네 그거.. (한층 광이 나는 얼굴이 되었다)",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q082",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "부활은 이런 기분이로군..",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q083",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "지옥에서.. 날 스카웃?",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q084",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "와아... (힘 들 어)",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q085",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "내가 미안하네. (가볍게 들어올려지는 그)",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q086",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그럴리가 있나... (그냥 저벅저벅 간다)",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q087",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "(괜히 뿌듯해진다) 하하하.",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q088",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "좋은 옷감을 찾았네. (마치 월척을 잡은 것마냥 골든스버그의 치마를 담당했던 천을 들어올린다)",
+      "session": "도브 돌라, 그 후"
+    },
+    {
+      "id": "q089",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "금속의 녹은 세월의 상징이지. 하지만 의도를 가진 흔적은 퍽 다른 느낌이야.",
+      "session": "주점 이니트"
+    },
+    {
+      "id": "q090",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "미겔의 노래는 실재하잖아. 가사의 바탕이 된 사건도, 불렀던 날도 다 알고 있으니까?",
+      "session": "주점 이니트"
+    },
+    {
+      "id": "q091",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그야 물론. 방랑계의 대선배님이시잖아.",
+      "session": "도브 돌라, 그 후"
+    },
+    {
+      "id": "q092",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "욕심은 많고, 자존심도 강하고.. 그렇지만 재능은 없던 재봉사 마티암.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q093",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "가끔은 운명을 믿는 것도 나쁘지 않은 듯 해서.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q094",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "이야기를 수집하는 이야기꾼이라 그런지 잘도 기억하는군.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q095",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그대의 손에 맞는다니 운명이라고 생각하지.",
+      "session": "아그렘 판당고"
+    },
+    {
+      "id": "q096",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "이 숲, 그의 숲이었던 곳에서.. 그의 노래를 들으니 어쩐지 눈물이 나더군.",
+      "session": "아낙시소스 숲"
+    },
+    {
+      "id": "q097",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "다정해야 할 땐 다정한 편이지.",
+      "session": "아낙시소스 숲"
+    },
+    {
+      "id": "q098",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "미겔 클론이라도 만들 셈인가. 어쩐지 그대 자체가 사라져도 여분 미겔이 나올 것 같은 기분이야.",
+      "session": "아낙시소스 숲"
+    },
+    {
+      "id": "q099",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "인상 깊은 것과 두려운 것. 그 두 개가 같은 사람이면 어떻게 될까 싶었던 거야.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q100",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "어쩌긴, 살려내야지. 센 바람 스치면 죽을 것 같은 상태가 되더라도.. 이야기는 끝까지 들어야 직성이 풀리니까.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q101",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그대와 함께라면 지루할 날은 없겠군.",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q102",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "세상사 원래 어이없는 실수 하나로 인생이 뒤바뀌는 법이지.",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q103",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그 말은 ... 너무 청혼 같잖아.",
+      "session": "지하 수로&테이너시스 거점"
+    },
+    {
+      "id": "q104",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "작은 오케스트라를 듣는 느낌이로군. 그대의 류트가 몸속으로 간 것만 같아.",
+      "session": "마계"
+    },
+    {
+      "id": "q105",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "좋아하는 색은 매번 바뀌는 것 아니겠나. 그리고 그건.. 미겔의 색이라 좋아하게 되는 거지. 순서가 틀렸어.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q106",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "지옥에서도 놀아준다니 든든하군. 외롭진 않겠어.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q107",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "하하, 이미 홀린 것 같네. 원래부터 멋있었지만.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q108",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "깨진 안경 사이로 빛나는 눈을 보니 새롭더군.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q109",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "세상의 탓, 운명의 탓.. 이라는 것을 하게 되었거든. 내 잘못만이 아니라고 말해준 누구 덕분에.",
+      "session": "마계"
+    },
+    {
+      "id": "q110",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "...그것 참 우연이로군. 아니, 운명인가?",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q111",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "언뜻 내 이름을 부르는 그대를 본 것도 같네. 역시 꽃보다 바드인가.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q112",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "5년 동안 한 번도 죽어본 적 없었거든. 죽지도 못하는 몸 아닐까 싶었지.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q113",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그랬다면 가장 두려운 것이 그대가 되었을지도 모르겠어.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q114",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "기억이 나지 않아도 몸은 자연스레 움직이곤 하니까. 가끔 그런 생각을 해. 내가 사라져도 몸은 움직이지 않을까하고.",
+      "session": "콘 오글로즈 늪지대"
+    },
+    {
+      "id": "q115",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그대의 검이 너무 날카롭더군. 노래를 들으면 부활할 수 있을 것 같아.",
+      "session": "마계"
+    },
+    {
+      "id": "q116",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "붉은색, 푸른색.. 그 범위 안에서도 완전히 똑같은 색은 없어. 그대만의 색인 거지.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q117",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "혼자만의 사후세계에 그대를 초대할 수 있다면.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q118",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "하하, 나를 지옥의 왕쯤으로 생각하는 것 아닌가.",
+      "session": "엔딩 D-1"
+    },
+    {
+      "id": "q119",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "그대가 덜 밟힐 수 있도록 고안해 낸 포즈라네.",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q120",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "아무리 그래도 이 긴 곱슬머리를 싹둑 자를 순 없지. 아깝지 않나.",
+      "session": "나스&지하 수로"
+    },
+    {
+      "id": "q121",
+      "type": "line",
+      "speaker": "matiam",
+      "text": "이럴 기회가 많지 않아서 말이야.",
+      "session": "마녀 헨젤의 성"
+    },
+    {
+      "id": "q122",
+      "type": "pair",
+      "session": "마녀 헨젤의 성",
+      "lines": [
+        {
+          "speaker": "migel",
+          "text": "밟히는... 인생일 수 있다...? (우.)"
+        },
+        {
+          "speaker": "matiam",
+          "text": "혹은 밟는 인생일 수도 있지. 미래를 쟁취하게나!"
+        }
+      ]
+    },
+    {
+      "id": "q123",
+      "type": "pair",
+      "session": "마녀 헨젤의 성",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "마티와 암 중에 누굴 선택하겠나."
+        },
+        {
+          "speaker": "migel",
+          "text": "마티씨는 머리라 죄송스러워서~ 암씨? 후후..."
+        }
+      ]
+    },
+    {
+      "id": "q124",
+      "type": "pair",
+      "session": "마녀 헨젤의 성",
+      "lines": [
+        {
+          "speaker": "migel",
+          "text": "이건... 무슨 포즈죠, 마티암씨~?!"
+        },
+        {
+          "speaker": "matiam",
+          "text": "그대가 덜 밟힐 수 있도록 고안해 낸 포즈라네."
+        }
+      ]
+    },
+    {
+      "id": "q125",
+      "type": "pair",
+      "session": "마녀 헨젤의 성",
+      "lines": [
+        {
+          "speaker": "migel",
+          "text": "오호, 부족하시다니! 자자, 그럼~"
+        },
+        {
+          "speaker": "matiam",
+          "text": "조금... 조금 더 세게.. 팍팍 밟게나!"
+        }
+      ]
+    },
+    {
+      "id": "q126",
+      "type": "pair",
+      "session": "도브 돌라",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "이쪽이 암이네. 뭐, 이름은 상관없지. 동행할텐가?"
+        },
+        {
+          "speaker": "migel",
+          "text": "아하! 머리가 마티셨군요~! 잘 어울리는 이름이십니다. 아니, 그럼 암씨가 질투한다는 게... 동행해주시면 저야 좋지요~ 재밌어보이는 게 엄청 많았습니다!"
+        }
+      ]
+    },
+    {
+      "id": "q127",
+      "type": "pair",
+      "session": "콘 오글로즈 늪지대",
+      "lines": [
+        {
+          "speaker": "migel",
+          "text": "더... 월드... 베스트... 마티암?"
+        },
+        {
+          "speaker": "matiam",
+          "text": "잘 가다가 왜 마티암이 되는건가. 정정하겠네. TWBBM이네."
+        }
+      ]
+    },
+    {
+      "id": "q128",
+      "type": "pair",
+      "session": "아그렘 판당고",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "미겔.. 내 힘으론 그대를 놀래킬 수 없을 것 같네."
+        },
+        {
+          "speaker": "migel",
+          "text": "흠, 괜찮습니다. 마티암씨는 마티암씨대로 노력했으니 말입니다..."
+        }
+      ]
+    },
+    {
+      "id": "q129",
+      "type": "pair",
+      "session": "아그렘 판당고",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "아무래도 민첩함을 더 키워야 할 것 같아. 다른 이를 찾아 떠나시게.."
+        },
+        {
+          "speaker": "migel",
+          "text": "하지만... 저는 마티암씨가... 후우... 아닙니다... 가십시오, 보내드릴 테니...."
+        }
+      ]
+    },
+    {
+      "id": "q130",
+      "type": "pair",
+      "session": "마계",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "듀라한은.. 말까지 세트인 것 아나?"
+        },
+        {
+          "speaker": "migel",
+          "text": "우와~!"
+        }
+      ]
+    },
+    {
+      "id": "q131",
+      "type": "pair",
+      "session": "엔딩 D-1",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "다들 좋은 밤 되길. 꿈에서 강을 본다면 절대 건너지 말게."
+        },
+        {
+          "speaker": "migel",
+          "text": "좋은 밤 되십쇼, 마티암씨! 잉, 근데 건너고 싶으면 어쩝니까~?"
+        }
+      ]
+    },
+    {
+      "id": "q132",
+      "type": "pair",
+      "session": "엔딩 D-1",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "그렇다면 나를 불러. 그대가 석류를 먹지 않도록 잘 감시해주지."
+        },
+        {
+          "speaker": "migel",
+          "text": "하하, 그곳이 마티암씨의 사후세계라면 냉큼 먹어버릴텐데두요!"
+        }
+      ]
+    },
+    {
+      "id": "q133",
+      "type": "pair",
+      "session": "도브 돌라",
+      "lines": [
+        {
+          "speaker": "migel",
+          "text": "찢기고 태워진 전단지 조각을 소중히 품에 안은 채) 전 왜 실연 당한 기분이 드는 겁니까? 이런 게 사랑입니까?"
+        },
+        {
+          "speaker": "matiam",
+          "text": "사랑은 쟁취하는 것이지."
+        }
+      ]
+    },
+    {
+      "id": "q134",
+      "type": "pair",
+      "session": "나스&지하 수로",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "머리를 자를 의향이 있는지?"
+        },
+        {
+          "speaker": "migel",
+          "text": "후후, 마티암씨께서 원하신다면요! 싹둑~ 잘라버립죠!"
+        }
+      ]
+    },
+    {
+      "id": "q135",
+      "type": "pair",
+      "session": "나스&지하 수로",
+      "lines": [
+        {
+          "speaker": "migel",
+          "text": "마티씨! 자자, 죽으신 소감이 어떻게 됩니까? 사후 세계는 구경하고 오셨습니까~?"
+        },
+        {
+          "speaker": "matiam",
+          "text": "너무 한순간이어서 제대로 즐기지도 못했네. 듀라한 재봉사도 죽을 때가 오는군. '진짜' 죽음 말이야."
+        }
+      ]
+    },
+    {
+      "id": "q136",
+      "type": "pair",
+      "session": "마계",
+      "lines": [
+        {
+          "speaker": "matiam",
+          "text": "그대의 검이 너무 날카롭더군. 노래를 들으면 부활할 수 있을 것 같아."
+        },
+        {
+          "speaker": "migel",
+          "text": "마티암씨의 레이피어만 할까요! 목이 떨어진 인형과 그를 사랑한 인형사~인형은 자신이 영영 망가져 사랑 받지 못할 거라 생각했다네~ 그래서 자기 목을 들고 인형사를 떠났네~"
+        }
+      ]
+    }
+  ]
+}

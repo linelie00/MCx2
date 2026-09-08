@@ -199,7 +199,9 @@ export async function speak({ character, channelId, userId, text }) {
       systemInstruction: systemPromptFor(character),
       safetySettings: SAFETY,
       temperature: 1.0,
-      maxOutputTokens: 400,
+      // 실측으로는 긴 답도 200토큰을 안 넘지만(프롬프트가 1~3문장을 요구한다),
+      // 여유를 준다고 손해 볼 게 없다. 안 쓰면 청구도 안 된다.
+      maxOutputTokens: 800,
     },
   };
 
@@ -232,10 +234,18 @@ export async function speak({ character, channelId, userId, text }) {
     throw new GeminiError(`대답을 받지 못했어요. (${msg.slice(0, 150)})`);
   }
 
+  const finish = res.candidates?.[0]?.finishReason;
   const reply = cleanReply(res.text);
+
+  // 토큰 한도에 걸려 문장 중간에서 끊긴 경우. 그대로 내보내면 왜 끊겼는지 알 수 없다.
+  if (reply && finish === 'MAX_TOKENS') {
+    pushHistory(channelId, character, text, reply);
+    return `${reply}…\n_(말이 길어져서 여기서 끊겼어요)_`;
+  }
+
   if (!reply) {
     // 안전 필터를 다 껐어도 막힐 때가 있다. 왜 비었는지 알려준다.
-    const reason = res.promptFeedback?.blockReason || res.candidates?.[0]?.finishReason;
+    const reason = res.promptFeedback?.blockReason || finish;
     throw new GeminiError(
       `${NAME[character]}이(가) 아무 말도 하지 않았어요.${reason ? ` (${reason})` : ''}`,
     );

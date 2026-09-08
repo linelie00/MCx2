@@ -12,9 +12,12 @@
  *    둘이 서로 끼어든다. customId 의 rev 로 지나간 클릭을 걸러내는 것도 같은 이유다.
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { rollDice, reroll, totals, MAX_ROLLS, ROUNDS } from '../yacht/rules.js';
+import {
+  rollDice, reroll, totals, commit, scoreFor, categoryOf, MAX_ROLLS, ROUNDS,
+} from '../yacht/rules.js';
 import { chooseHold, chooseCategory, turnEvents } from '../yacht/ai.js';
-import { line as npcLine, SPEAK_THRESHOLD } from '../ai/gameTalk.js';
+import { line as npcLine, turnLines as npcTurnLines } from '../ai/gameTalk.js';
+import { NAME } from '../ai/persona.js';
 import { sayAs } from '../discord/webhook.js';
 import * as state from '../yacht/state.js';
 import {
@@ -55,47 +58,74 @@ const bestOther = (game, me) => Math.max(
 );
 
 /**
- * 말할 만한 순간이면 한 줄 시킨다.
+ * 캐릭터로 한 줄 내보낸다.
  *
- * 매 턴 떠들면 성격이 아니라 소음이라, 문턱을 넘는 순간에만 부른다. 실패하면 조용히
- * 넘어간다 — 대사는 있으면 좋은 것이고, 없다고 판이 멈추면 안 된다.
+ * 웹훅이 막히면(봇에게 "웹훅 관리" 권한이 없는 채널 등) 일반 메시지로라도 보낸다.
+ * /캐입 은 처음부터 이 대비책이 있었는데 요트에는 없어서, 권한이 없는 채널에서는
+ * 대사가 통째로 사라져 기능이 죽은 것처럼 보였다.
  */
-async function maybeSpeak(game, seat, move) {
-  const events = turnEvents(move);
-  const top = events[0];
-  if (!top || top.priority < SPEAK_THRESHOLD) return;
-
-  const said = game.said[seat.character];
-  const text = await npcLine({
-    character: seat.character,
-    situation: [
-      `[요트 다이스 · ${move.round}/${ROUNDS}라운드]`,
-      `방금 내 차례였다. 내가 굴린 눈은 \`${move.dice.join(' ')}\` 이다.`,
-      top.detail,
-      `점수는 나 ${move.myTotal}점, 앞선 사람이 ${move.bestOtherTotal}점.`,
-    ].join('\n'),
-    said,
-  });
-  if (!text) return;
-
-  said.push(text);
-  await sayAs(game.message.channel, seat.character, text).catch((err) => {
-    console.warn('[요트] 대사 전송 실패:', err.message);
-  });
+async function say(game, character, text) {
+  try {
+    await sayAs(game.message.channel, character, text);
+  } catch (err) {
+    console.warn('[요트] 웹훅 실패, 일반 메시지로 대체:', err.message);
+    await game.message.channel
+      .send({ content: `**${NAME[character]}** ${text}` })
+      .catch((e) => console.warn('[요트] 대사 전송 실패:', e.message));
+  }
 }
 
-/** NPC 턴 한 개. 굴림은 전부 여기서 끝내고 화면은 두 번만 고친다. */
+/**
+ * 판이 시작되면 NPC 가 한 마디씩.
+ *
+ * 말할 만한 순간은 판당 네 번쯤인데 대부분 중후반에 몰린다. 초반 몇 라운드가 통째로
+ * 조용하면 기능이 안 도는 것처럼 보여서, 첫인사만은 문턱 없이 시킨다.
+ */
+async function openingLines(game) {
+  const others = game.seats.map((s) => s.name);
+  for (const seat of game.seats) {
+    if (seat.kind !== 'npc') continue;
+    const text = await npcLine({
+      character: seat.character,
+      situation: [
+        '[요트 다이스 · 판이 막 시작됐다]',
+        `${others.filter((n) => n !== seat.name).join(', ')} 와(과) 함께 한다.`,
+        '아직 아무도 주사위를 굴리지 않았다.',
+      ].join('\n'),
+      said: game.said[seat.character],
+    });
+    if (!text) continue;
+    game.said[seat.character].push(text);
+    await say(game, seat.character, text);
+    await sleep(700);
+  }
+}
+
+/**
+ * NPC 턴 한 개.
+ *
+ * 굴림은 전부 먼저 계산해 두고, 화면은 두 번만 고친다(굴린 직후 / 적은 직후).
+ * 대사도 그 두 자리에 하나씩 붙는다 — 굴리면서 한 마디, 적으면서 한 마디.
+ *
+ * 턴을 통째로 계산한 뒤에 대사를 **한 번에** 받는 이유는 두 줄이 이어지게 하기
+ * 위해서다. "5를 노려보지" 하고 굴린 다음 "결국 안 나왔군" 하고 적을 수 있다.
+ * 덤으로 호출 수도 반이 된다.
+ */
 async function playNpcTurn(game, seat) {
+  const sheetBefore = seat.sheet;
+  const round = game.round;
+
   game.dice = rollDice();
   game.rollsLeft = MAX_ROLLS - 1;
   game.trail = [`1번째 — \`${game.dice.join(' ')}\``];
+  const story = [`첫 굴림: ${game.dice.join(' ')}`];
   state.touch(game);
   await draw(game);                       // 편집 ①
 
   // 나머지 굴림은 화면을 안 고치고 진행한다. 과정은 trail 에 쌓아 한 번에 보여준다.
   while (game.rollsLeft > 0) {
     const held = chooseHold(seat.character, game.dice, seat.sheet, game.rollsLeft);
-    if (held.every(Boolean)) break;       // 다 쥐었으면 더 굴릴 이유가 없다
+    if (held.every(Boolean)) { story.push('더 굴리지 않고 이대로 가기로 했다.'); break; }
     const kept = game.dice.filter((_, i) => held[i]);
     game.dice = reroll(game.dice, held);
     game.rollsLeft -= 1;
@@ -103,29 +133,46 @@ async function playNpcTurn(game, seat) {
       kept.length ? `　↳ \`${kept.join(' ')}\` 쥐고 다시` : '　↳ 전부 다시',
       `${MAX_ROLLS - game.rollsLeft}번째 — \`${game.dice.join(' ')}\``,
     );
+    story.push(
+      kept.length ? `${kept.join(' ')} 만 쥐고 나머지를 다시 굴렸다.` : '전부 다시 굴렸다.',
+      `그래서 ${game.dice.join(' ')} 이 됐다.`,
+    );
   }
+
+  const dice = [...game.dice];
+  const key = chooseCategory(seat.character, game.dice, seat.sheet);
+  const wouldGain = scoreFor(key, dice);
+  const sheetAfter = commit(sheetBefore, key, dice).sheet;
+
+  // 대사를 먼저 받아 둔다. 그래야 굴린 직후에 첫 줄을 붙일 수 있다.
+  const lines = await npcTurnLines({
+    character: seat.character,
+    situation: [
+      `[요트 다이스 · ${round}/${ROUNDS}라운드] 내 차례다.`,
+      ...story,
+      `그리고 ${categoryOf(key).label} 칸에 ${wouldGain}점을 적기로 했다.`,
+      turnEvents({
+        gained: wouldGain, key, sheetBefore, sheetAfter, round,
+        myTotal: totals(sheetAfter).total, bestOtherTotal: bestOther(game, seat),
+      })[0]?.detail ?? '',
+      `점수는 나 ${totals(sheetAfter).total}점, 앞선 사람이 ${bestOther(game, seat)}점.`,
+    ].filter(Boolean).join('\n'),
+    said: game.said[seat.character],
+  });
+
+  if (lines?.rolling) await say(game, seat.character, lines.rolling);
 
   // 사람이 읽을 시간을 준다. 겸사겸사 메시지 편집이 레이트리밋 큐에 밀리는 것도 피한다 —
   // discord.js 는 걸려도 오류를 안 내고 늦게 보내서, 많이 고치면 그냥 버벅이는 것처럼 보인다.
-  await sleep(1400);
+  await sleep(1200);
   if (game.phase !== 'playing') return;   // 그 사이 /요트 그만 이 올 수 있다
 
   game.held = [true, true, true, true, true];
-  const sheetBefore = seat.sheet;
-  const key = chooseCategory(seat.character, game.dice, seat.sheet);
-  const dice = [...game.dice];
-  const round = game.round;
-  const gained = state.commitTo(game, key);
+  state.commitTo(game, key);
   await draw(game);                       // 편집 ②
 
-  // 대사는 판을 다 그린 뒤에 별도 메시지로. 여기서 1~3초가 걸려도 판은 이미 최신이다.
-  await maybeSpeak(game, seat, {
-    gained, key, dice, round,
-    sheetBefore,
-    sheetAfter: seat.sheet,
-    myTotal: totals(seat.sheet).total,
-    bestOtherTotal: bestOther(game, seat),
-  });
+  if (lines?.writing) await say(game, seat.character, lines.writing);
+  if (lines) game.said[seat.character].push(...[lines.rolling, lines.writing].filter(Boolean));
 }
 
 /**
@@ -139,6 +186,7 @@ async function runNpcTurns(game) {
   if (game.driving) return;
   game.driving = true;
   try {
+    if (!game.opened) { game.opened = true; await openingLines(game); }
     while (game.phase === 'playing' && state.current(game)?.kind === 'npc') {
       await playNpcTurn(game, state.current(game));
       await sleep(900);
@@ -167,16 +215,22 @@ async function closingLines(game) {
     });
     if (!text) continue;
     game.said[r.seat.character].push(text);
-    await sayAs(game.message.channel, r.seat.character, text).catch(() => {});
+    await say(game, r.seat.character, text);
     await sleep(700);
   }
 }
 
-/** NPC 차례면 드라이버를 띄운다. 기다리지 않는다 — 부르는 쪽은 이미 응답을 마쳤다. */
+/**
+ * NPC 드라이버를 띄운다. 기다리지 않는다 — 부르는 쪽은 이미 응답을 마쳤다.
+ *
+ * 사람 차례면 while 이 바로 빠지지만, 첫인사는 그 전에 나간다(사람이 먼저 두는 판에서도
+ * 시작하자마자 NPC 가 말을 걸어야 한다).
+ */
 function kickNpc(game) {
-  if (game.phase === 'playing' && state.current(game)?.kind === 'npc') {
-    runNpcTurns(game).catch((err) => console.error('[요트] NPC 턴 오류:', err));
-  }
+  const npcSeated = game.seats.some((s) => s.kind === 'npc');
+  if (game.phase !== 'playing' || !npcSeated) return;
+  if (game.opened && state.current(game)?.kind !== 'npc') return;
+  runNpcTurns(game).catch((err) => console.error('[요트] NPC 턴 오류:', err));
 }
 
 // 방치된 판을 접는다. 봇이 살아 있는 동안만 도는 타이머라 재시작하면 같이 사라지는데,

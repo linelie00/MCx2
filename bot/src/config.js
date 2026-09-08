@@ -73,8 +73,11 @@ export const config = {
     // 지정한 모델이 붐빌 때(503) 대신 써 볼 모델. 무료 티어의 인기 모델은 통째로
     // 몇 십 분씩 내려앉기도 해서, 재시도만으로는 못 넘긴다.
     fallbackModel: opt('GEMINI_MODEL_FALLBACK', 'gemini-flash-lite-latest'),
-    rpm: num('GEMINI_RPM', 8),
-    rpd: num('GEMINI_RPD', 300),
+    // 캐입과 요트 NPC 대사가 이 한도를 같이 쓴다(구글 쪽 한도가 하나라 카운터도 하나다).
+    // 기본값은 gemini-flash-lite 무료 티어(분당 15 · 하루 1000)에 맞춰 조금 낮춰 잡았다.
+    // 요트는 NPC 턴마다 한 번 부르므로 8 로는 대사가 자주 빠진다.
+    rpm: num('GEMINI_RPM', 15),
+    rpd: num('GEMINI_RPD', 800),
   },
 };
 

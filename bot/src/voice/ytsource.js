@@ -239,6 +239,12 @@ export async function checkBinaries() {
     ? `[voice] ${ff.out.slice(0, 50)} (${where})`
     : `[voice] ffmpeg 사용 불가 — ${ff.why} (${where})`);
 
+  // 유튜브가 막을 때 쓰는 손잡이 두 개가 실제로 전달됐는지 보여준다.
+  // 변수를 넣었는데 안 먹는 건지, 넣어도 소용없는 건지 구분하려면 이게 필요하다.
+  const extra = extraArgs();
+  console.log(`[voice] YTDLP_EXTRA_ARGS: ${extra.length ? extra.join(' ') : '(없음)'}`);
+  console.log(`[voice] 쿠키: ${ensureCookies() ? '사용' : '없음'}`);
+
   return yt.ok && ff.ok;
 }
 

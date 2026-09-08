@@ -52,11 +52,12 @@ export function npcSeat(character) {
   };
 }
 
-export function create({ channelId, guildId, starterId }) {
+export function create({ channelId, homeChannelId, guildId, starterId }) {
   const game = {
     serial: serial(),
     rev: 0,
-    channelId,
+    channelId,              // 판이 실제로 도는 곳. 보통 스레드다
+    homeChannelId,          // /요트 시작 을 친 채널. 스레드를 못 만들면 둘이 같다
     guildId,
     starterId,
     message: null,          // 판 메시지. 항상 이걸로 edit 한다(인터랙션 토큰은 15분이면 죽는다)
@@ -80,6 +81,17 @@ export function create({ channelId, guildId, starterId }) {
 }
 
 export const get = (channelId) => games.get(channelId) || null;
+
+/**
+ * 스레드 안에서 눌렀든 원래 채널에서 명령을 쳤든 같은 판을 찾아 준다.
+ * 판은 스레드 id 로 걸어 두지만, /요트 시작 은 바깥 채널에서 치기 때문이다.
+ */
+export function forChannel(channelId) {
+  const direct = games.get(channelId);
+  if (direct) return direct;
+  for (const g of games.values()) if (g.homeChannelId === channelId) return g;
+  return null;
+}
 export const remove = (channelId) => games.delete(channelId);
 
 /** 상태가 바뀔 때마다 부른다. 버튼의 rev 와 비교해 지나간 클릭을 걸러내는 근거가 된다. */

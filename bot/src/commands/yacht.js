@@ -31,22 +31,49 @@ const { filledCount } = state;
 const deny = (interaction, text) =>
   interaction.reply({ embeds: [fail(text)], flags: MessageFlags.Ephemeral });
 
-/** 지금 상태로 판 메시지를 다시 그린다. 모든 갱신이 여기를 지난다. */
-async function draw(game) {
-  if (!game.message) return;
+/** 지금 상태를 메시지 내용으로. 그리기와 새로 띄우기가 같이 쓴다. */
+function payloadFor(game) {
   // 시작도 안 한 판을 접었으면 점수표를 보여줄 게 없다.
   const neverPlayed = game.round === 1 && game.seats.every((s) => filledCount(s.sheet) === 0);
-  const payload = game.phase === 'done'
-    ? {
+  if (game.phase === 'done') {
+    return {
       embeds: [neverPlayed ? base({ description: '판을 접었어요.' }) : resultEmbed(game)],
       components: [],
-    }
-    : game.phase === 'lobby'
-      ? { embeds: [lobbyEmbed(game)], components: lobbyRows(game) }
-      : { embeds: [boardEmbed(game)], components: boardRows(game) };
-  await game.message.edit(payload).catch((err) => {
+    };
+  }
+  return game.phase === 'lobby'
+    ? { embeds: [lobbyEmbed(game)], components: lobbyRows(game) }
+    : { embeds: [boardEmbed(game)], components: boardRows(game) };
+}
+
+/** 있는 자리에서 고친다. 사람이 자기 턴을 두는 동안은 전부 이쪽이다(메시지가 안 늘어난다). */
+async function draw(game) {
+  if (!game.message) return;
+  await game.message.edit(payloadFor(game)).catch((err) => {
     console.warn('[요트] 판 갱신 실패:', err.message);
   });
+}
+
+/**
+ * 판을 맨 아래에 새로 띄운다.
+ *
+ * NPC 가 말을 하고 나면 판이 대사에 밀려 위로 올라가 버려서, 버튼을 누르려면 스크롤을
+ * 올려야 한다. 그래서 NPC 차례가 끝나면 판을 새로 띄운다.
+ * 새 메시지를 **먼저** 보내고 옛 것의 버튼을 걷는다 — 반대로 하면 잠깐 누를 판이 없어진다.
+ */
+async function repost(game) {
+  const old = game.message;
+  const channel = old?.channel;
+  if (!channel) return;
+
+  const fresh = await channel.send(payloadFor(game)).catch((err) => {
+    console.warn('[요트] 판 새로 띄우기 실패:', err.message);
+    return null;
+  });
+  if (!fresh) { await draw(game); return; }
+
+  game.message = fresh;
+  await old.edit({ components: [] }).catch(() => {});
 }
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
@@ -83,6 +110,7 @@ async function say(game, character, text) {
  */
 async function openingLines(game) {
   const others = game.seats.map((s) => s.name);
+  let spoke = false;
   for (const seat of game.seats) {
     if (seat.kind !== 'npc') continue;
     const text = await npcLine({
@@ -97,8 +125,10 @@ async function openingLines(game) {
     if (!text) continue;
     game.said[seat.character].push(text);
     await say(game, seat.character, text);
+    spoke = true;
     await sleep(700);
   }
+  return spoke;
 }
 
 /**
@@ -167,7 +197,7 @@ async function playNpcTurn(game, seat) {
   // 사람이 읽을 시간을 준다. 겸사겸사 메시지 편집이 레이트리밋 큐에 밀리는 것도 피한다 —
   // discord.js 는 걸려도 오류를 안 내고 늦게 보내서, 많이 고치면 그냥 버벅이는 것처럼 보인다.
   await sleep(1200);
-  if (game.phase !== 'playing') return;   // 그 사이 /요트 그만 이 올 수 있다
+  if (game.phase !== 'playing') return Boolean(lines?.rolling);   // 그 사이 /요트 그만 이 올 수 있다
 
   game.held = [true, true, true, true, true];
   state.commitTo(game, key);
@@ -175,6 +205,7 @@ async function playNpcTurn(game, seat) {
 
   if (lines?.writing) await say(game, seat.character, lines.writing);
   if (lines) game.said[seat.character].push(...[lines.rolling, lines.writing].filter(Boolean));
+  return Boolean(lines?.rolling || lines?.writing);
 }
 
 /**
@@ -187,13 +218,17 @@ async function playNpcTurn(game, seat) {
 async function runNpcTurns(game) {
   if (game.driving) return;
   game.driving = true;
+  let spoke = false;
   try {
-    if (!game.opened) { game.opened = true; await openingLines(game); }
+    if (!game.opened) { game.opened = true; spoke = await openingLines(game); }
     while (game.phase === 'playing' && state.current(game)?.kind === 'npc') {
-      await playNpcTurn(game, state.current(game));
+      spoke = (await playNpcTurn(game, state.current(game))) || spoke;
       await sleep(900);
     }
     if (game.phase === 'done' && game.endedReason === 'finished') await closingLines(game);
+    // 대사에 밀려 올라간 판을 다시 맨 아래로. NPC 차례 묶음마다 한 번씩만 한다 —
+    // 굴릴 때마다 새로 띄우면 스레드가 판으로 도배된다.
+    if (spoke) await repost(game);
   } finally {
     game.driving = false;
   }
@@ -256,7 +291,7 @@ const data = new SlashCommandBuilder()
 
 async function execute(interaction) {
   const sub = interaction.options.getSubcommand();
-  const existing = state.get(interaction.channelId);
+  const existing = state.forChannel(interaction.channelId);
   const live = existing && existing.phase !== 'done' ? existing : null;
 
   if (sub === '시작') {
@@ -264,8 +299,30 @@ async function execute(interaction) {
       await deny(interaction, '이 채널에 이미 판이 있어요. `/요트 판` 으로 띄우거나 `/요트 그만` 으로 접어주세요.');
       return;
     }
+    const starter = interaction.member?.displayName
+      || interaction.user.globalName || interaction.user.username;
+
+    // 판을 스레드에서 돌린다. 주사위와 대사가 오가는 통에 원래 채널이 묻히지 않는다.
+    // 스레드를 못 만드는 채널(권한이 없거나 이미 스레드 안이거나)이면 그냥 여기서 한다.
+    await interaction.reply({ embeds: [base({ description: `요트 판을 엽니다 — ${starter}` })] });
+    const anchor = await interaction.fetchReply();
+
+    let room = interaction.channel;
+    try {
+      if (!interaction.channel.isThread()) {
+        room = await anchor.startThread({
+          name: `🎲 요트 다이스 — ${starter}`,
+          autoArchiveDuration: 1440,
+        });
+      }
+    } catch (err) {
+      console.warn('[요트] 스레드를 못 만들어 채널에서 진행합니다:', err.message);
+      room = interaction.channel;
+    }
+
     const game = state.create({
-      channelId: interaction.channelId,
+      channelId: room.id,
+      homeChannelId: interaction.channelId,
       guildId: interaction.guildId,
       starterId: interaction.user.id,
     });
@@ -279,10 +336,13 @@ async function execute(interaction) {
     }
     if (against) state.start(game);
 
-    await interaction.reply(against
-      ? { embeds: [boardEmbed(game)], components: boardRows(game) }
-      : { embeds: [lobbyEmbed(game)], components: lobbyRows(game) });
-    game.message = await interaction.fetchReply();
+    // 스레드를 못 만들었으면 방금 띄운 안내를 판으로 바꿔 쓴다(메시지를 하나 아낀다).
+    if (room.id === interaction.channelId) {
+      await interaction.editReply(payloadFor(game));
+      game.message = anchor;
+    } else {
+      game.message = await room.send(payloadFor(game));
+    }
     kickNpc(game);
     return;
   }
@@ -292,12 +352,13 @@ async function execute(interaction) {
       await deny(interaction, '진행 중인 판이 없어요.');
       return;
     }
-    // 옛 메시지의 버튼은 걷어낸다. rev 검사로 눌러도 막히긴 하지만, 살아 있어 보이면 헷갈린다.
-    await live.message?.edit({ components: [] }).catch(() => {});
-    await interaction.reply(live.phase === 'lobby'
-      ? { embeds: [lobbyEmbed(live)], components: lobbyRows(live) }
-      : { embeds: [boardEmbed(live)], components: boardRows(live) });
-    live.message = await interaction.fetchReply();
+    // 판이 도는 곳(대개 스레드)에 새로 띄운다. 명령을 바깥 채널에서 쳤다고 판을 그쪽으로
+    // 옮기면 안 된다 — 판이 두 군데로 갈라진다.
+    await repost(live);
+    await interaction.reply({
+      embeds: [base({ description: `판을 다시 띄웠어요. <#${live.channelId}>` })],
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
@@ -326,7 +387,7 @@ async function execute(interaction) {
  */
 async function component(interaction) {
   const [, serial, rev, action, arg] = interaction.customId.split(':');
-  const game = state.get(interaction.channelId);
+  const game = state.forChannel(interaction.channelId);
 
   // 봇이 재시작됐거나 다른 판의 버튼. 그냥 무시하면 디스코드가 빨간 "상호작용 실패"를
   // 띄워 버그처럼 보이므로, 이유를 알려주고 죽은 버튼을 걷어낸다.

@@ -439,6 +439,15 @@ async function component(interaction) {
 
   await interaction.deferUpdate();
   await draw(game);
+
+  // 사람이 굴린 것도 채팅에 남긴다. 판을 새로 띄우고 나면 앞 굴림이 판에서 사라지는데,
+  // 채팅에 남아 있으면 이번 턴에 무엇을 어떻게 굴렸는지 되짚을 수 있다.
+  if (game.pendingRoll) {
+    const p = game.pendingRoll;
+    game.pendingRoll = null;
+    await rolled(game, p.seat, p.nth, p.dice, p.kept);
+  }
+
   kickNpc(game);
 }
 
@@ -498,9 +507,13 @@ async function handleTurn(interaction, game, action, arg) {
       await deny(interaction, '다섯 개를 다 고정해 두면 굴려도 그대로예요.');
       return true;
     }
+    // 첫 굴림에는 남긴 것이 없다. 다시 굴릴 때만 무엇을 쥐고 있었는지 적어 준다.
+    const kept = game.dice ? game.dice.filter((_, i) => game.held[i]) : null;
     game.dice = game.dice ? reroll(game.dice, game.held) : rollDice();
     game.rollsLeft -= 1;
     game.trail.push(`${MAX_ROLLS - game.rollsLeft}번째 — ${faces(game.dice)}`);
+    // 채팅 알림은 판을 다 그린 뒤에 보낸다. 여기서 보내면 인터랙션 응답이 그만큼 늦어진다.
+    game.pendingRoll = { seat, nth: MAX_ROLLS - game.rollsLeft, dice: [...game.dice], kept };
     state.touch(game);
     return false;
   }

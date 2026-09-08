@@ -136,7 +136,7 @@ function TicketModal({ movie, onClose, canDelete = false, onDelete, canEdit = fa
               <div className="mv-ticket__ratings">
                 {OWNER_KEYS.map((key) => {
                   const o = movieOwners[key];
-                  const r = movie.ratings[key] || { stars: 0, comment: '' };
+                  const r = (movie.ratings && movie.ratings[key]) || { stars: 0, comment: '' };
                   if (editing) {
                     const d = draft[key];
                     return (

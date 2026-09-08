@@ -65,7 +65,9 @@ function PosterCarousel({ movies = [], onOpen }) {
                   <p className="mv-poster__director">감독 · {m.director}</p>
                   <div className="mv-poster__ratings">
                     {['migel', 'matiam'].map((key) => {
-                      const r = m.ratings[key];
+                      // ratings 가 통째로 없거나 한쪽만 있는 영화가 있을 수 있다.
+                      // (API 는 항상 둘 다 채우지만 movies.json 을 직접 고치면 깨진다)
+                      const r = (m.ratings && m.ratings[key]) || { stars: 0, comment: '' };
                       const o = movieOwners[key];
                       return (
                         <div className="mv-rating" key={key}>

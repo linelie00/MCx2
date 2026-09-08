@@ -37,6 +37,8 @@ npm run dev
 4. **기존 `server` 서비스에도 Watch Paths = `/server/**` 를 추가한다.**
    안 하면 봇만 고쳐도 API 가 같이 재배포된다.
 5. Variables 에 `.env.example` 의 값들 + `NIXPACKS_NODE_VERSION=22`
+   - `YOUTUBE_DL_FILENAME=yt-dlp_linux` 와 `YOUTUBE_DL_SKIP_PYTHON_CHECK=1` 은
+     **빌드(npm install) 때 필요하다.** 없으면 파이썬이 없다며 설치가 실패한다.
    - `MIHEARTI_API_BASE` 는 `server` 서비스의 공개 도메인
    - `OWNER_*_KEY` 는 `server` 와 같은 값
 6. 볼륨·공개 도메인·PORT **모두 불필요**. 워커 서비스로 둔다.
@@ -52,6 +54,9 @@ npm run dev
 | `/주사위` | 누구나 | 면·개수·보정을 받아 굴린다 |
 | `/뽑기` | 누구나 | 쉼표로 구분한 항목에서 무작위 선택 |
 | `/음성테스트` | 누구나 | 배포 환경에서 음성 UDP 가 뚫리는지 진단 |
+| `/대사` `/그림` `/영화` `/플리` | 조회는 누구나 | 사이트 데이터 조회·수정 |
+| `/캐입` | 누구나 | 미겔·마티암과 대화 (Gemini) |
+| `/플리 재생` 계열 | 누구나 | 음성 채널에서 재생 |
 
 ## 음성이 안 될 때
 

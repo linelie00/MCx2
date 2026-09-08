@@ -63,10 +63,10 @@ export const config = {
 
   gemini: {
     apiKey: opt('GEMINI_API_KEY'),
-    // 구글이 모델 id 를 자주 갈아치우므로 코드에 박지 않고 환경변수로 바꿀 수 있게 둔다.
-    // 기본값이 사라지면 첫 호출이 404 로 실패하는데, 그때 봇이 쓸 수 있는 모델 목록을
-    // 보여주므로 그대로 골라 넣으면 된다.
-    model: opt('GEMINI_MODEL', 'gemini-2.5-flash-lite'),
+    // 번호가 붙은 id(gemini-2.5-flash-lite 등)는 조용히 사라진다. 실제로 그렇게 404 를
+    // 맞아서 별칭으로 바꿨다. -latest 별칭은 구글이 알아서 최신을 가리키므로 안 깨진다.
+    // 그래도 환경변수로 덮을 수 있게 두고, 404 가 나면 쓸 수 있는 목록을 보여준다.
+    model: opt('GEMINI_MODEL', 'gemini-flash-lite-latest'),
     rpm: num('GEMINI_RPM', 8),
     rpd: num('GEMINI_RPD', 300),
   },

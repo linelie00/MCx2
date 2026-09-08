@@ -164,6 +164,23 @@ export const faceOf = (d) => FACES[d];
 /** 남긴 눈 하나. 다른 색 그림이 있으면 그걸로, 없으면 [] 로 감싼다. */
 const heldFace = (d) => KEPT?.[d] || `[${FACES[d]}]`;
 
+const CUSTOM = /^<a?:(\w+):(\d+)>$/;
+
+/**
+ * 버튼에 붙일 이모지.
+ *
+ * 버튼 **라벨은 이모지 문법을 해석하지 않는다.** `<:dice2:123>` 을 라벨에 넣으면 그
+ * 글자가 그대로 보인다(실제로 그렇게 나왔다). 커스텀 이모지는 setEmoji 로 넣어야 하고,
+ * 그때는 `<:이름:id>` 가 아니라 { id, name } 을 줘야 한다.
+ *
+ * 버튼에서는 남긴 것을 [] 로 감싸지 않는다 — 초록 버튼 색이 이미 그 표시다.
+ */
+export function faceEmoji(d, held) {
+  const s = (held && KEPT?.[d]) || FACES[d];
+  const m = CUSTOM.exec(s);
+  return m ? { id: m[2], name: m[1] } : s;
+}
+
 /**
  * 눈 다섯 개를 나란히. held 를 주면 남긴 것을 구분해 그린다.
  * 채팅의 굴림 알림과 판이 같은 표기를 쓴다 — 두 군데가 다르면 헷갈린다.
@@ -224,7 +241,8 @@ export function boardRows(game) {
 
   const rows = [
     new ActionRowBuilder().addComponents(...game.dice.map((d, i) =>
-      new ButtonBuilder().setCustomId(cid(game, 'hold', i)).setLabel(FACES[d])
+      new ButtonBuilder().setCustomId(cid(game, 'hold', i))
+        .setEmoji(faceEmoji(d, game.held[i]))
         .setStyle(game.held[i] ? ButtonStyle.Success : ButtonStyle.Secondary)
         .setDisabled(game.rollsLeft === 0))),
   ];
@@ -277,6 +295,6 @@ export function resultEmbed(game) {
 }
 
 export default {
-  PREFIX, faceOf, faces, useCustomFaces, width, scoreTable,
+  PREFIX, faceOf, faceEmoji, faces, useCustomFaces, width, scoreTable,
   lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 };

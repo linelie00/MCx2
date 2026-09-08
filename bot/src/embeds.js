@@ -36,7 +36,7 @@ export function base({ title, description, color = THEME_COLOR, footer } = {}) {
 
 /** 실패를 알릴 때. 사용자에게는 항상 한국어 한 줄로 보여준다. */
 export function fail(message) {
-  return base({ title: '안 됐어요', description: message, color: 0x9c5a4a });
+  return base({ title: '실패', description: message, color: 0x9c5a4a });
 }
 
 export default { THEME_COLOR, trunc, mdEscape, base, fail };

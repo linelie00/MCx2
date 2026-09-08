@@ -10,7 +10,8 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "register": "node register-commands.js",
-    "build-content": "node scripts/build-content.mjs"
+    "build-content": "node scripts/build-content.mjs",
+    "check-keys": "node check-keys.js"
   },
   "dependencies": {
     "@discordjs/voice": "0.19.2",

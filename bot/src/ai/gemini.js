@@ -74,10 +74,19 @@ function noteCall(userId) {
   lastCallByUser.set(userId, Date.now());
 }
 
-export const usage = () => ({
-  minute: `${minute.count}/${config.gemini.rpm}`,
-  day: `${day.count}/${config.gemini.rpd}`,
-});
+/**
+ * 지금 얼마나 썼는지. 구글의 실제 한도가 아니라 우리가 건 안전장치 기준이다.
+ * 분 단위는 시계상의 분이 아니라 첫 호출부터 60초짜리 창이라, 언제 풀리는지도 알려준다.
+ */
+export const usage = () => {
+  const left = Math.max(0, Math.ceil((minute.resetAt - Date.now()) / 1000));
+  return {
+    minute: `${minute.count}/${config.gemini.rpm}`,
+    minuteResetsIn: minute.count && left ? left : 0,
+    day: `${day.count}/${config.gemini.rpd}`,
+    model: config.gemini.model,
+  };
+};
 
 // ---------------------------------------------------------------- 대화 상태
 
@@ -199,9 +208,11 @@ export async function speak({ character, channelId, userId, text }) {
       systemInstruction: systemPromptFor(character),
       safetySettings: SAFETY,
       temperature: 1.0,
-      // 실측으로는 긴 답도 200토큰을 안 넘지만(프롬프트가 1~3문장을 요구한다),
-      // 여유를 준다고 손해 볼 게 없다. 안 쓰면 청구도 안 된다.
-      maxOutputTokens: 800,
+      // thinking 하는 모델은 사고 토큰도 이 한도에서 깎아 쓴다. 실제로 400 이었을 때
+      // gemini-3.5-flash 가 382토큰을 사고에 쓰고 본문은 18자만 내놓은 채 잘렸다.
+      // 본문 자체는 긴 답도 200토큰을 안 넘으므로(프롬프트가 1~3문장을 요구한다),
+      // 사고 몫까지 넉넉히 얹는다. 안 쓰면 청구도 안 된다.
+      maxOutputTokens: 2000,
     },
   };
 

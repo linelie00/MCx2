@@ -78,7 +78,17 @@ export default {
     if (sub === '사용량') {
       const u = usage();
       await interaction.reply({
-        embeds: [base({ title: 'Gemini 사용량', description: `이번 분 ${u.minute}\n오늘 ${u.day}` })],
+        embeds: [base({
+          title: 'Gemini 사용량',
+          description: [
+            `최근 1분 ${u.minute}${u.minuteResetsIn ? ` (${u.minuteResetsIn}초 뒤 초기화)` : ''}`,
+            `오늘 ${u.day}`,
+            '',
+            '_구글의 실제 한도가 아니라 봇이 스스로 건 안전장치예요._',
+            '_`GEMINI_RPM` · `GEMINI_RPD` 로 조정합니다._',
+          ].join('\n'),
+          footer: u.model,
+        })],
         flags: MessageFlags.Ephemeral,
       });
       return;

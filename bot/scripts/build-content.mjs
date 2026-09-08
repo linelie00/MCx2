@@ -122,6 +122,15 @@ write('characters.json', {
   ),
 });
 
+// ===== accents.json — 재생목록 강조색 =====
+// 봇의 /플리 만들기 에서 선택지로 쓴다. 여기서 뽑아 두지 않으면 사이트가 색을
+// 추가했을 때 봇만 옛 목록을 들고 있게 된다.
+const playlistAccents = evalModule(
+  path.join(DATA_SRC, 'constants', 'colors.js'),
+  'playlistAccents',
+);
+write('accents.json', { accents: playlistAccents.map(({ id, label }) => ({ id, label })) });
+
 // ===== world.json — 로어 텍스트만 (이미지 블록 제외) =====
 const world = evalModule(path.join(DATA_SRC, 'world.js'), 'world');
 const worldBlocks = (world.body ?? [])

@@ -6,7 +6,7 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { getMovies, updateMovieRating, abs, ApiError } from '../api.js';
 import { OWNER_META, OWNERS, ownerFor } from '../owners.js';
-import { base, fail, trunc, THEME_COLOR } from '../embeds.js';
+import { base, fail, trunc, mdEscape, THEME_COLOR } from '../embeds.js';
 
 const COMMENT_MAX = 300; // 서버와 같은 값 (movieController.js)
 
@@ -33,7 +33,7 @@ function ratingLines(movie) {
   return OWNERS.map((o) => {
     const r = movie.ratings?.[o];
     const comment = (r?.comment || '').trim();
-    return `**${OWNER_META[o].label}** ${stars(r?.stars)}\n${comment || '_아직 한줄평이 없어요._'}`;
+    return `**${OWNER_META[o].label}** ${stars(r?.stars)}\n${comment ? mdEscape(comment) : '_아직 한줄평이 없어요._'}`;
   }).join('\n\n');
 }
 
@@ -130,7 +130,7 @@ export default {
       }
 
       const list = pending
-        .map((m) => `**${m.title}** · ${m.date}${m.director ? ` · ${m.director}` : ''}`)
+        .map((m) => `**${mdEscape(m.title)}** · ${m.date}${m.director ? ` · ${mdEscape(m.director)}` : ''}`)
         .join('\n');
 
       const e = base({
@@ -158,7 +158,7 @@ export default {
         const score = OWNERS
           .map((o) => `${OWNER_META[o].label} ${Number(m.ratings?.[o]?.stars) || 0}`)
           .join(' · ');
-        return `**${m.title}** · ${m.date}\n${score}`;
+        return `**${mdEscape(m.title)}** · ${m.date}\n${score}`;
       }).join('\n\n');
 
       const e = base({ title: `최근 본 영화 ${recent.length}편`, description: trunc(body, 4096) });

@@ -23,6 +23,7 @@ const read = (name) => {
 export const lines = read('lines.json').lines;
 export const characters = read('characters.json').characters;
 export const world = read('world.json');
+export const accents = read('accents.json').accents;
 export const quotes = read('quotes.json').quotes;
 
 /** 화자별 대사. 캐입 few-shot 과 /대사 랜덤에서 쓴다. */

@@ -125,9 +125,44 @@ export async function updateMovieRating({ owner, movieId, stars, comment }) {
 }
 
 // ---------------------------------------------------------------- 플레이리스트
-// (다음 단계에서 채운다. 조회는 인증이 필요 없다.)
 
 export const getPlaylists = () => cached('playlists', 60 * 1000, () => request('/api/playlist'));
+
+/**
+ * 곡 추가. 유튜브 메타데이터(제목·채널·길이·썸네일)는 서버가 직접 조회해 채운다.
+ * 그래서 봇에는 YouTube API 키가 필요 없다.
+ *
+ * 이 라우트들은 갤러리·영화와 달리 express.json() 이 걸려 있어 JSON 으로 보낸다.
+ */
+export async function addTrack({ owner, playlistId, url, note }) {
+  const track = await request(`/api/playlist/${playlistId}/tracks`, {
+    method: 'POST', owner, json: { url, note: note || '' },
+  });
+  invalidate('playlists');
+  return track;
+}
+
+export async function deleteTrack({ owner, playlistId, trackId }) {
+  await request(`/api/playlist/${playlistId}/tracks/${trackId}`, { method: 'DELETE', owner });
+  invalidate('playlists');
+}
+
+export async function createPlaylist({ owner, title, description, accent }) {
+  const playlist = await request('/api/playlist', {
+    method: 'POST', owner, json: { title, description: description || '', accent: accent || null },
+  });
+  invalidate('playlists');
+  return playlist;
+}
+
+/** 보낸 필드만 바뀐다. 안 건드릴 값은 아예 넣지 않는다. */
+export async function updatePlaylist({ owner, playlistId, patch }) {
+  const playlist = await request(`/api/playlist/${playlistId}`, {
+    method: 'PATCH', owner, json: patch,
+  });
+  invalidate('playlists');
+  return playlist;
+}
 
 // ---------------------------------------------------------------- 자가진단
 

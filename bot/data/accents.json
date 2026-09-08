@@ -1,0 +1,37 @@
+{
+  "_": "이 파일은 scripts/build-content.mjs 가 생성합니다. 직접 고치지 마세요.",
+  "accents": [
+    {
+      "id": "green",
+      "label": "초록"
+    },
+    {
+      "id": "blue",
+      "label": "청회색"
+    },
+    {
+      "id": "gray",
+      "label": "회색"
+    },
+    {
+      "id": "red",
+      "label": "붉은색"
+    },
+    {
+      "id": "brown",
+      "label": "갈색"
+    },
+    {
+      "id": "gold",
+      "label": "황토색"
+    },
+    {
+      "id": "teal",
+      "label": "청록"
+    },
+    {
+      "id": "purple",
+      "label": "보라색"
+    }
+  ]
+}

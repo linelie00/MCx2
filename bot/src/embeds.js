@@ -15,6 +15,17 @@ export function trunc(text, n) {
   return s.length <= n ? s : `${s.slice(0, n - 1)}…`;
 }
 
+/**
+ * 마크다운 특수문자를 이스케이프한다.
+ *
+ * 유튜브 영상 제목이나 사용자가 적은 값을 **굵게** 나 [링크](url) 안에 그대로 넣으면
+ * 문법이 깨진다. 실제로 "[MV] 정우 - 낡은 괴담" 같은 제목이 있어서 링크가 망가졌다.
+ * 우리가 만든 문구가 아니라 남에게서 온 문자열을 마크다운에 넣을 때 반드시 거친다.
+ */
+export function mdEscape(text) {
+  return String(text ?? '').replace(/([\\*_~`|[\]])/g, '\\$1');
+}
+
 export function base({ title, description, color = THEME_COLOR, footer } = {}) {
   const e = new EmbedBuilder().setColor(color);
   if (title) e.setTitle(trunc(title, 256));
@@ -28,4 +39,4 @@ export function fail(message) {
   return base({ title: '안 됐어요', description: message, color: 0x9c5a4a });
 }
 
-export default { THEME_COLOR, trunc, base, fail };
+export default { THEME_COLOR, trunc, mdEscape, base, fail };

@@ -10,7 +10,7 @@
  */
 import config from './config.js';
 import { keyFor } from './owners.js';
-import { cached } from './cache.js';
+import { cached, invalidate } from './cache.js';
 
 const BASE = config.api.base;
 
@@ -85,10 +85,44 @@ export const getImages = () =>
 export const getTags = () =>
   cached('gallery:tags', GALLERY_TTL, () => request('/api/gallery/tags'));
 
-// ---------------------------------------------------------------- 영화 / 플레이리스트
-// (다음 단계에서 채운다. 조회는 인증이 필요 없다.)
+// ---------------------------------------------------------------- 영화
 
 export const getMovies = () => cached('movies', 60 * 1000, () => request('/api/movie'));
+
+/**
+ * 오너 한 사람의 별점·한줄평을 고친다.
+ *
+ * 반드시 읽기-병합-쓰기여야 한다. 서버는 ratings 를 받으면 두 사람 것을 통째로
+ * 갈아치우기 때문에(movieController.js:127), 한 사람 것만 보내면 상대방 평점이
+ * 0점·빈 코멘트로 날아간다.
+ *
+ * 그리고 이 라우트에는 express.json() 이 없고 multer 만 걸려 있다. 평점만 고치는
+ * 경우에도 반드시 multipart 로 보내야 하고, JSON 을 보내면 req.body 가 비어
+ * 아무 일도 일어나지 않는다.
+ */
+export async function updateMovieRating({ owner, movieId, stars, comment }) {
+  const movies = await getMovies();
+  const movie = movies.find((m) => m.id === movieId);
+  if (!movie) throw new ApiError(404, { error: '그 영화를 찾을 수 없어요.' });
+
+  const one = (r) => ({ stars: Number(r?.stars) || 0, comment: r?.comment ?? '' });
+  const ratings = {
+    migel: one(movie.ratings?.migel),
+    matiam: one(movie.ratings?.matiam),
+  };
+  ratings[owner] = { stars, comment };
+
+  const form = new FormData();
+  form.append('ratings', JSON.stringify(ratings));
+
+  const updated = await request(`/api/movie/${movieId}`, { method: 'PATCH', owner, form });
+  invalidate('movies'); // 방금 바꿨으니 캐시가 낡았다
+  return updated;
+}
+
+// ---------------------------------------------------------------- 플레이리스트
+// (다음 단계에서 채운다. 조회는 인증이 필요 없다.)
+
 export const getPlaylists = () => cached('playlists', 60 * 1000, () => request('/api/playlist'));
 
 // ---------------------------------------------------------------- 자가진단
@@ -114,4 +148,6 @@ export async function checkOwnerKeys() {
   }
 }
 
-export default { abs, ApiError, getImages, getTags, getMovies, getPlaylists, checkOwnerKeys };
+export default {
+  abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
+};

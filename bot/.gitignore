@@ -9,5 +9,6 @@
 /tmp
 
 # 유튜브 쿠키 (로그인 자격증명이다. 뽑은 뒤 base64 로 환경변수에 넣고 파일은 지운다)
-cookies.txt
+cookies*.txt
 *.cookies.txt
+*cookie*

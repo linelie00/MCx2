@@ -84,6 +84,20 @@ const extraArgs = () =>
   config.voice.ytdlpExtraArgs.split(/\s+/).filter(Boolean);
 
 /**
+ * 모든 yt-dlp 호출에 공통으로 붙는 인자.
+ *
+ * 유튜브 추출에는 JS 런타임이 필요하다. 없으면 yt-dlp 가
+ * "No supported JavaScript runtime could be found ... some formats may be missing" 을
+ * 경고하고, 챌린지를 풀지 못해 "Sign in to confirm you're not a bot" 으로 막힌다.
+ * 가정용 IP 에서는 챌린지 자체가 잘 안 나와 문제가 드러나지 않지만, 데이터센터 IP
+ * (Railway)에서는 바로 걸린다.
+ *
+ * yt-dlp 는 deno 만 기본으로 켜 두는데, 우리는 Node 앱이라 node 가 반드시 있다.
+ * 그걸 런타임으로 지정하면 따로 설치할 게 없다.
+ */
+const baseArgs = () => ['--js-runtimes', `node:${process.execPath}`];
+
+/**
  * videoId 하나를 Ogg/Opus 스트림으로 연다.
  *
  * yt-dlp 가 주는 최적 오디오는 webm/opus 일 때도 m4a/AAC 일 때도 있다. 항상 ffmpeg 로
@@ -102,6 +116,7 @@ export async function openStream(videoId) {
     '--quiet', '--no-warnings',
     '--retries', '3',
     '--socket-timeout', '15',
+    ...baseArgs(),
     ...(cookies ? ['--cookies', cookies] : []),
     ...extraArgs(),
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -207,6 +222,7 @@ export async function resolve(input) {
   const args = [
     `ytsearch1:${input}`,
     '--dump-single-json', '--flat-playlist', '--no-warnings', '--quiet',
+    ...baseArgs(),
     ...(cookies ? ['--cookies', cookies] : []),
     ...extraArgs(),
   ];
@@ -257,6 +273,7 @@ export async function checkBinaries() {
 
   // 유튜브가 막을 때 쓰는 손잡이 두 개가 실제로 전달됐는지 보여준다.
   // 변수를 넣었는데 안 먹는 건지, 넣어도 소용없는 건지 구분하려면 이게 필요하다.
+  console.log(`[voice] JS 런타임: ${baseArgs().join(' ')}`);
   const extra = extraArgs();
   console.log(`[voice] YTDLP_EXTRA_ARGS: ${extra.length ? extra.join(' ') : '(없음)'}`);
   console.log(`[voice] 쿠키: ${ensureCookies() ? '사용' : '없음'}`);

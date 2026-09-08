@@ -72,13 +72,16 @@ const HINTS = {
   fours: '눈의 합',
   fives: '눈의 합',
   sixes: '눈의 합',
-  choice: '전부 합',
-  fourKind: '4개면 합',
-  fullHouse: '3+2 면 합',
-  sStraight: '연속4 15',
-  lStraight: '연속5 30',
-  yacht: '5개 50',
+  choice: '눈의 합',
+  fourKind: '눈의 합',
+  fullHouse: '눈의 합',
+  sStraight: '15',
+  lStraight: '30',
+  yacht: '50',
 };
+
+const BONUS_HINT = `소계 ${BONUS_NEED} 이상`;
+const HINT_W = Math.max(...Object.values(HINTS).map(width), width(BONUS_HINT), width('배점'));
 
 /**
  * 코드블록 점수표. 칸이 행, 사람이 열이다.
@@ -94,7 +97,7 @@ export function scoreTable(game) {
 
   const head = row('', seats.map((s) => padStartW(clipW(s.name, COL_W - 1), COL_W)), '배점');
   // ─(U+2500) 은 클라이언트마다 폭이 갈려서 표가 어긋난다. ASCII 로 정확히 맞춘다.
-  const rule = '-'.repeat(LABEL_W + COL_W * seats.length + 13);
+  const rule = '-'.repeat(LABEL_W + COL_W * seats.length + 3 + HINT_W);
 
   const rowFor = (cat) => row(
     cat.short,
@@ -114,7 +117,7 @@ export function scoreTable(game) {
     if (t.bonus) return padStartW(`+${BONUS_SCORE}`, COL_W);
     if (bonusLost(s.sheet)) return padStartW('×', COL_W);
     return padStartW(`-${t.bonusNeed}`, COL_W);
-  }), `소계 ${BONUS_NEED} 이상`);
+  }), BONUS_HINT);
 
   const total = row('합계', seats.map((s) => padStartW(String(totals(s.sheet).total), COL_W)));
 

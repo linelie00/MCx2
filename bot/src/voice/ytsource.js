@@ -52,10 +52,26 @@ function ensureCookies() {
   if (cookiesPath !== null) return cookiesPath;
   if (!config.voice.cookiesB64) { cookiesPath = ''; return cookiesPath; }
   try {
+    const text = Buffer.from(config.voice.cookiesB64, 'base64').toString('utf8');
+
+    // base64 를 잘못 붙여넣으면 쓰레기 문자열이 그대로 파일이 된다. yt-dlp 는 그걸
+    // "쿠키 없음" 과 구분해 주지 않으므로, 형식을 여기서 확인해 두는 편이 낫다.
+    // Netscape 형식은 헤더 주석으로 시작하고, 각 줄이 탭으로 나뉜 7개 필드다.
+    const lines = text.split(/\r?\n/).filter((l) => l && !l.startsWith('#'));
+    const looksRight = /netscape|# HTTP Cookie File/i.test(text)
+      && lines.some((l) => l.split('\t').length === 7);
+
+    if (!looksRight) {
+      console.warn('[voice] YT_COOKIES_B64 가 Netscape cookies.txt 형식이 아닙니다. 쿠키 없이 갑니다.');
+      cookiesPath = '';
+      return cookiesPath;
+    }
+
+    const youtube = lines.filter((l) => l.includes('youtube.com')).length;
     const file = path.join(os.tmpdir(), 'mihearti-yt-cookies.txt');
-    fs.writeFileSync(file, Buffer.from(config.voice.cookiesB64, 'base64'));
+    fs.writeFileSync(file, text, { mode: 0o600 });
     cookiesPath = file;
-    console.log('[voice] 유튜브 쿠키를 사용합니다.');
+    console.log(`[voice] 유튜브 쿠키 사용 (youtube.com 항목 ${youtube}개)`);
   } catch (err) {
     console.warn('[voice] 쿠키를 풀지 못했습니다:', err.message);
     cookiesPath = '';

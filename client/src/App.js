@@ -6,19 +6,24 @@ import './Styles/global.css';
 import './Assets/Font/Font.css';
 import './Styles/App.css';
 
+import { lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { OwnerProvider } from './contexts/OwnerContext';
 import { PlaybackProvider } from './contexts/PlaybackContext';
 import NavigateLayout from './Layouts/NavigateLayout';
 import ScrollToTop from "./Components/ScrollToTop";
+// 첫 화면(Home)과 가벼운 정적 페이지는 즉시 로드해 초기 렌더를 지연시키지 않는다.
 import HomePage from './Pages/Home';
-import Gallery from './Pages/Gallery';
+import World from './Pages/World';
 import CharacterHub from './Pages/CharacterHub';
 import CharacterPanel from './Pages/CharacterPanel';
-import Story from './Pages/Story';
-import World from './Pages/World';
-import Playlist from './Pages/Playlist';
-import Movie from './Pages/Movie';
+
+// 무겁거나 진입 빈도가 낮은 페이지는 분리 로드한다.
+// 특히 Story 는 Data/stories.js(350KB)를 통째로 안고 있어 홈 진입 시 함께 받을 이유가 없다.
+const Story = lazy(() => import('./Pages/Story'));
+const Gallery = lazy(() => import('./Pages/Gallery'));
+const Playlist = lazy(() => import('./Pages/Playlist'));
+const Movie = lazy(() => import('./Pages/Movie'));
 
 function App() {
   return (

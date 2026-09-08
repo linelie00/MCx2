@@ -90,3 +90,14 @@ section {
   white-space: nowrap;
   border-width: 0;
 }
+
+/* 코드 분할된 페이지를 불러오는 동안의 자리. 스피너 대신 높이만 유지해
+   네비게이션이 위로 튀는 것을 막는다(과한 로딩 연출을 두지 않는 방침). */
+.route-fallback {
+  min-height: calc(100vh - 50px);
+}
+@supports (height: 100dvh) {
+  .route-fallback {
+    min-height: calc(100dvh - 50px);
+  }
+}

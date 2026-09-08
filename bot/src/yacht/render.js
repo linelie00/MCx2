@@ -60,6 +60,27 @@ const LABEL_W = 9;
 const COL_W = 7;
 
 /**
+ * 오른쪽 배점 안내.
+ *
+ * 규칙을 매번 물어보지 않아도 되게 표 안에 넣어 둔다. 화살표(→)나 ↑ 같은 기호는
+ * 클라이언트마다 폭이 갈려 표를 어긋나게 하므로 안 쓴다.
+ */
+const HINTS = {
+  aces: '눈의 합',
+  deuces: '눈의 합',
+  threes: '눈의 합',
+  fours: '눈의 합',
+  fives: '눈의 합',
+  sixes: '눈의 합',
+  choice: '전부 합',
+  fourKind: '4개면 합',
+  fullHouse: '3+2 면 합',
+  sStraight: '연속4 15',
+  lStraight: '연속5 30',
+  yacht: '5개 50',
+};
+
+/**
  * 코드블록 점수표. 칸이 행, 사람이 열이다.
  * 라벨을 짧게(1~6, 초이스, 포카드…) 쓰는 이유는 4명이어도 한 줄이 안 넘치게 하기 위해서다.
  */
@@ -67,31 +88,35 @@ export function scoreTable(game) {
   const seats = game.seats;
   const cell = (v) => (v === null ? '·' : String(v));
 
-  const head = padEndW('', LABEL_W)
-    + seats.map((s) => padStartW(clipW(s.name, COL_W - 1), COL_W)).join('');
-  // ─(U+2500) 은 클라이언트마다 폭이 갈려서 표가 어긋난다. ASCII 로 정확히 맞춘다.
-  const rule = '-'.repeat(LABEL_W + COL_W * seats.length);
+  /** 사람 열들 뒤에 배점 안내를 붙인다. 없는 줄(소계·합계)은 빈칸으로 둔다. */
+  const row = (label, cells, hint = '') =>
+    padEndW(label, LABEL_W) + cells.join('') + (hint ? `   ${hint}` : '');
 
-  const rowFor = (cat) => padEndW(cat.short, LABEL_W)
-    + seats.map((s) => padStartW(cell(s.sheet[cat.key]), COL_W)).join('');
+  const head = row('', seats.map((s) => padStartW(clipW(s.name, COL_W - 1), COL_W)), '배점');
+  // ─(U+2500) 은 클라이언트마다 폭이 갈려서 표가 어긋난다. ASCII 로 정확히 맞춘다.
+  const rule = '-'.repeat(LABEL_W + COL_W * seats.length + 13);
+
+  const rowFor = (cat) => row(
+    cat.short,
+    seats.map((s) => padStartW(cell(s.sheet[cat.key]), COL_W)),
+    HINTS[cat.key],
+  );
 
   const upper = CATEGORIES.filter((c) => UPPER_KEYS.includes(c.key)).map(rowFor);
   const lower = CATEGORIES.filter((c) => !UPPER_KEYS.includes(c.key)).map(rowFor);
 
-  const sub = padEndW('소계', LABEL_W)
-    + seats.map((s) => padStartW(String(totals(s.sheet).upper), COL_W)).join('');
+  const sub = row('소계', seats.map((s) => padStartW(String(totals(s.sheet).upper), COL_W)));
 
   // 보너스는 받았으면 +35, 물 건너갔으면 ×, 아직이면 몇 점 남았는지. 마티암의 신중함이
   // 여기서 눈에 보인다.
-  const bonus = padEndW('보너스', LABEL_W) + seats.map((s) => {
+  const bonus = row('보너스', seats.map((s) => {
     const t = totals(s.sheet);
     if (t.bonus) return padStartW(`+${BONUS_SCORE}`, COL_W);
     if (bonusLost(s.sheet)) return padStartW('×', COL_W);
     return padStartW(`-${t.bonusNeed}`, COL_W);
-  }).join('');
+  }), `소계 ${BONUS_NEED} 이상`);
 
-  const total = padEndW('합계', LABEL_W)
-    + seats.map((s) => padStartW(String(totals(s.sheet).total), COL_W)).join('');
+  const total = row('합계', seats.map((s) => padStartW(String(totals(s.sheet).total), COL_W)));
 
   return ['```', head, ...upper, sub, bonus, rule, ...lower, rule, total, '```'].join('\n');
 }
@@ -217,7 +242,6 @@ export function boardEmbed(game) {
     title: `요트 다이스 · ${game.round}/${ROUNDS}라운드 — ${seat.name} 차례`,
     description: lines.join('\n'),
     color: seat.color,
-    footer: `포카드·풀하우스는 주사위 5개의 합 · 상단 ${BONUS_NEED}점이면 +${BONUS_SCORE}`,
   });
 }
 

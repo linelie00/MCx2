@@ -17,6 +17,20 @@ const client = new Client({
 const commands = await loadCommands();
 console.log(`[봇] 명령 ${commands.size}개 적재: ${[...commands.keys()].join(', ')}`);
 
+/**
+ * 버튼·셀렉트를 받을 모듈. 명령 모듈이 componentPrefix 와 component 를 함께 내보내면
+ * customId 의 첫 토막(`요트라면 yacht:...`)으로 여기 걸린다.
+ *
+ * loadCommands 는 모르는 속성을 그대로 통과시키므로 로더는 손대지 않아도 된다.
+ */
+const components = new Map();
+for (const cmd of commands.values()) {
+  if (cmd.componentPrefix && typeof cmd.component === 'function') {
+    components.set(cmd.componentPrefix, cmd);
+  }
+}
+if (components.size) console.log(`[봇] 컴포넌트 접두사: ${[...components.keys()].join(', ')}`);
+
 client.once('clientReady', async (c) => {
   console.log(`[봇] 로그인 완료: ${c.user.tag}`);
   console.log(`[봇] API 주소: ${config.api.base}`);
@@ -31,38 +45,48 @@ client.on('interactionCreate', async (interaction) => {
   // 등록해 둔 서버 밖에서 온 것은 무시한다.
   if (interaction.guildId !== config.discord.guildId) return;
 
-  const command = interaction.isAutocomplete() || interaction.isChatInputCommand()
-    ? commands.get(interaction.commandName)
-    : null;
-  if (!command) return;
+  // 버튼과 셀렉트는 commandName 이 없다. customId 접두사로 담당 모듈을 찾는다.
+  const isComponent = interaction.isButton() || interaction.isStringSelectMenu();
+  const handler = isComponent
+    ? components.get(interaction.customId.split(':')[0])
+    : commands.get(interaction.commandName);
+  if (!handler) return;
+  if (!isComponent && !interaction.isAutocomplete() && !interaction.isChatInputCommand()) return;
+
+  // 로그에 쓸 이름. 컴포넌트는 commandName 이 undefined 라 customId 를 대신 쓴다.
+  const label = isComponent ? `[${interaction.customId}]` : `/${interaction.commandName}`;
 
   // 디스코드의 초기 응답 시한은 인터랙션이 "생성된" 시점부터 3초다. 우리가 받기도 전에
   // 게이트웨이에서 지연되면 손쓸 수가 없다. 어디서 시간이 갔는지 구분하려고 도착 시점의
   // 나이를 재 둔다(10062 Unknown interaction 이 났을 때 원인을 좁히는 유일한 단서).
   const age = Date.now() - interaction.createdTimestamp;
-  if (age > 1500) console.warn(`[봇] /${interaction.commandName} 인터랙션이 ${age}ms 늦게 도착`);
+  if (age > 1500) console.warn(`[봇] ${label} 인터랙션이 ${age}ms 늦게 도착`);
 
   try {
     if (interaction.isAutocomplete()) {
-      await command.autocomplete?.(interaction);
+      await handler.autocomplete?.(interaction);
       return;
     }
-    await command.execute(interaction);
+    if (isComponent) {
+      await handler.component(interaction);
+      return;
+    }
+    await handler.execute(interaction);
   } catch (err) {
     // 10062 는 시한이 지나 인터랙션이 사라진 것이라 어떤 응답도 보낼 수 없다. 길게 찍지 않는다.
     if (err?.code === 10062) {
-      console.error(`[봇] /${interaction.commandName} 응답 시한 초과 (도착 ${age}ms). 응답 불가.`);
+      console.error(`[봇] ${label} 응답 시한 초과 (도착 ${age}ms). 응답 불가.`);
       return;
     }
     // 디스코드 API 거절은 스택보다 code/rawError 가 훨씬 중요하다. 눈에 띄게 따로 찍는다.
     if (err?.rawError || err?.code) {
       console.error(
-        `[봇] /${interaction.commandName} 디스코드 API 거절`,
+        `[봇] ${label} 디스코드 API 거절`,
         `code=${err.code} status=${err.status ?? '-'} ${err.message}`,
       );
       console.error('     rawError:', JSON.stringify(err.rawError));
     } else {
-      console.error(`[봇] /${interaction.commandName} 처리 중 오류:`, err);
+      console.error(`[봇] ${label} 처리 중 오류:`, err);
     }
 
     // 둘만 쓰는 비공개 봇이라 원인을 숨길 이유가 없다. 디스코드에 바로 보여주면

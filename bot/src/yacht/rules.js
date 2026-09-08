@@ -18,20 +18,24 @@
  */
 import { randomInt } from 'node:crypto';
 
-/** 표시 순서 그대로. short 는 좁은 점수표용. */
+/**
+ * 표시 순서 그대로.
+ * label 은 고를 때(셀렉트 메뉴), short 는 좁은 점수표용. 둘 다 한국어로 통일한다 —
+ * 표에는 '포카드' 라고 써 놓고 메뉴에는 '4 of a Kind' 라고 쓰면 같은 칸인지 헷갈린다.
+ */
 export const CATEGORIES = [
-  { key: 'aces', label: 'Aces', short: '1', section: 'upper', face: 1 },
-  { key: 'deuces', label: 'Deuces', short: '2', section: 'upper', face: 2 },
-  { key: 'threes', label: 'Threes', short: '3', section: 'upper', face: 3 },
-  { key: 'fours', label: 'Fours', short: '4', section: 'upper', face: 4 },
-  { key: 'fives', label: 'Fives', short: '5', section: 'upper', face: 5 },
-  { key: 'sixes', label: 'Sixes', short: '6', section: 'upper', face: 6 },
-  { key: 'choice', label: 'Choice', short: '초이스', section: 'lower' },
-  { key: 'fourKind', label: '4 of a Kind', short: '포카드', section: 'lower' },
-  { key: 'fullHouse', label: 'Full House', short: '풀하우스', section: 'lower' },
-  { key: 'sStraight', label: 'S.Straight', short: 'S스트', section: 'lower' },
-  { key: 'lStraight', label: 'L.Straight', short: 'L스트', section: 'lower' },
-  { key: 'yacht', label: 'Yacht', short: '요트', section: 'lower' },
+  { key: 'aces', label: '1의 눈', short: '1', section: 'upper', face: 1 },
+  { key: 'deuces', label: '2의 눈', short: '2', section: 'upper', face: 2 },
+  { key: 'threes', label: '3의 눈', short: '3', section: 'upper', face: 3 },
+  { key: 'fours', label: '4의 눈', short: '4', section: 'upper', face: 4 },
+  { key: 'fives', label: '5의 눈', short: '5', section: 'upper', face: 5 },
+  { key: 'sixes', label: '6의 눈', short: '6', section: 'upper', face: 6 },
+  { key: 'choice', label: '초이스', short: '초이스', section: 'lower' },
+  { key: 'fourKind', label: '포카드 (같은 눈 4개)', short: '포카드', section: 'lower' },
+  { key: 'fullHouse', label: '풀하우스 (3개 + 2개)', short: '풀하우스', section: 'lower' },
+  { key: 'sStraight', label: '스몰 스트레이트 (연속 4개)', short: 'S스트', section: 'lower' },
+  { key: 'lStraight', label: '라지 스트레이트 (연속 5개)', short: 'L스트', section: 'lower' },
+  { key: 'yacht', label: '요트 (같은 눈 5개)', short: '요트', section: 'lower' },
 ];
 
 export const CATEGORY_KEYS = CATEGORIES.map((c) => c.key);

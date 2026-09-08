@@ -1,7 +1,7 @@
 # ARCHITECTURE
 
 미하티(MIHEARTI) 프로젝트의 현재 구조와 규약을 정리한 문서입니다.
-리팩터링 진행에 따라 갱신합니다. (최종 갱신: 2026-06-08)
+리팩터링 진행에 따라 갱신합니다. (최종 갱신: 2026-09-08)
 
 > 이 문서는 **client/src(프론트엔드) 구조와 규약**을 다룹니다.
 > 갤러리·스토리·방명록 등 기능 흐름과 **백엔드(Express API)** 는 `FEATURES.md` 참고.
@@ -12,6 +12,8 @@
 client/src/
 ├── Assets/
 │   ├── Font/            폰트 (Pretendard, NexonWarhaven, OldLondon, Quentin, Hahmlet)
+│   │   ├── optimized/   ★ 실제로 참조하는 woff2 (scripts/optimize-fonts.py 산출물)
+│   │   └── ttf|otf|woff|woff2/  원본 — 재변환 소스로만 보관, 직접 참조 금지
 │   └── Images/          이미지 (webp 우선, png/jpg/svg 병존; story/ 삽화)
 ├── Components/
 │   ├── common/
@@ -109,6 +111,49 @@ App.css     → 기존 전역 스타일
   단, 인라인으로 쓰는 SVG(ReactComponent)는 각 컴포넌트에서 직접 import.
 - **breakpoints.js** — 기준값(375/767/1023/1024)과 `getBreakpoint()`.
   현재는 참고용이며 CSS는 아직 리터럴 px을 사용.
+
+### 이미지 최적화 규약
+
+- 프론트는 Netlify(CDN)에 정적 배포되므로 이미지는 **레포에 두고 번들에 태우는 것이 가장 빠르다.**
+  Railway(백엔드)는 단일 리전 컨테이너라 정적 이미지 원본으로 쓰면 오히려 느려진다.
+  서버가 서빙하는 건 사용자가 올린 갤러리 미디어(`/uploads`)뿐이다.
+- 그래서 성능은 저장 위치가 아니라 **파일 용량**으로 결정된다. 새 이미지를 추가할 땐
+  `client/scripts/optimize-images.mjs` 의 TARGETS 에 등록하고 실행해 webp 를 만든 뒤,
+  코드/CSS 는 **webp 만 참조**한다. 원본(png/jpg)은 재변환용으로 남겨 두되 import 하지 않는다.
+
+  ```bash
+  cd client && node scripts/optimize-images.mjs
+  ```
+
+  maxWidth 는 "CSS 표시 폭 × 2(레티나)" 기준. 표시 폭은 **추정하지 말고 실측한다** —
+  1920 뷰포트에서 `[...document.querySelectorAll('img')].map(i => [i.src, i.clientWidth, i.naturalWidth])`
+  로 재면 어떤 이미지가 몇 배 과한지 바로 나온다(포트레이트가 15배까지 과했다).
+  예외: `img_background` 는 `background-size: 100% auto` 라 뷰포트 폭 그대로 쓰므로 2x 를 적용하지 않고,
+  세부가 많은 사진은 2x 를 채우면 용량이 급증해 1.4x 선에서 타협한다(`img_J4Wphoto`).
+- `<img>` 에는 원본 픽셀 크기를 `width`/`height` 로 적어 비율을 알려주고(레이아웃 밀림 방지),
+  첫 화면 밖 이미지엔 `loading="lazy" decoding="async"` 를 붙인다.
+
+### 폰트 최적화 규약
+
+- **참조는 `Assets/Font/optimized/` 의 woff2 만.** 원본(ttf/otf/woff/woff2)은 재변환
+  소스로 남겨 두고 `Font.css` 에서 직접 가리키지 않는다. 폰트를 추가·교체할 땐
+  `scripts/optimize-fonts.py` 의 TARGETS 에 등록하고 실행한다.
+
+  ```bash
+  cd client && python scripts/optimize-fonts.py   # 사전: pip install fonttools brotli
+  ```
+
+- **모든 `@font-face` 에 `font-display: swap`.** 없으면 브라우저가 최대 3초간 글자를
+  아예 그리지 않는다. NexonWarhaven 은 거의 모든 페이지에서 쓰이므로 특히 중요하다.
+- **woff 폴백은 두지 않는다.** browserslist 프로덕션 대상은 전부 woff2 를 지원해서
+  내려받지도 않으면서 배포 용량만 차지했다.
+- **실제로 쓰는 웨이트만 선언한다.** Pretendard 400/600/700/800, NexonWarhaven 400/700,
+  Hahmlet 400/700. 선언만 해 둔 웨이트는 내려받지는 않지만 산출물을 무겁게 한다.
+- **서브셋은 Pretendard 에만 적용한다.** 방명록·갤러리처럼 사용자가 입력한 글자가
+  렌더링되는 폰트(NexonWarhaven / Hahmlet)는 글리프를 하나도 버리지 않는다.
+  Pretendard 로 그려지는 한글은 레포 안 정적 텍스트뿐이라 안전하고, 이미 woff2 여서
+  재압축 여지가 없어(721KB → 721KB) 글자 수를 줄이는 것 말고는 방법이 없었다.
+  상용 집합의 정의와 근거는 스크립트 상단 주석 참고.
 
 ## 반응형 규약
 

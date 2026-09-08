@@ -19,8 +19,12 @@ export const abs = (url) => (url && url.startsWith('/') ? `${BASE}${url}` : url)
 
 /** 상태코드를 사람이 읽을 수 있는 한국어로. 사용자에게 그대로 보여줄 문장이다. */
 function messageFor(status, body) {
-  if (body?.error) return body.error;          // 서버가 이미 한국어로 준다
-  if (status === 401) return '오너 권한이 필요한 작업이에요.';
+  // 401 만은 서버 문구("owner authorization required")를 쓰지 않는다. 영어인 데다
+  // 원인(봇에 넣은 패스코드가 서버 값과 다름)을 알려주지 못한다.
+  if (status === 401) {
+    return '패스코드가 사이트와 달라요. 봇의 OWNER_*_KEY 가 server 서비스의 값과 같은지 확인해 주세요.';
+  }
+  if (body?.error) return body.error;          // 나머지는 서버가 이미 한국어로 준다
   if (status === 404) return '찾을 수 없어요.';
   if (status === 409) return '이미 등록된 항목이에요.';
   if (status === 413) return '파일이 너무 커요.';

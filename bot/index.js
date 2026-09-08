@@ -8,6 +8,7 @@ import { Client, GatewayIntentBits, MessageFlags } from 'discord.js';
 import config from './src/config.js';
 import { loadCommands } from './src/loadCommands.js';
 import { fail } from './src/embeds.js';
+import { checkOwnerKeys } from './src/api.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
@@ -16,9 +17,14 @@ const client = new Client({
 const commands = await loadCommands();
 console.log(`[봇] 명령 ${commands.size}개 적재: ${[...commands.keys()].join(', ')}`);
 
-client.once('clientReady', (c) => {
+client.once('clientReady', async (c) => {
   console.log(`[봇] 로그인 완료: ${c.user.tag}`);
   console.log(`[봇] API 주소: ${config.api.base}`);
+
+  // 오너 패스코드가 실제로 통하는지 부팅 시 한 번 확인한다. 첫 쓰기 명령이 401 로
+  // 실패하는 대신 배포 로그에서 바로 드러나게 하는 것이 목적이다. 실패해도 죽이지 않는다 —
+  // 조회 기능은 키 없이도 동작해야 한다.
+  await checkOwnerKeys();
 });
 
 client.on('interactionCreate', async (interaction) => {

@@ -80,11 +80,17 @@ export default {
     }
 
     // 찾기 — 큐레이션이 아니라 원본 전체에서
+    //
+    // 임베드를 여러 개 보내는 유일한 갈래라 응답이 무거운 편이다. 디스코드의 초기 응답 시한은
+    // 3초뿐이고 실제로 여기서 Unknown interaction(10062) 이 났었다. deferReply 로 먼저
+    // 접수만 해 두면 시한이 15분으로 늘어난다.
+    await interaction.deferReply();
+
     const term = interaction.options.getString('검색어').trim();
     const hits = lines.filter((l) => l.text.includes(term));
 
     if (!hits.length) {
-      await interaction.reply({ embeds: [fail(`"${trunc(term, 50)}" 가 들어간 대사를 못 찾았어요.`)] });
+      await interaction.editReply({ embeds: [fail(`"${trunc(term, 50)}" 가 들어간 대사를 못 찾았어요.`)] });
       return;
     }
 
@@ -99,6 +105,6 @@ export default {
     if (hits.length > shown.length) {
       embeds.push(base({ description: `그 외 ${hits.length - shown.length}줄이 더 있어요.` }));
     }
-    await interaction.reply({ embeds });
+    await interaction.editReply({ embeds });
   },
 };

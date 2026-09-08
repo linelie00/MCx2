@@ -30,6 +30,12 @@ client.on('interactionCreate', async (interaction) => {
     : null;
   if (!command) return;
 
+  // 디스코드의 초기 응답 시한은 인터랙션이 "생성된" 시점부터 3초다. 우리가 받기도 전에
+  // 게이트웨이에서 지연되면 손쓸 수가 없다. 어디서 시간이 갔는지 구분하려고 도착 시점의
+  // 나이를 재 둔다(10062 Unknown interaction 이 났을 때 원인을 좁히는 유일한 단서).
+  const age = Date.now() - interaction.createdTimestamp;
+  if (age > 1500) console.warn(`[봇] /${interaction.commandName} 인터랙션이 ${age}ms 늦게 도착`);
+
   try {
     if (interaction.isAutocomplete()) {
       await command.autocomplete?.(interaction);
@@ -37,6 +43,11 @@ client.on('interactionCreate', async (interaction) => {
     }
     await command.execute(interaction);
   } catch (err) {
+    // 10062 는 시한이 지나 인터랙션이 사라진 것이라 어떤 응답도 보낼 수 없다. 길게 찍지 않는다.
+    if (err?.code === 10062) {
+      console.error(`[봇] /${interaction.commandName} 응답 시한 초과 (도착 ${age}ms). 응답 불가.`);
+      return;
+    }
     console.error(`[봇] /${interaction.commandName} 처리 중 오류:`, err);
 
     // 이미 응답했는지에 따라 보내는 방법이 달라진다. 여기서 또 던지면 조용히 먹히므로 감싼다.

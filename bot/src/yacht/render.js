@@ -142,25 +142,35 @@ export function lobbyRows(game) {
 const KEYCAPS = ['', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
 
 let FACES = [...KEYCAPS];
+let KEPT = null;
 
 /**
  * 서버에 진짜 주사위 그림을 올려 뒀으면 그걸 쓴다.
  *
  * 커스텀 이모지는 `<:이름:id>` 형태라 코드에 박아 둘 수가 없다(서버마다 id 가 다르다).
  * 그래서 부팅할 때 이름으로 찾아 갈아 끼운다 — 없으면 키캡 그대로다.
+ *
+ * kept 는 **남긴 주사위용 다른 색** 그림이다. 이것까지 있으면 남긴 것을 색으로 구분하고,
+ * 없으면 [] 로 감싼다. 이모지에는 굵게·색 같은 마크다운이 안 먹어서, 표준 이모지만으로는
+ * 색을 달리할 방법이 없다.
  */
-export function useCustomFaces(found) {
+export function useCustomFaces(found, kept) {
   FACES = FACES.map((v, i) => found[i] || KEYCAPS[i]);
+  KEPT = kept?.some(Boolean) ? kept : null;
 }
 
 export const faceOf = (d) => FACES[d];
 
-/** 눈 다섯 개를 나란히. 채팅에 굴림 결과를 알릴 때도 쓴다. */
-export const faces = (dice) => dice.map((d) => FACES[d]).join(' ');
+/** 남긴 눈 하나. 다른 색 그림이 있으면 그걸로, 없으면 [] 로 감싼다. */
+const heldFace = (d) => KEPT?.[d] || `[${FACES[d]}]`;
 
-/** 고정한 것은 [] 로 감싼다. 색만으로는 색각 이상이 있으면 구분이 안 된다. */
-const diceLine = (game) =>
-  game.dice.map((d, i) => (game.held[i] ? `[${FACES[d]}]` : ` ${FACES[d]} `)).join(' ');
+/**
+ * 눈 다섯 개를 나란히. held 를 주면 남긴 것을 구분해 그린다.
+ * 채팅의 굴림 알림과 판이 같은 표기를 쓴다 — 두 군데가 다르면 헷갈린다.
+ */
+export const faces = (dice, held) => dice
+  .map((d, i) => (held?.[i] ? heldFace(d) : FACES[d]))
+  .join(' ');
 
 export function boardEmbed(game) {
   const seat = current(game);
@@ -173,7 +183,8 @@ export function boardEmbed(game) {
   }
 
   if (game.dice) {
-    lines.push(`\`${diceLine(game)}\`  ${game.held.some(Boolean) ? '— `[ ]` 는 고정' : ''}`.trim());
+    // 인라인 코드(`) 로 감싸면 안 된다 — 이모지가 글자 크기로 쪼그라든다.
+    lines.push(`${faces(game.dice, game.held)}${game.held.some(Boolean) ? '　← 고정' : ''}`);
     lines.push(game.rollsLeft > 0 ? `굴릴 수 있는 횟수 **${game.rollsLeft}번**` : '**마지막 굴림이에요.** 적을 칸을 고르세요.');
   } else if (seat.kind === 'npc') {
     // 사람이 칸을 적은 직후 잠깐 이 상태가 보인다. NPC 에게 굴리라고 할 수는 없다.

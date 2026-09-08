@@ -106,13 +106,14 @@ async function say(game, character, text) {
  * 굴린 결과를 채팅에 한 줄 남긴다.
  *
  * 캐릭터 웹훅이 아니라 봇 이름으로 보낸다 — 대사와 섞이면 어디까지가 그 사람이 한 말인지
- * 알 수 없다. 앞 굴림에서 무엇을 쥐었는지도 같이 적어야 왜 이 눈이 됐는지 읽힌다.
+ * 알 수 없다.
+ *
+ * 남긴 주사위는 "(6 6 남기고)" 처럼 따로 적지 않고 결과 안에서 구분해 그린다.
+ * 같은 눈을 두 번 쓰니 줄이 길어지고 어느 자리가 남은 것인지도 안 보였다.
  */
-async function rolled(game, seat, nth, dice, kept) {
-  const head = `🎲 **${seat.name}** ${nth}번째`;
-  const tail = kept === null ? '' : (kept.length ? ` (${faces(kept)} 남기고)` : ' (전부 다시)');
+async function rolled(game, seat, nth, dice, held) {
   await game.message.channel
-    .send({ content: `${head}${tail} — ${faces(dice)}` })
+    .send({ content: `🎲 **${seat.name}** ${nth}번째 — ${faces(dice, held)}` })
     .catch((err) => console.warn('[요트] 굴림 알림 실패:', err.message));
 }
 
@@ -179,16 +180,13 @@ async function playNpcTurn(game, seat) {
     const kept = game.dice.filter((_, i) => held[i]);
     game.dice = reroll(game.dice, held);
     game.rollsLeft -= 1;
-    game.trail.push(
-      kept.length ? `　↳ ${faces(kept)} 쥐고 다시` : '　↳ 전부 다시',
-      `${MAX_ROLLS - game.rollsLeft}번째 — ${faces(game.dice)}`,
-    );
+    game.trail.push(`${MAX_ROLLS - game.rollsLeft}번째 — ${faces(game.dice, held)}`);
     story.push(
       kept.length ? `${kept.join(' ')} 만 쥐고 나머지를 다시 굴렸다.` : '전부 다시 굴렸다.',
       `그래서 ${game.dice.join(' ')} 이 됐다.`,
     );
     await sleep(800);
-    await rolled(game, seat, MAX_ROLLS - game.rollsLeft, game.dice, kept);
+    await rolled(game, seat, MAX_ROLLS - game.rollsLeft, game.dice, held);
   }
 
   const dice = [...game.dice];
@@ -445,7 +443,7 @@ async function component(interaction) {
   if (game.pendingRoll) {
     const p = game.pendingRoll;
     game.pendingRoll = null;
-    await rolled(game, p.seat, p.nth, p.dice, p.kept);
+    await rolled(game, p.seat, p.nth, p.dice, p.held);
   }
 
   kickNpc(game);
@@ -507,13 +505,13 @@ async function handleTurn(interaction, game, action, arg) {
       await deny(interaction, '다섯 개를 다 고정해 두면 굴려도 그대로예요.');
       return true;
     }
-    // 첫 굴림에는 남긴 것이 없다. 다시 굴릴 때만 무엇을 쥐고 있었는지 적어 준다.
-    const kept = game.dice ? game.dice.filter((_, i) => game.held[i]) : null;
+    // 첫 굴림에는 남긴 것이 없다. 다시 굴릴 때만 어느 자리를 쥐고 있었는지 표시한다.
+    const held = game.dice ? [...game.held] : null;
     game.dice = game.dice ? reroll(game.dice, game.held) : rollDice();
     game.rollsLeft -= 1;
-    game.trail.push(`${MAX_ROLLS - game.rollsLeft}번째 — ${faces(game.dice)}`);
+    game.trail.push(`${MAX_ROLLS - game.rollsLeft}번째 — ${faces(game.dice, held)}`);
     // 채팅 알림은 판을 다 그린 뒤에 보낸다. 여기서 보내면 인터랙션 응답이 그만큼 늦어진다.
-    game.pendingRoll = { seat, nth: MAX_ROLLS - game.rollsLeft, dice: [...game.dice], kept };
+    game.pendingRoll = { seat, nth: MAX_ROLLS - game.rollsLeft, dice: [...game.dice], held };
     state.touch(game);
     return false;
   }

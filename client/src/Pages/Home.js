@@ -115,7 +115,16 @@ const Home = () => {
         </h2>
       </div>
       <div className="berry-card">
-        <img src={images.home.card} alt="베리 파수꾼 카드" />
+        {/* width/height 는 원본 픽셀(726x850). 표시 크기는 .berry-card img 의 vw 값이
+            정하고, 이 값은 비율만 알려줘 로드 전에도 자리를 잡게 한다. */}
+        <img
+          src={images.home.card}
+          alt="베리 파수꾼 카드"
+          width={726}
+          height={850}
+          loading="lazy"
+          decoding="async"
+        />
       </div>
       <section className="bg-100w" />
       <section className="section-385B44">

@@ -5,13 +5,13 @@
  * 키는 `${sessionId}_${speaker}` — 세션마다 화자별 삽화가 최대 1개라 유일하게 구분됨.
  * 새 삽화는 Assets/Images/story/ 에 같은 규칙으로 추가하고 여기에 한 줄 등록하면 된다.
  */
-import agremMatiam from '../Assets/Images/story/agrem-fandango_matiam.png';
-import agremMigel from '../Assets/Images/story/agrem-fandango_migel.png';
-import narrsMigel from '../Assets/Images/story/narrs-sewer_migel.png';
-import demonMatiam from '../Assets/Images/story/demon-realm_matiam.png';
-import demonMigel from '../Assets/Images/story/demon-realm_migel.png';
-import dovMigel from '../Assets/Images/story/dov-dola_migel.png';
-import anacsisausMigel from '../Assets/Images/story/anacsisaus_migel.png';
+import agremMatiam from '../Assets/Images/story/agrem-fandango_matiam.webp';
+import agremMigel from '../Assets/Images/story/agrem-fandango_migel.webp';
+import narrsMigel from '../Assets/Images/story/narrs-sewer_migel.webp';
+import demonMatiam from '../Assets/Images/story/demon-realm_matiam.webp';
+import demonMigel from '../Assets/Images/story/demon-realm_migel.webp';
+import dovMigel from '../Assets/Images/story/dov-dola_migel.webp';
+import anacsisausMigel from '../Assets/Images/story/anacsisaus_migel.webp';
 
 export const storyImages = {
   'agrem-fandango_matiam': agremMatiam,

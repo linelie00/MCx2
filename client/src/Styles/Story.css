@@ -107,7 +107,7 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: url('../Assets/Images/parchment.jpg');
+  background: url('../Assets/Images/parchment.webp');
   background-size: cover;
   opacity: 0.18;
   mix-blend-mode: multiply;

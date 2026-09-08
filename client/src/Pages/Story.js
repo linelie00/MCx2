@@ -16,8 +16,8 @@ import { stories } from '../Data/stories';
 import characters from '../Data/Characters';
 import { getStoryImage, storyImages } from '../Data/storyImages';
 import StoryTimeline from '../Components/story/StoryTimeline';
-import coverFront from '../Assets/Images/img_front_cover.png';
-import coverBack from '../Assets/Images/img_back_cover.png';
+import coverFront from '../Assets/Images/img_front_cover.webp';
+import coverBack from '../Assets/Images/img_back_cover.webp';
 
 const COVER = { front: coverFront, back: coverBack };
 

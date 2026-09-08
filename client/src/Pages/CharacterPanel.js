@@ -65,7 +65,7 @@ const CharacterPanel = () => {
             </div>
             <div className="info-item">
               <span className="label">&#91;무기&#93;</span>
-              <img src={character.weapon} alt={character.name}/>
+              <img src={character.weapon} alt={character.name} loading="lazy" decoding="async" />
             </div>
             <div className="row-box">
               <div className="stat-and-attack-box">
@@ -98,12 +98,12 @@ const CharacterPanel = () => {
 
         {/* 기본 정보 */}
         <div className="panel-body">
-          <img src={imgJ4W} className="stamp" alt="" />
-          <img src={imgJ4W} className="stamp stamp-reverse" alt="" />
+          <img src={imgJ4W} className="stamp" alt="" loading="lazy" decoding="async" />
+          <img src={imgJ4W} className="stamp stamp-reverse" alt="" loading="lazy" decoding="async" />
           <Tear className="tear-top" />
           <Tear className="tear-bottom" />
           <div className="panel-header">
-            <img src={character.portrait} alt={character.name} />
+            <img src={character.portrait} alt={character.name} loading="lazy" decoding="async" />
             <p>{character.name}</p>
           </div>
           {fields.map(({ key, label }) => (

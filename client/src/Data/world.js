@@ -7,10 +7,12 @@ import { images } from './constants/images';
  * - body: 본문 블록을 "순서대로" 나열한 배열.
  *         배열 순서가 곧 DOM 순서이며, float 레이아웃이 이 순서에 의존하므로
  *         순서를 바꾸면 데스크톱 잡지 레이아웃의 텍스트 감싸기가 달라진다.
- *   - { type: 'image',  className, src, alt }
+ *   - { type: 'image',  className, src, alt, width, height }
+ *     width/height 는 원본 픽셀 크기. 표시 크기는 CSS가 정하고, 이 값은 비율만
+ *     알려줘 이미지가 도착하기 전에도 자리를 잡게 한다(레이아웃 밀림 방지).
  *   - { type: 'label',  text }                  // 소제목
  *   - { type: 'text',   lines: [...] }           // 각 줄 뒤에 <br/> 렌더
- *   - { type: 'figure', src, alt, caption, comment } // 우측 인물 컷
+ *   - { type: 'figure', src, alt, width, height, caption, comment } // 우측 인물 컷
  */
 export const world = {
   header: {
@@ -27,6 +29,8 @@ export const world = {
       className: 'article-image',
       src: images.world.monster,
       alt: '땅에서 솟아난 마물',
+      width: 800,
+      height: 1154,
     },
     { type: 'label', text: '마물,' },
     {
@@ -44,6 +48,8 @@ export const world = {
       type: 'figure',
       src: images.world.zetta,
       alt: '베리 파수꾼단 단장 제타',
+      width: 300,
+      height: 400,
       caption: '~단장, 제타~',
       comment: '“ 따라와, 내가 길을 열어주겠다! ”',
     },
@@ -63,12 +69,16 @@ export const world = {
       className: 'article-photo-image',
       src: images.world.photo,
       alt: '베리 파수꾼단 단체 사진',
+      width: 1600,
+      height: 960,
     },
     {
       type: 'image',
       className: 'article-berry-image',
       src: images.world.crow,
       alt: '소식을 전하는 까마귀',
+      width: 600,
+      height: 904,
     },
     { type: 'label', text: '도입' },
     {

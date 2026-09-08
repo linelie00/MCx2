@@ -196,7 +196,7 @@
   position: absolute;
   inset: 0;
 
-  background: url('../Assets/Images/parchment.jpg');
+  background: url('../Assets/Images/parchment.webp');
   background-size: cover;
 
   opacity: 0.4; /* 🔥 여기서 투명도 조절 */

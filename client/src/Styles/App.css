@@ -45,7 +45,7 @@ html::-webkit-scrollbar {
 .bg-100w {
   /* 배경 기본 */
   margin-top: -6%;
-  background-image: url('../Assets/Images/img_background.png');
+  background-image: url('../Assets/Images/img_background.webp');
   background-repeat: no-repeat;
   background-position: center top;
 

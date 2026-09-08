@@ -25,7 +25,10 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
 app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : undefined));
 
 // 업로드된 미디어 정적 서빙 (DATA_DIR 볼륨 경로와 동일하게)
-app.use('/uploads', express.static(UPLOADS_DIR));
+// 파일명이 UUID라(storageService.makeFilename) 같은 이름이 다른 내용으로 바뀌는 일이 없다.
+// 따라서 1년 불변 캐시를 걸어도 안전하고, 재방문 시 304 왕복조차 생략된다.
+// (교체는 항상 새 UUID = 새 URL 이므로 캐시가 낡을 여지가 없다)
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1y', immutable: true }));
 
 // 인증(오너 확인) / 갤러리 / 방명록 API
 app.use('/api/auth', authRoutes);

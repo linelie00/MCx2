@@ -11,7 +11,7 @@
  * commands/yacht.js 가 한다.
  */
 import { randomBytes } from 'node:crypto';
-import { newSheet, commit, totals, isComplete, CATEGORY_KEYS } from './rules.js';
+import { newSheet, commit, totals, isComplete, categoryOf, CATEGORY_KEYS } from './rules.js';
 import { OWNER_META, ownerFor } from '../owners.js';
 import { THEME_COLOR } from '../embeds.js';
 
@@ -68,6 +68,7 @@ export function create({ channelId, guildId, starterId }) {
     held: [false, false, false, false, false],
     rollsLeft: MAX_ROLLS,
     trail: [],              // 이번 턴에 굴린 기록. NPC 턴을 한 번에 보여줄 때 쓴다
+    lastMove: null,         // 직전에 누가 어디에 몇 점을 적었는지. NPC 턴이 눈에 보이게 한다
     lastAt: Date.now(),
     driving: false,         // NPC 턴 드라이버가 돌고 있는지
     endedReason: null,
@@ -111,7 +112,10 @@ export function start(game) {
   return null;
 }
 
-/** 새 턴. 주사위와 고정을 반드시 비운다 — 안 비우면 앞 사람 고정이 남아 아주 헷갈린다. */
+/**
+ * 새 턴. 주사위와 고정을 반드시 비운다 — 안 비우면 앞 사람 고정이 남아 아주 헷갈린다.
+ * lastMove 는 일부러 남긴다. NPC 가 순식간에 두고 지나가면 뭘 했는지 알 수가 없다.
+ */
 export function beginTurn(game) {
   game.dice = null;
   game.held = [false, false, false, false, false];
@@ -144,6 +148,12 @@ export function commitTo(game, key) {
   const seat = current(game);
   const { sheet, gained } = commit(seat.sheet, key, game.dice);
   seat.sheet = sheet;
+  game.lastMove = {
+    name: seat.name,
+    dice: [...game.dice],
+    label: categoryOf(key).short,
+    gained,
+  };
   advance(game);
   return gained;
 }

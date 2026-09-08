@@ -119,6 +119,10 @@ export function lobbyRows(game) {
   return [new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(cid(game, 'join')).setLabel('참가')
       .setStyle(ButtonStyle.Primary).setDisabled(full),
+    new ButtonBuilder().setCustomId(cid(game, 'npc', 'migel')).setLabel('미겔 부르기')
+      .setStyle(ButtonStyle.Secondary).setDisabled(full),
+    new ButtonBuilder().setCustomId(cid(game, 'npc', 'matiam')).setLabel('마티암 부르기')
+      .setStyle(ButtonStyle.Secondary).setDisabled(full),
     new ButtonBuilder().setCustomId(cid(game, 'start')).setLabel('시작')
       .setStyle(ButtonStyle.Success).setDisabled(game.seats.length < 2),
     new ButtonBuilder().setCustomId(cid(game, 'cancel')).setLabel('취소')
@@ -136,9 +140,18 @@ export function boardEmbed(game) {
   const seat = current(game);
   const lines = [];
 
+  // NPC 는 순식간에 두고 지나가므로, 직전에 무엇을 했는지 판에 남겨 둔다.
+  if (game.lastMove) {
+    const m = game.lastMove;
+    lines.push(`직전 · **${m.name}** \`${m.dice.join(' ')}\` → ${m.label} **${m.gained}점**`, '');
+  }
+
   if (game.dice) {
     lines.push(`\`${diceLine(game)}\`  ${game.held.some(Boolean) ? '— `[ ]` 는 고정' : ''}`.trim());
     lines.push(game.rollsLeft > 0 ? `굴릴 수 있는 횟수 **${game.rollsLeft}번**` : '**마지막 굴림이에요.** 적을 칸을 고르세요.');
+  } else if (seat.kind === 'npc') {
+    // 사람이 칸을 적은 직후 잠깐 이 상태가 보인다. NPC 에게 굴리라고 할 수는 없다.
+    lines.push(`_${seat.name}이(가) 주사위를 집습니다…_`);
   } else {
     lines.push('_주사위를 굴려 주세요._');
   }

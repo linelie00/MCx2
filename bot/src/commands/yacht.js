@@ -13,6 +13,7 @@
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { rollDice, reroll, MAX_ROLLS } from '../yacht/rules.js';
+import { chooseHold, chooseCategory } from '../yacht/ai.js';
 import * as state from '../yacht/state.js';
 import {
   PREFIX, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
@@ -43,6 +44,66 @@ async function draw(game) {
   });
 }
 
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
+
+/** NPC 턴 한 개. 굴림은 전부 여기서 끝내고 화면은 두 번만 고친다. */
+async function playNpcTurn(game, seat) {
+  game.dice = rollDice();
+  game.rollsLeft = MAX_ROLLS - 1;
+  game.trail = [`1번째 — \`${game.dice.join(' ')}\``];
+  state.touch(game);
+  await draw(game);                       // 편집 ①
+
+  // 나머지 굴림은 화면을 안 고치고 진행한다. 과정은 trail 에 쌓아 한 번에 보여준다.
+  while (game.rollsLeft > 0) {
+    const held = chooseHold(seat.character, game.dice, seat.sheet, game.rollsLeft);
+    if (held.every(Boolean)) break;       // 다 쥐었으면 더 굴릴 이유가 없다
+    const kept = game.dice.filter((_, i) => held[i]);
+    game.dice = reroll(game.dice, held);
+    game.rollsLeft -= 1;
+    game.trail.push(
+      kept.length ? `　↳ \`${kept.join(' ')}\` 쥐고 다시` : '　↳ 전부 다시',
+      `${MAX_ROLLS - game.rollsLeft}번째 — \`${game.dice.join(' ')}\``,
+    );
+  }
+
+  // 사람이 읽을 시간을 준다. 겸사겸사 메시지 편집이 레이트리밋 큐에 밀리는 것도 피한다 —
+  // discord.js 는 걸려도 오류를 안 내고 늦게 보내서, 많이 고치면 그냥 버벅이는 것처럼 보인다.
+  await sleep(1400);
+  if (game.phase !== 'playing') return;   // 그 사이 /요트 그만 이 올 수 있다
+
+  game.held = [true, true, true, true, true];
+  state.commitTo(game, chooseCategory(seat.character, game.dice, seat.sheet));
+  await draw(game);                       // 편집 ②
+}
+
+/**
+ * NPC 차례가 이어지는 동안 대신 둔다.
+ *
+ * 인터랙션 응답 경로 **밖에서** 돈다. Gemini 대사까지 붙으면 한 바퀴에 수십 초가 걸리는데,
+ * 그걸 사람의 버튼 응답 안에 넣으면 3초 시한을 넘겨 10062 를 맞는다.
+ * driving 플래그로 드라이버가 둘 도는 것을 막는다(지나간 버튼 클릭이 하나 더 띄울 수 있다).
+ */
+async function runNpcTurns(game) {
+  if (game.driving) return;
+  game.driving = true;
+  try {
+    while (game.phase === 'playing' && state.current(game)?.kind === 'npc') {
+      await playNpcTurn(game, state.current(game));
+      await sleep(900);
+    }
+  } finally {
+    game.driving = false;
+  }
+}
+
+/** NPC 차례면 드라이버를 띄운다. 기다리지 않는다 — 부르는 쪽은 이미 응답을 마쳤다. */
+function kickNpc(game) {
+  if (game.phase === 'playing' && state.current(game)?.kind === 'npc') {
+    runNpcTurns(game).catch((err) => console.error('[요트] NPC 턴 오류:', err));
+  }
+}
+
 // 방치된 판을 접는다. 봇이 살아 있는 동안만 도는 타이머라 재시작하면 같이 사라지는데,
 // 재시작하면 판 자체가 사라지므로 문제되지 않는다.
 setInterval(() => {
@@ -52,7 +113,13 @@ setInterval(() => {
 const data = new SlashCommandBuilder()
   .setName('요트')
   .setDescription('요트 다이스를 합니다.')
-  .addSubcommand((s) => s.setName('시작').setDescription('새 판을 엽니다'))
+  .addSubcommand((s) => s.setName('시작').setDescription('새 판을 엽니다')
+    .addStringOption((o) => o.setName('상대').setDescription('NPC 를 앉히고 바로 시작합니다')
+      .addChoices(
+        { name: '미겔', value: 'migel' },
+        { name: '마티암', value: 'matiam' },
+        { name: '미겔 + 마티암', value: 'both' },
+      )))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
   .addSubcommand((s) => s.setName('그만').setDescription('진행 중인 판을 접습니다'));
 
@@ -73,8 +140,19 @@ async function execute(interaction) {
     });
     state.addSeat(game, state.humanSeat(interaction.user, interaction.member?.displayName));
 
-    await interaction.reply({ embeds: [lobbyEmbed(game)], components: lobbyRows(game) });
+    // 상대를 지정했으면 대기실을 건너뛰고 바로 시작한다. 둘이 쓰는 서버에서 혼자
+    // NPC 랑 놀 때 버튼을 두 번 더 누르게 할 이유가 없다.
+    const against = interaction.options.getString('상대');
+    for (const c of against === 'both' ? ['migel', 'matiam'] : (against ? [against] : [])) {
+      state.addSeat(game, state.npcSeat(c));
+    }
+    if (against) state.start(game);
+
+    await interaction.reply(against
+      ? { embeds: [boardEmbed(game)], components: boardRows(game) }
+      : { embeds: [lobbyEmbed(game)], components: lobbyRows(game) });
     game.message = await interaction.fetchReply();
+    kickNpc(game);
     return;
   }
 
@@ -138,7 +216,7 @@ async function component(interaction) {
   }
 
   if (game.phase === 'lobby') {
-    const refusal = await handleLobby(interaction, game, action);
+    const refusal = await handleLobby(interaction, game, action, arg);
     if (refusal) return;
   } else {
     const refusal = await handleTurn(interaction, game, action, arg);
@@ -147,15 +225,22 @@ async function component(interaction) {
 
   await interaction.deferUpdate();
   await draw(game);
+  kickNpc(game);
 }
 
 /** 대기실 버튼. 거절했으면 true 를 돌려준다(호출부가 더 진행하지 않게). */
-async function handleLobby(interaction, game, action) {
+async function handleLobby(interaction, game, action, arg) {
   if (action === 'join') {
     const err = state.addSeat(
       game,
       state.humanSeat(interaction.user, interaction.member?.displayName),
     );
+    if (err) { await deny(interaction, err); return true; }
+    return false;
+  }
+
+  if (action === 'npc') {
+    const err = state.addSeat(game, state.npcSeat(arg));
     if (err) { await deny(interaction, err); return true; }
     return false;
   }

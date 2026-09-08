@@ -132,7 +132,7 @@ export async function openStream(videoId) {
   // 으로 보고 다음 곡으로 넘어간다. 7곡이 순식간에 지나가고 소리는 안 나는 게 그 증상이었다.
   // 첫 바이트를 기다렸다가 넘기면 실패가 실패로 드러난다.
   //
-  // 받은 첫 청크를 잃지 않도록 PassThrough 를 끼운다.
+  // 버퍼에 쌓인 채로 기다릴 수 있게 PassThrough 를 끼운다.
   const out = new PassThrough();
   ff.stdout.pipe(out);
 
@@ -141,28 +141,32 @@ export async function openStream(videoId) {
       fail(new Error('20초 안에 오디오가 나오지 않았어요.'));
     }, 20_000);
 
-    const done = () => { clearTimeout(timer); cleanup(); };
+    const cleanup = () => {
+      clearTimeout(timer);
+      out.off('readable', onReadable);
+      out.off('end', onEnd);
+      out.off('close', onEnd);
+    };
     const fail = (err) => {
-      done();
+      cleanup();
       destroy();
       const why = spawnError || stderr.split('\n').filter(Boolean).slice(-2).join(' / ');
       reject(new Error(why || err.message));
     };
 
-    const onData = () => { done(); resolve(); };
-    const onEnd = () => fail(new Error('오디오가 나오지 않았어요.'));
-
-    function cleanup() {
-      out.off('data', onData);
-      out.off('end', onEnd);
-      out.off('close', onEnd);
-      // 흘려보내기를 멈춰 첫 청크가 사라지지 않게 한다.
-      out.pause();
+    // 'data' 로 기다리면 안 된다 — 스트림이 흐름 모드가 되면서 첫 청크가 소비돼 버려진다.
+    // Ogg 는 첫 페이지가 헤더라, 그게 사라지면 디코더가 아무것도 못 읽고 즉시 끝난다.
+    // (실제로 "▶ 는 뜨는데 소리가 안 나는" 증상이 이것 때문이었다.)
+    // 'readable' 은 읽지 않는 한 아무것도 소비하지 않으므로, 버퍼에 쌓인 양만 확인한다.
+    function onReadable() {
+      if (out.readableLength > 0) { cleanup(); resolve(); }
     }
+    function onEnd() { fail(new Error('오디오가 나오지 않았어요.')); }
 
-    out.once('data', onData);
+    out.on('readable', onReadable);
     out.once('end', onEnd);
     out.once('close', onEnd);
+    onReadable();   // 이미 쌓여 있을 수도 있다
   });
 
   return {

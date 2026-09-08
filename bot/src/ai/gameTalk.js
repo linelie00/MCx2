@@ -99,9 +99,18 @@ const SYSTEM = {
 const systemOf = (character, variant) =>
   SYSTEM[character][Math.abs(Math.floor(variant)) % VARIANTS];
 
-/** 모델이 이름표·번호·따옴표를 붙이는 경우가 있어 걷어낸다. */
+/**
+ * 모델이 덧붙이는 군더더기를 걷어낸다.
+ *
+ * 이름표("미겔:"), 번호("1."), 따옴표는 자주 붙는다. 여기에 더해 `</code>` 같은 HTML
+ * 조각이나 코드펜스를 흘릴 때가 있다(실제로 마티암 대사 끝에 `</code>` 가 붙어 나왔다).
+ * 태그를 지울 때 `<:이모지:id>` 나 `<@멘션>` 은 남겨야 하므로, 영문자로 시작하는
+ * 태그만 지운다.
+ */
 function clean(text) {
   return String(text || '')
+    .replace(/```[a-z]*\n?/gi, '')
+    .replace(/<\/?[a-z][^>]*>/gi, '')
     .replace(/^\s*\d+[.)]\s*/, '')
     .replace(/^\s*(미겔|마티암)\s*[::]\s*/, '')
     .replace(/^["“']|["”']$/g, '')

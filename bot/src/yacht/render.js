@@ -133,10 +133,27 @@ export function lobbyRows(game) {
 // ---------------------------------------------------------------- 진행 중
 
 /**
- * 주사위 눈. 숫자보다 한눈에 들어온다.
- * 유니코드 주사위 문자(U+2680~2685)라 별도 이모지 등록이 필요 없고, 폭도 한 칸이다.
+ * 주사위 눈.
+ *
+ * 처음엔 유니코드 주사위 문자(U+2680~2685)를 썼는데 디스코드에서 두부(▯)로 깨졌다.
+ * 글꼴에 그 글자가 없으면 그냥 네모가 된다. 키캡 숫자 이모지는 디스코드가 자체 이미지로
+ * 그려 주므로 어느 기기에서나 똑같이 보인다.
  */
-export const FACES = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+const KEYCAPS = ['', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
+
+let FACES = [...KEYCAPS];
+
+/**
+ * 서버에 진짜 주사위 그림을 올려 뒀으면 그걸 쓴다.
+ *
+ * 커스텀 이모지는 `<:이름:id>` 형태라 코드에 박아 둘 수가 없다(서버마다 id 가 다르다).
+ * 그래서 부팅할 때 이름으로 찾아 갈아 끼운다 — 없으면 키캡 그대로다.
+ */
+export function useCustomFaces(found) {
+  FACES = FACES.map((v, i) => found[i] || KEYCAPS[i]);
+}
+
+export const faceOf = (d) => FACES[d];
 
 /** 눈 다섯 개를 나란히. 채팅에 굴림 결과를 알릴 때도 쓴다. */
 export const faces = (dice) => dice.map((d) => FACES[d]).join(' ');
@@ -196,7 +213,7 @@ export function boardRows(game) {
 
   const rows = [
     new ActionRowBuilder().addComponents(...game.dice.map((d, i) =>
-      new ButtonBuilder().setCustomId(cid(game, 'hold', i)).setLabel(`${FACES[d]} ${d}`)
+      new ButtonBuilder().setCustomId(cid(game, 'hold', i)).setLabel(FACES[d])
         .setStyle(game.held[i] ? ButtonStyle.Success : ButtonStyle.Secondary)
         .setDisabled(game.rollsLeft === 0))),
   ];
@@ -249,6 +266,6 @@ export function resultEmbed(game) {
 }
 
 export default {
-  PREFIX, FACES, faces, width, scoreTable,
+  PREFIX, faceOf, faces, useCustomFaces, width, scoreTable,
   lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 };

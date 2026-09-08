@@ -9,6 +9,7 @@ import config from './src/config.js';
 import { loadCommands } from './src/loadCommands.js';
 import { fail } from './src/embeds.js';
 import { checkOwnerKeys } from './src/api.js';
+import { useCustomFaces } from './src/yacht/render.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -39,6 +40,23 @@ client.once('clientReady', async (c) => {
   // 실패하는 대신 배포 로그에서 바로 드러나게 하는 것이 목적이다. 실패해도 죽이지 않는다 —
   // 조회 기능은 키 없이도 동작해야 한다.
   await checkOwnerKeys();
+
+  // 서버에 dice1~dice6 이름으로 주사위 그림을 올려 뒀으면 요트가 그걸 쓴다.
+  // 없으면 키캡 숫자(1️⃣~6️⃣) 그대로다 — 아무 설정 없이도 보이게 하려는 기본값이다.
+  try {
+    const guild = await c.guilds.fetch(config.discord.guildId);
+    const emojis = await guild.emojis.fetch();
+    const found = ['', ...Array.from({ length: 6 }, (_, i) => {
+      const e = emojis.find((x) => x.name === `dice${i + 1}`);
+      return e ? e.toString() : null;
+    })];
+    if (found.some(Boolean)) {
+      useCustomFaces(found);
+      console.log(`[봇] 주사위 이모지 ${found.filter(Boolean).length}/6 개를 서버에서 찾았습니다.`);
+    }
+  } catch (err) {
+    console.warn('[봇] 주사위 이모지 확인 실패(키캡 숫자를 씁니다):', err.message);
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {

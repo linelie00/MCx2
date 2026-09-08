@@ -12,7 +12,8 @@
   ```bash
   nvm install 22 && nvm use 22
   ```
-- ffmpeg (음성 재생 단계부터). Railway 에서는 `nixpacks.toml` 이 알아서 깐다.
+- ffmpeg 는 따로 안 깔아도 된다 — `ffmpeg-static` 패키지로 들고 온다.
+  시스템에 있으면 그쪽을 먼저 쓴다.
 
 ## 로컬 실행
 

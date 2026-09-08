@@ -19,6 +19,22 @@ import config from '../config.js';
 
 const require_ = createRequire(import.meta.url);
 
+/**
+ * ffmpeg 경로.
+ *
+ * 처음엔 nixpacks.toml 의 aptPkgs 로 시스템 ffmpeg 를 깔아 쓰려 했는데, Railway 에서
+ * 그게 적용되지 않아 재생이 전부 ENOENT 로 실패했다(빌더 설정에 좌우된다).
+ * 패키지로 들고 오면 빌더가 무엇이든 상관없다 — server 와 이미지 최적화 스크립트도
+ * 같은 방식을 쓴다. 그래도 시스템에 있으면 그쪽을 먼저 쓴다.
+ */
+function ffmpegPath() {
+  try {
+    const bin = require_('ffmpeg-static');
+    if (bin && fs.existsSync(bin)) return bin;
+  } catch { /* 아래 PATH 로 */ }
+  return 'ffmpeg';
+}
+
 /** youtube-dl-exec 가 받아 둔 바이너리 경로. 이 패키지는 실행 파일 위치를 이렇게만 알려준다. */
 function ytdlpPath() {
   const dir = path.join(path.dirname(require_.resolve('youtube-dl-exec/package.json')), 'bin');
@@ -56,7 +72,6 @@ const extraArgs = () =>
  *
  * yt-dlp 가 주는 최적 오디오는 webm/opus 일 때도 m4a/AAC 일 때도 있다. 항상 ffmpeg 로
  * Ogg/Opus 로 정규화하면 재생 경로가 하나로 유지되고 demuxProbe 분기가 사라진다.
- * ffmpeg 는 nixpacks.toml 로 이미 깔려 있다.
  *
  * 반환한 handle 은 반드시 destroy() 로 정리해야 한다. 안 그러면 좀비 프로세스가 쌓인다.
  */
@@ -75,7 +90,7 @@ export async function openStream(videoId) {
     ...extraArgs(),
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-  const ff = spawn('ffmpeg', [
+  const ff = spawn(ffmpegPath(), [
     '-i', 'pipe:0',
     '-vn',
     '-ar', '48000', '-ac', '2',      // 디스코드가 요구하는 48kHz 스테레오
@@ -213,8 +228,12 @@ export async function checkBinaries() {
   }
   console.log(yt.ok ? `[voice] yt-dlp ${yt.out}` : `[voice] yt-dlp 사용 불가 — ${yt.why}`);
 
-  const ff = await run('ffmpeg', ['-version']);
-  console.log(ff.ok ? `[voice] ${ff.out.slice(0, 60)}` : `[voice] ffmpeg 사용 불가 — ${ff.why} (nixpacks.toml 의 aptPkgs 확인)`);
+  const ffBin = ffmpegPath();
+  const ff = await run(ffBin, ['-version']);
+  const where = ffBin === 'ffmpeg' ? 'PATH' : 'ffmpeg-static';
+  console.log(ff.ok
+    ? `[voice] ${ff.out.slice(0, 50)} (${where})`
+    : `[voice] ffmpeg 사용 불가 — ${ff.why} (${where})`);
 
   return yt.ok && ff.ok;
 }

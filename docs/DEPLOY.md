@@ -168,6 +168,10 @@ YOUTUBE_DL_SKIP_PYTHON_CHECK=1               ← 빌드 때 필요
   영상이 필요하면 `ffmpeg-static`/`ffprobe-static`이 빌드 환경에서 동작하는지 로그로 확인.
 - **봇 배포가 "파이썬이 없다"며 실패**: `YOUTUBE_DL_SKIP_PYTHON_CHECK=1` 과
   `YOUTUBE_DL_FILENAME=yt-dlp_linux` 를 봇 서비스 변수에 넣었는지 확인. 빌드 시점에 필요하다.
+- **음성이 소리 없이 곡만 넘어감**: 봇 부팅 로그의 `[voice] yt-dlp ...` / `[voice] ffmpeg ...`
+  두 줄을 본다. `사용 불가` 가 있으면 그 바이너리가 없는 것이다.
+  ffmpeg 는 `ffmpeg-static` 패키지로 들고 오므로 `npm install` 이 제대로 됐는지 확인.
+  (`nixpacks.toml` 의 aptPkgs 는 Railway 빌더 설정에 좌우돼 적용 안 될 수 있다.)
 - **봇이 사이트에 연결 못 함**: `MIHEARTI_API_BASE` 에 `https://` 가 붙어 있는지.
   Railway 대시보드는 도메인을 스킴 없이 보여준다(봇이 보정하긴 하지만 로그로 확인할 것).
 - **봇 쓰기 명령이 401**: `cd bot && npm run check-keys` 로 패스코드가 서버와 같은지 확인.

@@ -19,6 +19,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -121,6 +123,46 @@ write('characters.json', {
     Object.entries(characters).map(([k, v]) => [k, pickCharacter(v)]),
   ),
 });
+
+// ===== 초상화 PNG — 캐입 웹훅 아바타 =====
+//
+// 캐입은 웹훅으로 보내서 캐릭터 본인이 말하는 것처럼 보이게 한다. 웹훅 아바타는 만들 때
+// 이미지를 구워 넣으므로 외부 호스팅이 필요 없다 — 사이트 이미지는 번들 해시가 붙어
+// 빌드마다 파일명이 바뀌므로 고정 URL 로 쓸 수 없어서, 이 방식이 유일하게 안전하다.
+//
+// 원본이 .webp 인데 디스코드 아바타는 png/jpg/gif 만 받으므로 변환한다.
+function buildPortraits() {
+  const OUT_DIR = path.join(BOT, 'assets');
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+
+  // 이미지 최적화 때와 같은 방식으로 ffmpeg 를 빌려 쓴다(server 의 의존성).
+  const require_ = createRequire(import.meta.url);
+  let ffmpeg = null;
+  for (const id of ['ffmpeg-static', '../../server/node_modules/ffmpeg-static']) {
+    try {
+      const bin = require_(id);
+      if (bin && fs.existsSync(bin)) { ffmpeg = bin; break; }
+    } catch { /* 다음 후보 */ }
+  }
+  if (!ffmpeg) {
+    console.warn('  초상화 변환 건너뜀 — ffmpeg 를 찾지 못했습니다 (server 에서 npm install 필요)');
+    return;
+  }
+
+  const IMG = path.join(BOT, '..', 'client', 'src', 'Assets', 'Images');
+  for (const [key, file] of [['migel', 'img_migel-portrait.webp'], ['matiam', 'img_matiam-portrait.webp']]) {
+    const src = path.join(IMG, file);
+    if (!fs.existsSync(src)) { console.warn(`  초상화 원본 없음: ${file}`); continue; }
+    const out = path.join(OUT_DIR, `${key}.png`);
+    // 아바타는 작게 나오므로 256px 이면 충분하다.
+    execFileSync(ffmpeg, [
+      '-y', '-loglevel', 'error', '-i', src,
+      '-vf', "scale='min(256,iw)':-2:flags=lanczos", out,
+    ]);
+    console.log(`  assets/${key}.png     ${Math.round(fs.statSync(out).size / 1024)}KB`);
+  }
+}
+buildPortraits();
 
 // ===== accents.json — 재생목록 강조색 =====
 // 봇의 /플리 만들기 에서 선택지로 쓴다. 여기서 뽑아 두지 않으면 사이트가 색을

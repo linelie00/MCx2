@@ -1,0 +1,200 @@
+/**
+ * gemini — 캐입 핑퐁의 모델 호출과 대화 상태
+ *
+ * 무료 티어를 쓰므로 한도를 넘기지 않게 자체 가드를 둔다. 실제 한도는 지역·계정·과금
+ * 연결 여부에 따라 달라서 문서 숫자를 믿기 어렵다. AI Studio 대시보드에서 확인하고
+ * GEMINI_RPM / GEMINI_RPD 로 조정한다.
+ *
+ * 대화 기록은 메모리에만 둔다. 봇이 재시작되면 사라지지만, 서버의 JSON 스토어를
+ * 오염시키지 않는 편이 낫고 둘이 쓰는 봇에서 그 손해는 크지 않다.
+ */
+import { GoogleGenAI } from '@google/genai';
+import config from '../config.js';
+import { systemPromptFor, NAME } from './persona.js';
+
+const HISTORY_TURNS = 12;              // user/model 합쳐 12개 = 6번 주고받기
+const HISTORY_TTL = 30 * 60 * 1000;    // 30분 지나면 맥락을 버린다
+const USER_COOLDOWN = 5 * 1000;
+
+/**
+ * 안전 필터를 모두 끈다.
+ * 마티암은 목이 잘린 재봉사고 세션 내용에 마물·전투가 흔해서 DANGEROUS 계열에
+ * 걸릴 여지가 크다. 둘만 쓰는 비공개 봇이라 필터로 얻을 게 없다.
+ */
+const SAFETY = [
+  'HARM_CATEGORY_HARASSMENT',
+  'HARM_CATEGORY_HATE_SPEECH',
+  'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+  'HARM_CATEGORY_DANGEROUS_CONTENT',
+  'HARM_CATEGORY_CIVIC_INTEGRITY',
+].map((category) => ({ category, threshold: 'OFF' }));
+
+let client = null;
+function getClient() {
+  if (!config.gemini.apiKey) return null;
+  if (!client) client = new GoogleGenAI({ apiKey: config.gemini.apiKey });
+  return client;
+}
+
+// ---------------------------------------------------------------- 사용량 가드
+
+const minute = { count: 0, resetAt: 0 };
+const day = { count: 0, key: '' };
+const lastCallByUser = new Map();
+
+const kstDay = () =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+
+/** 호출해도 되는지 본다. 안 되면 사용자에게 보여줄 한국어 사유를 돌려준다. */
+function checkQuota(userId) {
+  const now = Date.now();
+
+  const last = lastCallByUser.get(userId) || 0;
+  if (now - last < USER_COOLDOWN) {
+    return `조금만 천천히요. ${Math.ceil((USER_COOLDOWN - (now - last)) / 1000)}초 뒤에 다시 불러주세요.`;
+  }
+
+  if (now > minute.resetAt) { minute.count = 0; minute.resetAt = now + 60_000; }
+  if (minute.count >= config.gemini.rpm) {
+    return `지금 1분 한도(${config.gemini.rpm}회)를 다 썼어요. 잠시 뒤에 다시 불러주세요.`;
+  }
+
+  const today = kstDay();
+  if (day.key !== today) { day.key = today; day.count = 0; }
+  if (day.count >= config.gemini.rpd) {
+    return `오늘 몫(${config.gemini.rpd}회)을 다 썼어요. 내일 다시 불러주세요.`;
+  }
+
+  return null;
+}
+
+function noteCall(userId) {
+  minute.count += 1;
+  day.count += 1;
+  lastCallByUser.set(userId, Date.now());
+}
+
+export const usage = () => ({
+  minute: `${minute.count}/${config.gemini.rpm}`,
+  day: `${day.count}/${config.gemini.rpd}`,
+});
+
+// ---------------------------------------------------------------- 대화 상태
+
+const sessions = new Map();   // `${channelId}:${character}` → { history, lastAt }
+
+const keyOf = (channelId, character) => `${channelId}:${character}`;
+
+function getHistory(channelId, character) {
+  const s = sessions.get(keyOf(channelId, character));
+  if (!s) return [];
+  if (Date.now() - s.lastAt > HISTORY_TTL) {
+    sessions.delete(keyOf(channelId, character));
+    return [];
+  }
+  return s.history;
+}
+
+function pushHistory(channelId, character, userText, modelText) {
+  const history = getHistory(channelId, character).concat([
+    { role: 'user', parts: [{ text: userText }] },
+    { role: 'model', parts: [{ text: modelText }] },
+  ]);
+  sessions.set(keyOf(channelId, character), {
+    history: history.slice(-HISTORY_TURNS),
+    lastAt: Date.now(),
+  });
+}
+
+/** 대화를 지운다. 지운 게 있었는지 돌려준다. */
+export function resetSession(channelId, character) {
+  if (character) return sessions.delete(keyOf(channelId, character));
+  let any = false;
+  for (const key of [...sessions.keys()]) {
+    if (key.startsWith(`${channelId}:`)) { sessions.delete(key); any = true; }
+  }
+  return any;
+}
+
+// ---------------------------------------------------------------- 호출
+
+/** 모델이 "미겔:" 같은 접두사를 붙이는 경우가 있어 걷어낸다. */
+function cleanReply(text) {
+  return String(text || '')
+    .replace(/^\s*(미겔|마티암)\s*[::]\s*/, '')
+    .trim();
+}
+
+export class GeminiError extends Error {}
+
+/** 대화를 지원하는 모델 이름만 추린다. 설정이 틀렸을 때 안내에 쓴다. */
+async function listModels(ai) {
+  const names = [];
+  for await (const m of await ai.models.list()) {
+    if (m.supportedActions && !m.supportedActions.includes('generateContent')) continue;
+    names.push(String(m.name || '').replace(/^models\//, ''));
+  }
+  return names.filter((n) => n.includes('flash') || n.includes('pro'));
+}
+
+/**
+ * 캐릭터로서 한 번 답한다.
+ * 실패는 GeminiError 로 던지고, 메시지는 그대로 사용자에게 보여줄 한국어다.
+ */
+export async function speak({ character, channelId, userId, text }) {
+  const ai = getClient();
+  if (!ai) throw new GeminiError('GEMINI_API_KEY 가 설정돼 있지 않아요.');
+  if (!config.gemini.model) throw new GeminiError('GEMINI_MODEL 이 설정돼 있지 않아요.');
+
+  const blocked = checkQuota(userId);
+  if (blocked) throw new GeminiError(blocked);
+
+  const history = getHistory(channelId, character);
+  const contents = [...history, { role: 'user', parts: [{ text }] }];
+
+  let res;
+  try {
+    noteCall(userId);   // 실패해도 호출은 이미 나갔으므로 먼저 센다
+    res = await ai.models.generateContent({
+      model: config.gemini.model,
+      contents,
+      config: {
+        systemInstruction: systemPromptFor(character),
+        safetySettings: SAFETY,
+        temperature: 1.0,
+        maxOutputTokens: 400,
+      },
+    });
+  } catch (err) {
+    const msg = String(err?.message || '');
+    if (/quota|RESOURCE_EXHAUSTED|429/i.test(msg)) {
+      throw new GeminiError('무료 한도를 넘었어요. 잠시 뒤에 다시 불러주세요.');
+    }
+    if (/API key|401|403|PERMISSION/i.test(msg)) {
+      throw new GeminiError('Gemini 키가 거절당했어요. GEMINI_API_KEY 를 확인해 주세요.');
+    }
+    if (/not found|404/i.test(msg)) {
+      // 모델 id 는 구글이 자주 갈아치운다. 추측하게 두지 말고 쓸 수 있는 것을 보여준다.
+      const usable = await listModels(ai).catch(() => []);
+      throw new GeminiError(
+        `모델 "${config.gemini.model}" 을 찾을 수 없어요.`
+        + (usable.length ? `\nGEMINI_MODEL 에 쓸 수 있는 것: ${usable.slice(0, 8).join(', ')}` : ''),
+      );
+    }
+    throw new GeminiError(`대답을 받지 못했어요. (${msg.slice(0, 150)})`);
+  }
+
+  const reply = cleanReply(res.text);
+  if (!reply) {
+    // 안전 필터를 다 껐어도 막힐 때가 있다. 왜 비었는지 알려준다.
+    const reason = res.promptFeedback?.blockReason || res.candidates?.[0]?.finishReason;
+    throw new GeminiError(
+      `${NAME[character]}이(가) 아무 말도 하지 않았어요.${reason ? ` (${reason})` : ''}`,
+    );
+  }
+
+  pushHistory(channelId, character, text, reply);
+  return reply;
+}
+
+export default { speak, resetSession, usage, GeminiError };

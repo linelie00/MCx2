@@ -124,9 +124,11 @@ export default {
         text,
       });
     } catch (err) {
-      await interaction.followUp({
+      // 실패하면 건넨 말만 덩그러니 남지 않도록, 원래 응답에 사유를 붙여 고친다.
+      // 따로 숨은 메시지로 보내면 채널에 맥락 없는 인용문만 남는다.
+      await interaction.editReply({
+        content: `> ${trunc(text, 1900)}`,
         embeds: [fail(err instanceof GeminiError ? err.message : '대답을 받지 못했어요.')],
-        flags: MessageFlags.Ephemeral,
       });
       return;
     }

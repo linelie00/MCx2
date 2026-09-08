@@ -48,7 +48,16 @@ client.on('interactionCreate', async (interaction) => {
       console.error(`[봇] /${interaction.commandName} 응답 시한 초과 (도착 ${age}ms). 응답 불가.`);
       return;
     }
-    console.error(`[봇] /${interaction.commandName} 처리 중 오류:`, err);
+    // 디스코드 API 거절은 스택보다 code/rawError 가 훨씬 중요하다. 눈에 띄게 따로 찍는다.
+    if (err?.rawError || err?.code) {
+      console.error(
+        `[봇] /${interaction.commandName} 디스코드 API 거절`,
+        `code=${err.code} status=${err.status ?? '-'} ${err.message}`,
+      );
+      console.error('     rawError:', JSON.stringify(err.rawError));
+    } else {
+      console.error(`[봇] /${interaction.commandName} 처리 중 오류:`, err);
+    }
 
     // 이미 응답했는지에 따라 보내는 방법이 달라진다. 여기서 또 던지면 조용히 먹히므로 감싼다.
     const payload = { embeds: [fail('처리 중에 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.')] };

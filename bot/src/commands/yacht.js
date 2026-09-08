@@ -12,8 +12,10 @@
  *    둘이 서로 끼어든다. customId 의 rev 로 지나간 클릭을 걸러내는 것도 같은 이유다.
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { rollDice, reroll, MAX_ROLLS } from '../yacht/rules.js';
-import { chooseHold, chooseCategory } from '../yacht/ai.js';
+import { rollDice, reroll, totals, MAX_ROLLS, ROUNDS } from '../yacht/rules.js';
+import { chooseHold, chooseCategory, turnEvents } from '../yacht/ai.js';
+import { line as npcLine, SPEAK_THRESHOLD } from '../ai/gameTalk.js';
+import { sayAs } from '../discord/webhook.js';
 import * as state from '../yacht/state.js';
 import {
   PREFIX, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
@@ -46,6 +48,42 @@ async function draw(game) {
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
+/** 나 말고 가장 높은 점수. 역전을 판단하는 데 쓴다. */
+const bestOther = (game, me) => Math.max(
+  0,
+  ...game.seats.filter((s) => s !== me).map((s) => totals(s.sheet).total),
+);
+
+/**
+ * 말할 만한 순간이면 한 줄 시킨다.
+ *
+ * 매 턴 떠들면 성격이 아니라 소음이라, 문턱을 넘는 순간에만 부른다. 실패하면 조용히
+ * 넘어간다 — 대사는 있으면 좋은 것이고, 없다고 판이 멈추면 안 된다.
+ */
+async function maybeSpeak(game, seat, move) {
+  const events = turnEvents(move);
+  const top = events[0];
+  if (!top || top.priority < SPEAK_THRESHOLD) return;
+
+  const said = game.said[seat.character];
+  const text = await npcLine({
+    character: seat.character,
+    situation: [
+      `[요트 다이스 · ${move.round}/${ROUNDS}라운드]`,
+      `방금 내 차례였다. 내가 굴린 눈은 \`${move.dice.join(' ')}\` 이다.`,
+      top.detail,
+      `점수는 나 ${move.myTotal}점, 앞선 사람이 ${move.bestOtherTotal}점.`,
+    ].join('\n'),
+    said,
+  });
+  if (!text) return;
+
+  said.push(text);
+  await sayAs(game.message.channel, seat.character, text).catch((err) => {
+    console.warn('[요트] 대사 전송 실패:', err.message);
+  });
+}
+
 /** NPC 턴 한 개. 굴림은 전부 여기서 끝내고 화면은 두 번만 고친다. */
 async function playNpcTurn(game, seat) {
   game.dice = rollDice();
@@ -73,8 +111,21 @@ async function playNpcTurn(game, seat) {
   if (game.phase !== 'playing') return;   // 그 사이 /요트 그만 이 올 수 있다
 
   game.held = [true, true, true, true, true];
-  state.commitTo(game, chooseCategory(seat.character, game.dice, seat.sheet));
+  const sheetBefore = seat.sheet;
+  const key = chooseCategory(seat.character, game.dice, seat.sheet);
+  const dice = [...game.dice];
+  const round = game.round;
+  const gained = state.commitTo(game, key);
   await draw(game);                       // 편집 ②
+
+  // 대사는 판을 다 그린 뒤에 별도 메시지로. 여기서 1~3초가 걸려도 판은 이미 최신이다.
+  await maybeSpeak(game, seat, {
+    gained, key, dice, round,
+    sheetBefore,
+    sheetAfter: seat.sheet,
+    myTotal: totals(seat.sheet).total,
+    bestOtherTotal: bestOther(game, seat),
+  });
 }
 
 /**
@@ -92,8 +143,32 @@ async function runNpcTurns(game) {
       await playNpcTurn(game, state.current(game));
       await sleep(900);
     }
+    if (game.phase === 'done' && game.endedReason === 'finished') await closingLines(game);
   } finally {
     game.driving = false;
+  }
+}
+
+/** 판이 끝나면 NPC 가 한 마디씩. 한 판에서 대사가 가장 값진 자리라 문턱 없이 부른다. */
+async function closingLines(game) {
+  const rows = state.ranking(game);
+  const board = rows.map((r) => `${r.rank}위 ${r.seat.name} ${r.total}점`).join(' / ');
+
+  for (const r of rows) {
+    if (r.seat.kind !== 'npc') continue;
+    const text = await npcLine({
+      character: r.seat.character,
+      situation: [
+        '[요트 다이스 · 판이 끝났다]',
+        `결과: ${board}`,
+        r.rank === 1 ? '내가 이겼다.' : `나는 ${r.rank}위로 끝났다.`,
+      ].join('\n'),
+      said: game.said[r.seat.character],
+    });
+    if (!text) continue;
+    game.said[r.seat.character].push(text);
+    await sayAs(game.message.channel, r.seat.character, text).catch(() => {});
+    await sleep(700);
   }
 }
 

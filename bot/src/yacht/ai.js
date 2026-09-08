@@ -25,7 +25,7 @@
  * 이 파일도 디스코드를 모른다. 순수 함수라 시뮬레이터로 검증한다.
  */
 import {
-  CATEGORY_KEYS, DICE_COUNT, categoryOf, scoreFor, openCategories,
+  CATEGORY_KEYS, DICE_COUNT, ROUNDS, categoryOf, scoreFor, openCategories,
   totals, bonusLost, reroll,
 } from './rules.js';
 
@@ -281,4 +281,52 @@ function lossOf(key) {
   return { choice: 30, fourKind: 30, fullHouse: 30, sStraight: 15, lStraight: 30, yacht: 50 }[key];
 }
 
-export default { STYLES, chooseHold, chooseCategory };
+/**
+ * 방금 둔 수에서 **말할 만한 순간**을 골라 낸다.
+ *
+ * 매 턴 떠들면 성격이 아니라 소음이 된다(3자리 12라운드면 24번이다). 사람이 이미
+ * 반응하고 있는 순간에만 한 줄 얹는 편이 훨씬 낫고, Gemini 호출도 그만큼 아낀다.
+ *
+ * 우선순위가 높은 것 하나만 돌려준다. 부르는 쪽이 문턱과 판당 상한을 건다.
+ *
+ * detail 을 꼬박꼬박 "내가 …" 로 쓰는 이유가 있다. 그냥 "야찌가 나왔다!" 라고 줬더니
+ * 미겔이 **자기가 낸 야찌를 두고 마티암을 칭찬했다.** 말투 예시가 온통 상대에게 말을
+ * 거는 대사라서, 주어가 흐리면 남이 한 일로 읽어 버린다.
+ */
+export function turnEvents({
+  gained, key, sheetBefore, sheetAfter, round, myTotal, bestOtherTotal,
+}) {
+  const before = totals(sheetBefore);
+  const after = totals(sheetAfter);
+  const out = [];
+
+  if (key === 'yacht' && gained > 0) out.push({ kind: 'yacht', priority: 100, detail: '내가 야찌를 냈다!' });
+  else if (gained === 0) {
+    out.push({
+      kind: 'bust',
+      priority: key === 'yacht' ? 85 : 70,
+      detail: `내가 어쩔 수 없이 ${categoryOf(key).short} 칸에 0점을 적었다.`,
+    });
+  } else if (gained >= 28) {
+    out.push({ kind: 'big', priority: 60, detail: `내가 ${categoryOf(key).short} 에 ${gained}점을 적었다.` });
+  }
+
+  if (!before.bonus && after.bonus) {
+    out.push({ kind: 'bonusGot', priority: 75, detail: '내가 상단 보너스 35점을 챙겼다.' });
+  } else if (!bonusLost(sheetBefore) && bonusLost(sheetAfter)) {
+    out.push({ kind: 'bonusGone', priority: 55, detail: '내 상단 보너스는 물 건너갔다.' });
+  }
+
+  // 역전. 적기 전에는 지고 있었는데 적고 나니 앞선 경우.
+  if (before.total <= bestOtherTotal && after.total > bestOtherTotal) {
+    out.push({ kind: 'lead', priority: 65, detail: '이걸로 내가 앞서 나갔다.' });
+  }
+
+  if (round >= ROUNDS && myTotal !== undefined) {
+    out.push({ kind: 'last', priority: 45, detail: '마지막 라운드다.' });
+  }
+
+  return out.sort((a, b) => b.priority - a.priority);
+}
+
+export default { STYLES, chooseHold, chooseCategory, turnEvents };

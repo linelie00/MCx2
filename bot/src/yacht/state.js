@@ -69,6 +69,7 @@ export function create({ channelId, guildId, starterId }) {
     rollsLeft: MAX_ROLLS,
     trail: [],              // 이번 턴에 굴린 기록. NPC 턴을 한 번에 보여줄 때 쓴다
     lastMove: null,         // 직전에 누가 어디에 몇 점을 적었는지. NPC 턴이 눈에 보이게 한다
+    said: { migel: [], matiam: [] },   // NPC 가 이 판에서 한 말. 같은 말 반복을 막는 데만 쓴다
     lastAt: Date.now(),
     driving: false,         // NPC 턴 드라이버가 돌고 있는지
     endedReason: null,

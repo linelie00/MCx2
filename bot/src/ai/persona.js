@@ -25,13 +25,13 @@ const SHOT_MAX = 200;
  * 말투 예시를 고른다. 무작위로 뽑으면 호출마다 톤이 흔들리고 프롬프트 캐싱도 못 쓰므로
  * 결정적으로 고른다. 세션이 골고루 섞이도록 일정 간격으로 집는다.
  */
-function pickShots(speaker) {
+function pickShots(speaker, n = SHOTS) {
   const pool = linesBySpeaker[speaker]
     .filter((l) => l.text.length >= SHOT_MIN && l.text.length <= SHOT_MAX);
-  if (pool.length <= SHOTS) return pool;
+  if (pool.length <= n) return pool;
 
-  const step = pool.length / SHOTS;
-  return Array.from({ length: SHOTS }, (_, i) => pool[Math.floor(i * step)]);
+  const step = pool.length / n;
+  return Array.from({ length: n }, (_, i) => pool[Math.floor(i * step)]);
 }
 
 /** 세계관 전문. 6KB 남짓이라 통째로 넣어도 부담이 크지 않고, 잘라 넣으면 뒷부분 맥락이 사라진다. */
@@ -135,13 +135,50 @@ function buildPrompt(key) {
   ].filter((s) => s !== '').join('\n');
 }
 
+/**
+ * 말투만 담은 짧은 프롬프트.
+ *
+ * 캐입용 프롬프트는 세계관 전문(6KB)과 연표까지 들고 있는데, 요트 한 판에서는 대사를
+ * 열 번 넘게 부른다. 매번 6KB 를 얹을 이유가 없다. 누구인지와 **어떻게 말하는지**만
+ * 남기면 2KB 안쪽으로 줄어든다.
+ *
+ * 말투 예시는 그대로 둔다. 미겔·마티암처럼 들리게 하는 건 결국 이 부분이다.
+ * 무엇을 하고 있는 상황인지는 부르는 쪽이 뒤에 붙인다 — 이 함수는 게임을 모른다.
+ */
+const VOICE_SHOTS = 8;
+
+function buildVoice(key) {
+  const c = characters[key];
+  const d = c.description;
+
+  return [
+    `너는 "${NAME[key]}"이다. ${NAME[key]} 본인으로서 말한다.`,
+    '',
+    '## 나는 누구인가',
+    `${c.name} · ${d.job} · 나이 ${d.age} · ${d.race}`,
+    `좌우명 같은 것: ${c.title}`,
+    '',
+    '## 성격',
+    d.personality.trim(),
+    '',
+    '## 말투 — 이게 가장 중요하다',
+    `아래는 실제로 ${NAME[key]}이 한 말들이다. 어휘·어미·리듬을 이대로 따라 한다.`,
+    '',
+    ...pickShots(key, VOICE_SHOTS).map((l) => `- ${l.text}`),
+  ].join('\n');
+}
+
 /** 부팅 시 한 번만 조립한다. */
 const PROMPTS = Object.fromEntries(
   Object.keys(characters).map((key) => [key, buildPrompt(key)]),
 );
+const VOICES = Object.fromEntries(
+  Object.keys(characters).map((key) => [key, buildVoice(key)]),
+);
 
 export const systemPromptFor = (key) => PROMPTS[key];
+export const voicePromptFor = (key) => VOICES[key];
 export const characterName = (key) => NAME[key];
 export { NAME, OTHER };
 
-export default { systemPromptFor, characterName, NAME, OTHER };
+export default { systemPromptFor, voicePromptFor, characterName, NAME, OTHER };

@@ -148,10 +148,13 @@ export async function connect(channel, onEvent) {
 
   player.on(AudioPlayerStatus.Idle, () => {
     // 한 곡 반복이면 방금 곡을 큐 앞에, 전체 반복이면 뒤에 되돌린다.
-    if (s.current) {
+    // 다만 사용자가 직접 건너뛴 경우엔 반복을 적용하지 않는다 — 한 곡 반복 중이라면
+    // 같은 곡을 다시 트는 꼴이 되어 건너뛴 의미가 없어진다.
+    if (s.current && !s.skipping) {
       if (s.loop === LOOP.ONE) s.queue.unshift(s.current);
       else if (s.loop === LOOP.ALL) s.queue.push(s.current);
     }
+    s.skipping = false;
     playNext(channel.guild.id).catch((err) => console.error('[voice] 다음 곡 실패:', err));
   });
 
@@ -174,16 +177,66 @@ export async function enqueue(guildId, tracks) {
   if (!s.current) await playNext(guildId);
 }
 
-export async function skip(guildId) {
+export function skip(guildId) {
   const s = guilds.get(guildId);
   if (!s?.current) return false;
   const skipped = s.current;
-  // 한 곡 반복 중이면 건너뛰기가 같은 곡을 다시 트는 꼴이 되므로 반복을 무시한다.
-  const loop = s.loop;
-  s.loop = LOOP.OFF;
+  // 한 곡 반복 중이면 건너뛰기가 같은 곡을 다시 트는 꼴이 된다. Idle 핸들러가 이 표시를
+  // 보고 이번만 반복을 건너뛴다. (s.loop 를 잠깐 바꿨다 되돌리면 Idle 이 언제 오느냐에
+  // 따라 결과가 달라져 불안정하다.)
+  s.skipping = true;
   s.player.stop(true);   // Idle 이벤트가 다음 곡을 부른다
-  s.loop = loop === LOOP.ONE ? LOOP.OFF : loop;
   return skipped;
+}
+
+/** 일시정지. 이미 멈춰 있으면 false. */
+export function pause(guildId) {
+  const s = guilds.get(guildId);
+  if (!s?.current) return false;
+  return s.player.pause(true);
+}
+
+/** 다시 재생. 멈춰 있지 않았으면 false. */
+export function resume(guildId) {
+  const s = guilds.get(guildId);
+  if (!s?.current) return false;
+  return s.player.unpause();
+}
+
+export const isPaused = (guildId) =>
+  guilds.get(guildId)?.player?.state?.status === AudioPlayerStatus.Paused;
+
+/** 대기열 n번째(1부터)로 건너뛴다. 그 앞의 곡들은 버린다. */
+export function jump(guildId, n) {
+  const s = guilds.get(guildId);
+  if (!s || n < 1 || n > s.queue.length) return null;
+  const target = s.queue[n - 1];
+  s.queue.splice(0, n - 1);   // 앞의 것들을 버리면 skip 이 곧장 target 을 튼다
+  skip(guildId);
+  return target;
+}
+
+/** 대기열 n번째(1부터)를 뺀다. 지금 나오는 곡은 대상이 아니다. */
+export function removeAt(guildId, n) {
+  const s = guilds.get(guildId);
+  if (!s || n < 1 || n > s.queue.length) return null;
+  return s.queue.splice(n - 1, 1)[0];
+}
+
+/** 대기열만 비운다. 지금 곡은 계속 나온다. */
+export function clearQueue(guildId) {
+  const s = guilds.get(guildId);
+  if (!s) return 0;
+  const n = s.queue.length;
+  s.queue = [];
+  return n;
+}
+
+/** 앞에 끼워넣는다. 지금 곡 다음에 나온다. */
+export async function enqueueNext(guildId, tracks) {
+  const s = stateOf(guildId);
+  s.queue.unshift(...tracks);
+  if (!s.current) await playNext(guildId);
 }
 
 export function shuffle(guildId) {
@@ -202,4 +255,7 @@ export function setLoop(guildId, mode) {
   return mode;
 }
 
-export default { connect, enqueue, skip, shuffle, setLoop, leave, getState, LOOP };
+export default {
+  connect, enqueue, enqueueNext, skip, pause, resume, isPaused,
+  jump, removeAt, clearQueue, shuffle, setLoop, leave, getState, LOOP,
+};

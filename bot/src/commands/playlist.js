@@ -11,8 +11,10 @@ import {
 import { accents } from '../content.js';
 import { ownerFor } from '../owners.js';
 import {
-  connect, enqueue, skip, shuffle, setLoop, leave, getState,
+  connect, enqueue, enqueueNext, skip, pause, resume, isPaused,
+  jump, removeAt, clearQueue, shuffle, setLoop, leave, getState,
 } from '../voice/player.js';
+import { controlRow } from '../voice/controls.js';
 import { resolve } from '../voice/ytsource.js';
 import { base, fail, trunc, mdEscape, THEME_COLOR } from '../embeds.js';
 
@@ -40,7 +42,10 @@ const LOOP_LABEL = { off: '끄기', one: '한곡', all: '전체' };
 /** 색 선택지는 생성 데이터에서 가져온다. 사이트가 색을 추가하면 재생성만 하면 된다. */
 const ACCENT_CHOICES = accents.map((a) => ({ name: a.label, value: a.id }));
 
-const VOICE_SUBS = new Set(['재생', '지금', '대기열', '건너뛰기', '섞기', '반복', '정지']);
+const VOICE_SUBS = new Set([
+  '재생', '다음에', '지금', '대기열', '건너뛰기', '일시정지', '다시재생',
+  '점프', '빼기', '비우기', '섞기', '반복', '정지',
+]);
 
 /**
  * 음성 갈래.
@@ -64,11 +69,11 @@ async function handleVoice(interaction, sub) {
     const t = s.current;
     const e = new EmbedBuilder()
       .setColor(THEME_COLOR)
-      .setTitle(trunc(t.title, 256))
+      .setTitle(`${isPaused(guildId) ? '⏸ ' : ''}${trunc(t.title, 250)}`)
       .setURL(`https://youtu.be/${t.videoId}`)
       .setFooter({ text: `대기열 ${s.queue.length}곡 · 반복 ${LOOP_LABEL[s.loop]}` });
     if (t.thumbnail) e.setThumbnail(t.thumbnail);
-    await interaction.editReply({ embeds: [e] });
+    await interaction.editReply({ embeds: [e], components: [controlRow(guildId)] });
     return;
   }
 
@@ -85,11 +90,61 @@ async function handleVoice(interaction, sub) {
   }
 
   if (sub === '건너뛰기') {
-    const skipped = await skip(guildId);
+    const skipped = skip(guildId);
     await interaction.editReply({
       embeds: skipped
         ? [base({ description: `**${mdEscape(trunc(skipped.title, 200))}** 을(를) 넘겼어요.` })]
         : [fail('넘길 곡이 없어요.')],
+    });
+    return;
+  }
+
+  if (sub === '일시정지') {
+    await interaction.editReply({
+      embeds: pause(guildId)
+        ? [base({ description: '일시정지했어요. `/플리 다시재생` 으로 이어서 들을 수 있어요.' })]
+        : [fail(isPaused(guildId) ? '이미 멈춰 있어요.' : '멈출 곡이 없어요.')],
+    });
+    return;
+  }
+
+  if (sub === '다시재생') {
+    await interaction.editReply({
+      embeds: resume(guildId)
+        ? [base({ description: '다시 재생해요.' })]
+        : [fail('멈춰 있지 않아요.')],
+    });
+    return;
+  }
+
+  if (sub === '점프') {
+    const n = interaction.options.getInteger('번호');
+    const target = jump(guildId, n);
+    await interaction.editReply({
+      embeds: target
+        ? [base({ description: `**${mdEscape(trunc(target.title, 200))}** 로 건너뛰었어요. (앞의 ${n - 1}곡은 버림)` })]
+        : [fail(`대기열에 ${n}번 곡이 없어요.`)],
+    });
+    return;
+  }
+
+  if (sub === '빼기') {
+    const n = interaction.options.getInteger('번호');
+    const removed = removeAt(guildId, n);
+    await interaction.editReply({
+      embeds: removed
+        ? [base({ description: `**${mdEscape(trunc(removed.title, 200))}** 을(를) 대기열에서 뺐어요.` })]
+        : [fail(`대기열에 ${n}번 곡이 없어요.`)],
+    });
+    return;
+  }
+
+  if (sub === '비우기') {
+    const n = clearQueue(guildId);
+    await interaction.editReply({
+      embeds: n
+        ? [base({ description: `대기열 ${n}곡을 비웠어요. 지금 곡은 계속 나옵니다.` })]
+        : [fail('대기열이 이미 비어 있어요.')],
     });
     return;
   }
@@ -109,14 +164,15 @@ async function handleVoice(interaction, sub) {
     return;
   }
 
-  // ---------------- 재생
+  // ---------------- 재생 / 다음에
   const channel = interaction.member?.voice?.channel;
   if (!channel) {
     await interaction.editReply({ embeds: [fail('먼저 음성 채널에 들어가 주세요.')] });
     return;
   }
 
-  const listId = interaction.options.getString('재생목록');
+  const next = sub === '다음에';
+  const listId = next ? null : interaction.options.getString('재생목록');
   const search = interaction.options.getString('검색');
   if (!listId && !search) {
     await interaction.editReply({ embeds: [fail('재생목록을 고르거나 검색어를 적어주세요.')] });
@@ -162,7 +218,11 @@ async function handleVoice(interaction, sub) {
       // 재생 알림은 명령을 부른 채널로 흘린다. 실패해도 재생 자체는 계속 간다.
       const send = (payload) => interaction.channel?.send(payload).catch(() => {});
       if (ev.type === 'playing') {
-        send({ embeds: [base({ description: `▶ **${mdEscape(trunc(ev.track.title, 200))}**` })] });
+        // 곡이 바뀔 때마다 버튼을 새로 달아 준다. 조작하려고 매번 명령을 칠 필요가 없다.
+        send({
+          embeds: [base({ description: `▶ **${mdEscape(trunc(ev.track.title, 200))}**` })],
+          components: [controlRow(guildId)],
+        });
       } else if (ev.type === 'aborted') {
         send({
           embeds: [fail(
@@ -180,11 +240,12 @@ async function handleVoice(interaction, sub) {
         });
       }
     });
-    await enqueue(guildId, tracks);
+    if (next) await enqueueNext(guildId, tracks);
+    else await enqueue(guildId, tracks);
 
     await interaction.editReply({
       embeds: [base({
-        title: `${tracks.length}곡을 넣었어요`,
+        title: next ? '다음 곡으로 넣었어요' : `${tracks.length}곡을 넣었어요`,
         description: tracks.slice(0, 5)
           .map((t, i) => `**${i + 1}.** ${mdEscape(trunc(t.title, 70))}`).join('\n')
           + (tracks.length > 5 ? `\n_그 외 ${tracks.length - 5}곡_` : ''),
@@ -258,7 +319,22 @@ export default {
           o.setName('검색').setDescription('유튜브 링크 또는 검색어 (한 곡만)'))
         .addBooleanOption((o) =>
           o.setName('섞기').setDescription('넣을 때 순서를 섞습니다')))
+    .addSubcommand((s) =>
+      s.setName('다음에').setDescription('지금 곡 바로 다음에 끼워넣습니다')
+        .addStringOption((o) =>
+          o.setName('검색').setDescription('유튜브 링크 또는 검색어').setRequired(true)))
     .addSubcommand((s) => s.setName('지금').setDescription('지금 나오는 곡'))
+    .addSubcommand((s) => s.setName('일시정지').setDescription('잠시 멈춥니다'))
+    .addSubcommand((s) => s.setName('다시재생').setDescription('멈춘 곡을 이어서 재생합니다'))
+    .addSubcommand((s) =>
+      s.setName('점프').setDescription('대기열 N번째로 건너뜁니다 (앞의 곡은 버려요)')
+        .addIntegerOption((o) =>
+          o.setName('번호').setDescription('대기열 번호').setRequired(true).setMinValue(1)))
+    .addSubcommand((s) =>
+      s.setName('빼기').setDescription('대기열에서 한 곡을 뺍니다')
+        .addIntegerOption((o) =>
+          o.setName('번호').setDescription('대기열 번호').setRequired(true).setMinValue(1)))
+    .addSubcommand((s) => s.setName('비우기').setDescription('대기열만 비웁니다 (지금 곡은 계속)'))
     .addSubcommand((s) => s.setName('대기열').setDescription('다음에 나올 곡들'))
     .addSubcommand((s) => s.setName('건너뛰기').setDescription('이 곡을 넘깁니다'))
     .addSubcommand((s) => s.setName('섞기').setDescription('대기열 순서를 섞습니다'))

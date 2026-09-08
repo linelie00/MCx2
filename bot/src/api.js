@@ -57,7 +57,14 @@ async function request(path, { method = 'GET', owner = null, json, form } = {}) 
     body = JSON.stringify(json);
   }
 
-  const res = await fetch(`${BASE}${path}`, { method, headers, body });
+  // fetch 자체가 실패하면(DNS·연결 거부·주소 오류) 원인을 감추지 말고 그대로 올린다.
+  // "사이트에 연결하지 못했어요" 로 뭉뚱그리면 설정 실수를 찾는 데 한참 걸린다.
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, { method, headers, body });
+  } catch (err) {
+    throw new ApiError(0, { error: `사이트에 연결하지 못했어요. (${BASE} — ${err.cause?.code || err.message})` });
+  }
 
   if (!res.ok) {
     let parsed = null;

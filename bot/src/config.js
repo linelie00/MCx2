@@ -17,6 +17,24 @@ const req = (name) => {
 };
 
 const opt = (name, fallback = '') => (process.env[name] || '').trim() || fallback;
+
+/**
+ * API 주소를 손질한다.
+ * - 끝 슬래시를 뗀다. 안 그러면 경로를 조립할 때 // 가 된다.
+ * - 스킴이 없으면 https:// 를 붙인다. Railway 대시보드가 도메인을 스킴 없이 보여줘서
+ *   그대로 붙여넣기 쉬운데, 그러면 fetch 가 URL 파싱 단계에서 터진다.
+ */
+function normalizeBase(raw) {
+  const trimmed = raw.replace(/\/+$/, '');
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    // origin 이 아니라 href 를 쓴다 — 나중에 하위 경로에 올릴 일이 있어도 살아남는다.
+    return new URL(withScheme).href.replace(/\/+$/, '');
+  } catch {
+    console.error(`[config] MIHEARTI_API_BASE 가 올바른 주소가 아닙니다: ${raw}`);
+    process.exit(1);
+  }
+}
 const num = (name, fallback) => {
   const n = Number(opt(name));
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -36,8 +54,7 @@ export const config = {
   },
 
   api: {
-    // 끝 슬래시가 붙어 오면 경로를 조립할 때 // 가 되므로 미리 떼어낸다.
-    base: opt('MIHEARTI_API_BASE', 'http://localhost:8000').replace(/\/+$/, ''),
+    base: normalizeBase(opt('MIHEARTI_API_BASE', 'http://localhost:8000')),
     keys: {
       migel: opt('OWNER_MIGEL_KEY'),
       matiam: opt('OWNER_MATIAM_KEY'),

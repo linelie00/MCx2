@@ -127,6 +127,46 @@ function cleanReply(text) {
 
 export class GeminiError extends Error {}
 
+/**
+ * SDK 는 실패를 JSON 문자열째로 던질 때가 많다.
+ * 그대로 보여주면 사용자에게는 읽을 수 없는 덩어리라, 안쪽 message 만 꺼낸다.
+ */
+function readableError(err) {
+  const raw = String(err?.message || err || '');
+  const at = raw.indexOf('{');
+  if (at >= 0) {
+    try {
+      const body = JSON.parse(raw.slice(at));
+      return body?.error?.message || raw;
+    } catch { /* JSON 이 아니면 원문 그대로 */ }
+  }
+  return raw;
+}
+
+/**
+ * 일시적 실패는 다시 해 본다.
+ *
+ * 무료 티어의 인기 모델은 503("This model is currently experiencing high demand")을
+ * 자주 낸다. 몇 초 뒤면 되는 경우가 대부분이라, 사용자에게 다시 치라고 하기보다
+ * 여기서 조용히 재시도하는 편이 낫다. 한도 초과(429)는 재시도해도 소용없으므로 제외한다.
+ */
+async function withRetry(fn, attempts = 3) {
+  let last;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await fn();
+    } catch (err) {
+      last = err;
+      const msg = readableError(err);
+      const transient = /503|high demand|overloaded|UNAVAILABLE|500|internal/i.test(msg)
+        && !/quota|RESOURCE_EXHAUSTED|429/i.test(msg);
+      if (!transient || i === attempts - 1) throw err;
+      await new Promise((r) => { setTimeout(r, 1200 * (i + 1)); });
+    }
+  }
+  throw last;
+}
+
 /** 대화를 지원하는 모델 이름만 추린다. 설정이 틀렸을 때 안내에 쓴다. */
 async function listModels(ai) {
   const names = [];
@@ -152,26 +192,34 @@ export async function speak({ character, channelId, userId, text }) {
   const history = getHistory(channelId, character);
   const contents = [...history, { role: 'user', parts: [{ text }] }];
 
+  const params = {
+    model: config.gemini.model,
+    contents,
+    config: {
+      systemInstruction: systemPromptFor(character),
+      safetySettings: SAFETY,
+      temperature: 1.0,
+      maxOutputTokens: 400,
+    },
+  };
+
   let res;
   try {
     noteCall(userId);   // 실패해도 호출은 이미 나갔으므로 먼저 센다
-    res = await ai.models.generateContent({
-      model: config.gemini.model,
-      contents,
-      config: {
-        systemInstruction: systemPromptFor(character),
-        safetySettings: SAFETY,
-        temperature: 1.0,
-        maxOutputTokens: 400,
-      },
-    });
+    res = await withRetry(() => ai.models.generateContent(params));
   } catch (err) {
-    const msg = String(err?.message || '');
+    const msg = readableError(err);
     if (/quota|RESOURCE_EXHAUSTED|429/i.test(msg)) {
       throw new GeminiError('무료 한도를 넘었어요. 잠시 뒤에 다시 불러주세요.');
     }
     if (/API key|401|403|PERMISSION/i.test(msg)) {
       throw new GeminiError('Gemini 키가 거절당했어요. GEMINI_API_KEY 를 확인해 주세요.');
+    }
+    if (/503|high demand|overloaded|UNAVAILABLE/i.test(msg)) {
+      throw new GeminiError(
+        `${config.gemini.model} 모델이 지금 붐벼요. 몇 번 다시 시도했지만 안 됐습니다.\n`
+        + '잠시 뒤에 다시 부르거나, GEMINI_MODEL 을 다른 모델로 바꿔 보세요.',
+      );
     }
     if (/not found|404/i.test(msg)) {
       // 모델 id 는 구글이 자주 갈아치운다. 추측하게 두지 말고 쓸 수 있는 것을 보여준다.

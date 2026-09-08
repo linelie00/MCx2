@@ -7,130 +7,97 @@ This license is copied below, and is also available with a FAQ at:
 http://scripts.sil.org/OFL
 */
 
-@font-face {
-	font-family: 'Pretendard';
-	font-weight: 900;
-	font-display: swap;
-	src: local('Pretendard Black'), url(./woff2/Pretendard-Black.woff2) format('woff2'), url(./woff/Pretendard-Black.woff) format('woff');
-}
+/*
+  여기서 참조하는 파일은 전부 ./optimized/ 아래의 woff2 다.
+  원본(ttf/otf/woff/woff2)은 재변환용 소스로만 남겨 두고 직접 참조하지 않는다.
+  폰트를 추가·교체할 땐 scripts/optimize-fonts.py 의 TARGETS 에 등록하고 실행할 것.
 
-@font-face {
-	font-family: 'Pretendard';
-	font-weight: 800;
-	font-display: swap;
-	src: local('Pretendard ExtraBold'), url(./woff2/Pretendard-ExtraBold.woff2) format('woff2'), url(./woff/Pretendard-ExtraBold.woff) format('woff');
-}
+    cd client && python scripts/optimize-fonts.py
 
+  규약:
+  - woff2 만 쓴다. browserslist 프로덕션 대상은 전부 woff2 를 지원하므로
+    woff 폴백은 내려받지도 않으면서 배포 용량만 차지했다(9.6MB).
+  - 모든 @font-face 에 font-display: swap 을 준다. 없으면 브라우저가 최대 3초간
+    글자를 아예 안 그린다(특히 NexonWarhaven 은 거의 모든 페이지에서 쓰인다).
+  - 실제로 쓰는 웨이트만 선언한다. 선언만 해 둔 웨이트는 내려받지 않지만
+    빌드 산출물과 레포만 무겁게 한다.
+*/
+
+/* ===== Pretendard — 본문 기본(--font-sans) =====
+   상용 서브셋본이라 아주 드문 음절은 시스템 sans 로 대체된다.
+   Pretendard 로 렌더링되는 한글은 전부 레포 안 정적 텍스트이고
+   사용자 입력(방명록/갤러리)은 NexonWarhaven·Hahmlet 이 받으므로 문제되지 않는다.
+   시스템에 Pretendard 가 설치돼 있으면 local() 로 전체 글리프본을 그대로 쓴다. */
 @font-face {
 	font-family: 'Pretendard';
-	font-weight: 700;
+	font-weight: 400;
 	font-display: swap;
-	src: local('Pretendard Bold'), url(./woff2/Pretendard-Bold.woff2) format('woff2'), url(./woff/Pretendard-Bold.woff) format('woff');
+	src: local('Pretendard Regular'), url(./optimized/Pretendard-Regular.woff2) format('woff2');
 }
 
 @font-face {
 	font-family: 'Pretendard';
 	font-weight: 600;
 	font-display: swap;
-	src: local('Pretendard SemiBold'), url(./woff2/Pretendard-SemiBold.woff2) format('woff2'), url(./woff/Pretendard-SemiBold.woff) format('woff');
+	src: local('Pretendard SemiBold'), url(./optimized/Pretendard-SemiBold.woff2) format('woff2');
 }
 
 @font-face {
 	font-family: 'Pretendard';
-	font-weight: 500;
+	font-weight: 700;
 	font-display: swap;
-	src: local('Pretendard Medium'), url(./woff2/Pretendard-Medium.woff2) format('woff2'), url(./woff/Pretendard-Medium.woff) format('woff');
+	src: local('Pretendard Bold'), url(./optimized/Pretendard-Bold.woff2) format('woff2');
 }
 
 @font-face {
 	font-family: 'Pretendard';
+	font-weight: 800;
+	font-display: swap;
+	src: local('Pretendard ExtraBold'), url(./optimized/Pretendard-ExtraBold.woff2) format('woff2');
+}
+
+/* ===== NexonWarhaven — 표시용 기본(--font-display), 이 사이트에서 가장 많이 쓰임 =====
+   원본이 무압축 TTF 3.2MB 였다. 글리프는 하나도 버리지 않고 woff2 재압축만 했다. */
+@font-face {
+	font-family: 'NexonWarhaven';
 	font-weight: 400;
 	font-display: swap;
-	src: local('Pretendard Regular'), url(./woff2/Pretendard-Regular.woff2) format('woff2'), url(./woff/Pretendard-Regular.woff) format('woff');
-}
-
-@font-face {
-	font-family: 'Pretendard';
-	font-weight: 300;
-	font-display: swap;
-	src: local('Pretendard Light'), url(./woff2/Pretendard-Light.woff2) format('woff2'), url(./woff/Pretendard-Light.woff) format('woff');
-}
-
-@font-face {
-	font-family: 'Pretendard';
-	font-weight: 200;
-	font-display: swap;
-	src: local('Pretendard ExtraLight'), url(./woff2/Pretendard-ExtraLight.woff2) format('woff2'), url(./woff/Pretendard-ExtraLight.woff) format('woff');
-}
-
-@font-face {
-	font-family: 'Pretendard';
-	font-weight: 100;
-	font-display: swap;
-	src: local('Pretendard Thin'), url(./woff2/Pretendard-Thin.woff2) format('woff2'), url(./woff/Pretendard-Thin.woff) format('woff');
-}
-
-@font-face {
-    font-family: 'NexonWarhaven';
-    src: url('./ttf/NEXON_Warhaven_Regular.ttf') format('truetype');
-    font-weight: 400;
+	src: url('./optimized/NEXON_Warhaven_Regular.woff2') format('woff2');
 }
 
 @font-face {
 	font-family: 'NexonWarhaven';
-	src: url('./ttf/NEXON_Warhaven_Bold.ttf') format('truetype');
 	font-weight: 700;
+	font-display: swap;
+	src: url('./optimized/NEXON_Warhaven_Bold.woff2') format('woff2');
 }
 
-@font-face {
-    font-family: 'ClimateCrisisKR-1979';
-    src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2212@1.0/ClimateCrisisKR-1979.woff2') format('woff2');
-    font-weight: 900;
-    font-style: normal;
-}
-
-@font-face {
-    font-family: 'Yangjin';
-    src: url('https://cdn.jsdelivr.net/gh/supernovice-lab/font@0.9/yangjin.woff') format('woff');
-    font-weight: normal;
-    font-display: swap;
-}
-
+/* ===== 장식용 라틴 ===== */
 @font-face {
 	font-family: 'Quentin';
-	src: url('./otf/Quentin.otf') format('opentype');
+	font-display: swap;
+	src: url('./optimized/Quentin.woff2') format('woff2');
 }
 
 @font-face {
 	font-family: 'OldLondon';
-	src: url('./otf/OldLondon.otf') format('opentype');
+	font-display: swap;
+	src: url('./optimized/OldLondon.woff2') format('woff2');
 }
 
-@font-face {
-    font-family: 'GilbutRainbow';
-    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2112@1.0/GilbeotRainbow.woff') format('woff');
-    font-weight: normal;
-    font-display: swap;
-}
-
-/* 한글 세리프 — 낡은 책/기록 느낌 본문용 (Story 등) */
+/* ===== Hahmlet — 한글 세리프, 낡은 책/기록 느낌 본문용 (Story 등) =====
+   원래 400/500/700 을 선언했지만 500 을 쓰는 규칙이 없어 뺐다.
+   weight 600 은 CSS 폰트 매칭상 700 으로 떨어지므로 기존과 동일하게 보인다. */
 @font-face {
 	font-family: 'Hahmlet';
 	font-weight: 400;
 	font-display: swap;
-	src: url('./woff2/Hahmlet-Regular.woff2') format('woff2');
-}
-
-@font-face {
-	font-family: 'Hahmlet';
-	font-weight: 500;
-	font-display: swap;
-	src: url('./woff2/Hahmlet-Medium.woff2') format('woff2');
+	src: url('./optimized/Hahmlet-Regular.woff2') format('woff2');
 }
 
 @font-face {
 	font-family: 'Hahmlet';
 	font-weight: 700;
 	font-display: swap;
-	src: url('./woff2/Hahmlet-Bold.woff2') format('woff2');
+	src: url('./optimized/Hahmlet-Bold.woff2') format('woff2');
 }

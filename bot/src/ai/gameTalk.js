@@ -3,10 +3,10 @@
  *
  * /캐입 과 같은 Gemini 를 쓰지만 정책이 다르다.
  *
- *   프롬프트  세계관 6KB 를 뺀 말투 위주(1.3KB). 한 판에 스무 번 넘게 부르니까.
+ *   프롬프트  세계관·연표를 뺀 말투 위주(3.4KB). 캐입은 7.7KB 다.
  *   쿨다운    없다. 사람이 부른 게 아니라 NPC 차례다.
  *   분당 한도 계량의 70% 까지만 — 배경에서 도는 게임이 사람의 /캐입 을 굶기면 안 된다.
- *   기록      안 남긴다. 그 판에서 한 말 두어 줄만 그때그때 얹어 반복을 막는다.
+ *   기록      안 남긴다. 그 판에서 한 말 여섯 줄을 얹어 되풀이를 막는다.
  *   실패      **조용히 넘어간다.** 대사가 없을 뿐 판은 계속 돌아야 한다.
  *
  * 그래서 이 파일의 함수는 절대 던지지 않는다. 못 하면 null 이다.
@@ -66,14 +66,17 @@ const RULES = (character) => [
   '- 혼잣말이 아니다. **같이 하는 사람들에게 말을 걸듯** 한다.',
   '- 방금 그 일을 한 사람은 **나 자신**이다. 남이 한 일처럼 말하거나 남을 칭찬하지 않는다.',
   '- 주어진 상황 설명은 사실을 적어 둔 메모일 뿐이다. **그 말투를 따라 하지 않는다.**',
-  '- 점수와 눈금을 그대로 읊지 않는다. 판에 이미 적혀 있다.',
+  '- **숫자를 말하지 않는다.** 몇 점인지 어떤 눈이 나왔는지는 판에 이미 적혀 있다.',
+  '- 칸 이름을 매번 부르지 않는다. 한 판에 열두 번 하는 말이라 금방 지겨워진다.',
+  '- 매번 다르게 말한다. 시작하는 감탄사, 부르는 말, 문장 길이를 계속 바꾼다.',
+  '- 짧게 툭 던지는 줄도 있고 신이 나서 늘어놓는 줄도 있게, 길이를 들쭉날쭉하게 한다.',
   `- "${NAME[character]}:" 같은 화자 이름을 앞에 붙이지 않는다. 바로 대사부터.`,
   '- 짧은 행동은 (괄호) 안에 적어도 좋다. 나레이션은 하지 않는다.',
   '- 네가 AI이거나 언어모델이라는 사실을 절대 언급하지 않는다.',
 ];
 
-const systemFor = (character) => [
-  voicePromptFor(character),
+const systemFor = (character, variant) => [
+  voicePromptFor(character, variant),
   '',
   '## 지금 하고 있는 것',
   '친구들과 요트 다이스(주사위 5개로 12칸을 채우는 게임)를 하는 중이다.',
@@ -81,11 +84,20 @@ const systemFor = (character) => [
   ...RULES(character),
 ].join('\n');
 
-/** 부팅 시 한 번만 조립한다. */
+/**
+ * 부팅 시 변형별로 조립해 둔다.
+ *
+ * 매번 같은 예시를 보여 주면 모델이 그중 한 문장을 틀로 굳혀 버린다. 실제로 미겔이
+ * 매 턴 "우와~ 사백씨, 이번엔 …" 으로 시작하고 "이이이래도 되는 겁니까~? …칸에 N점
+ * 콩~" 으로 끝내는 판이 나왔다. 부를 때마다 다른 예시 묶음을 보여 준다.
+ */
+const VARIANTS = 6;
 const SYSTEM = {
-  migel: systemFor('migel'),
-  matiam: systemFor('matiam'),
+  migel: Array.from({ length: VARIANTS }, (_, i) => systemFor('migel', i)),
+  matiam: Array.from({ length: VARIANTS }, (_, i) => systemFor('matiam', i)),
 };
+const systemOf = (character, variant) =>
+  SYSTEM[character][Math.abs(Math.floor(variant)) % VARIANTS];
 
 /** 모델이 이름표·번호·따옴표를 붙이는 경우가 있어 걷어낸다. */
 function clean(text) {
@@ -109,9 +121,21 @@ function allowed(character, said) {
   return true;
 }
 
-/** 아까 한 말 두어 줄. 같은 말을 반복하지 않게 붙인다. */
+/**
+ * 아까 한 말들. 같은 말을 반복하지 않게 붙인다.
+ *
+ * 두 줄만 보여 줬더니 세 턴 전 표현으로 되돌아갔다. 여섯 줄까지 보여 주고,
+ * 막연히 "반복하지 마라" 가 아니라 **무엇을 바꿔야 하는지**를 짚어 준다.
+ */
 const recentOf = (said) => (said.length
-  ? `\n아까 내가 한 말: ${said.slice(-2).map((t) => `"${t}"`).join(' / ')}`
+  ? [
+    '',
+    '## 이미 한 말 — 되풀이 금지',
+    ...said.slice(-6).map((t) => `- ${t}`),
+    '',
+    '위 표현들은 이미 썼다. **같은 말로 시작하지 말고, 같은 틀을 다시 쓰지 마라.**',
+    '시작하는 감탄사, 부르는 말, 문장 구조를 이번엔 다르게 잡는다.',
+  ].join('\n')
   : '');
 
 /**
@@ -132,9 +156,9 @@ export async function line({ character, situation, said = [] }) {
 
   try {
     const res = await generate({
-      system: SYSTEM[character],
+      system: systemOf(character, said.length),
       contents: [{ role: 'user', parts: [{ text }] }],
-      temperature: 1.15,
+      temperature: 1.2,
       maxOutputTokens: 1200,
     });
     return clean(String(res.text || '').split('\n')[0]) || null;
@@ -168,9 +192,9 @@ export async function turnLines({ character, situation, said = [] }) {
 
   try {
     const res = await generate({
-      system: SYSTEM[character],
+      system: systemOf(character, said.length),
       contents: [{ role: 'user', parts: [{ text }] }],
-      temperature: 1.15,
+      temperature: 1.2,
       maxOutputTokens: 1500,
     });
     const rows = String(res.text || '')

@@ -25,7 +25,7 @@ const SHOT_MAX = 200;
  * 말투 예시를 고른다. 무작위로 뽑으면 호출마다 톤이 흔들리고 프롬프트 캐싱도 못 쓰므로
  * 결정적으로 고른다. 세션이 골고루 섞이도록 일정 간격으로 집는다.
  */
-function pickShots(speaker, n = SHOTS, mark = null) {
+function pickShots(speaker, n = SHOTS, mark = null, offset = 0) {
   const long = linesBySpeaker[speaker]
     .filter((l) => l.text.length >= SHOT_MIN && l.text.length <= SHOT_MAX);
   // 표지가 있는 줄만 추리되, 너무 적게 남으면 원래 풀로 돌아간다.
@@ -34,7 +34,7 @@ function pickShots(speaker, n = SHOTS, mark = null) {
   if (pool.length <= n) return pool;
 
   const step = pool.length / n;
-  return Array.from({ length: n }, (_, i) => pool[Math.floor(i * step)]);
+  return Array.from({ length: n }, (_, i) => pool[Math.floor(i * step + offset) % pool.length]);
 }
 
 /** 세계관 전문. 6KB 남짓이라 통째로 넣어도 부담이 크지 않고, 잘라 넣으면 뒷부분 맥락이 사라진다. */
@@ -148,7 +148,14 @@ function buildPrompt(key) {
  * 말투 예시는 그대로 둔다. 미겔·마티암처럼 들리게 하는 건 결국 이 부분이다.
  * 무엇을 하고 있는 상황인지는 부르는 쪽이 뒤에 붙인다 — 이 함수는 게임을 모른다.
  */
-const VOICE_SHOTS = 8;
+const VOICE_SHOTS = 14;
+
+/**
+ * 같은 예시를 매번 보여 주면 모델이 그중 한 문장을 **틀로 굳혀 버린다.**
+ * 실제로 요트에서 미겔이 매 턴 "이이이래도 되는 겁니까~? …" 로 시작했다.
+ * 그래서 예시 창을 조금씩 밀어 가며 여러 벌을 만들어 두고 돌려 쓴다.
+ */
+const VOICE_VARIANTS = 6;
 
 /**
  * 그 사람다운 어미가 실제로 들어 있는 줄만 고르기 위한 표지.
@@ -162,7 +169,13 @@ const VOICE_MARKS = {
   matiam: /(군|지|나|네|겠어|다네)[.!?~…]|하하/,
 };
 
-function buildVoice(key) {
+/** 배경 설정에서 대사에 쓸 만한 앞부분만. 통째로 넣으면 한 줄 뽑는 데 과하다. */
+const gist = (text, limit) => {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  return t.length <= limit ? t : `${t.slice(0, limit)}…`;
+};
+
+function buildVoice(key, offset = 0) {
   const c = characters[key];
   const d = c.description;
 
@@ -170,17 +183,26 @@ function buildVoice(key) {
     `너는 "${NAME[key]}"이다. ${NAME[key]} 본인으로서 말한다.`,
     '',
     '## 나는 누구인가',
-    `${c.name} · ${d.job} · 나이 ${d.age} · ${d.race}`,
+    `${c.name} (${c.realname}) · ${d.job} · 나이 ${d.age} · ${d.race} · ${d.body}`,
     `좌우명 같은 것: ${c.title}`,
+    `가진 것: ${d.belongings}`,
+    c.skill.length ? `할 줄 아는 것: ${c.skill.map((k) => k.label).join(' / ')}` : '',
     '',
     '## 성격',
     d.personality.trim(),
     '',
-    '## 말투 — 이게 가장 중요하다',
-    `아래는 실제로 ${NAME[key]}이 한 말들이다. 어휘·어미·리듬을 이대로 따라 한다.`,
+    '## 배경',
+    gist(d.etc, 900),
     '',
-    ...pickShots(key, VOICE_SHOTS, VOICE_MARKS[key]).map((l) => `- ${l.text}`),
-  ].join('\n');
+    '## 겉모습',
+    gist(c.appearance.description, 400),
+    '',
+    '## 말투 — 이게 가장 중요하다',
+    `아래는 실제로 ${NAME[key]}이 한 말들이다. 어휘·어미·리듬·호흡을 이대로 따라 한다.`,
+    '다만 **문장을 그대로 베끼지는 않는다.** 말투를 배우라고 준 것이지 대본이 아니다.',
+    '',
+    ...pickShots(key, VOICE_SHOTS, VOICE_MARKS[key], offset).map((l) => `- ${l.text}`),
+  ].filter((x) => x !== '').join('\n');
 }
 
 /** 부팅 시 한 번만 조립한다. */
@@ -188,11 +210,16 @@ const PROMPTS = Object.fromEntries(
   Object.keys(characters).map((key) => [key, buildPrompt(key)]),
 );
 const VOICES = Object.fromEntries(
-  Object.keys(characters).map((key) => [key, buildVoice(key)]),
+  Object.keys(characters).map((key) => [
+    key,
+    Array.from({ length: VOICE_VARIANTS }, (_, i) => buildVoice(key, i * 3)),
+  ]),
 );
 
 export const systemPromptFor = (key) => PROMPTS[key];
-export const voicePromptFor = (key) => VOICES[key];
+/** variant 를 바꾸면 말투 예시가 다른 것으로 갈린다. 같은 틀로 굳는 것을 막는다. */
+export const voicePromptFor = (key, variant = 0) =>
+  VOICES[key][Math.abs(Math.floor(variant)) % VOICE_VARIANTS];
 export const characterName = (key) => NAME[key];
 export { NAME, OTHER };
 

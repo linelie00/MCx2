@@ -206,9 +206,22 @@ export async function speak({ character, channelId, userId, text }) {
   };
 
   let res;
+  let usedModel = config.gemini.model;
   try {
     noteCall(userId);   // 실패해도 호출은 이미 나갔으므로 먼저 센다
-    res = await withRetry(() => ai.models.generateContent(params));
+    try {
+      res = await withRetry(() => ai.models.generateContent(params));
+    } catch (err) {
+      // 인기 모델은 통째로 한동안 내려앉기도 한다(재시도로는 못 넘긴다).
+      // 그럴 땐 대체 모델로 한 번 더 시도한다 — 대답을 못 받는 것보단 낫다.
+      const overloaded = /503|high demand|overloaded|UNAVAILABLE/i.test(readableError(err));
+      const fallback = config.gemini.fallbackModel;
+      if (!overloaded || !fallback || fallback === config.gemini.model) throw err;
+
+      console.warn(`[gemini] ${config.gemini.model} 붐빔 → ${fallback} 로 대체`);
+      res = await withRetry(() => ai.models.generateContent({ ...params, model: fallback }), 2);
+      usedModel = fallback;
+    }
   } catch (err) {
     const msg = readableError(err);
     if (/quota|RESOURCE_EXHAUSTED|429/i.test(msg)) {
@@ -219,8 +232,8 @@ export async function speak({ character, channelId, userId, text }) {
     }
     if (/503|high demand|overloaded|UNAVAILABLE/i.test(msg)) {
       throw new GeminiError(
-        `${config.gemini.model} 모델이 지금 붐벼요. 몇 번 다시 시도했지만 안 됐습니다.\n`
-        + '잠시 뒤에 다시 부르거나, GEMINI_MODEL 을 다른 모델로 바꿔 보세요.',
+        `${config.gemini.model} 도 ${config.gemini.fallbackModel} 도 지금 붐벼요.\n`
+        + '잠시 뒤에 다시 불러주세요.',
       );
     }
     if (/not found|404/i.test(msg)) {
@@ -238,6 +251,9 @@ export async function speak({ character, channelId, userId, text }) {
   const reply = cleanReply(res.text);
 
   // 토큰 한도에 걸려 문장 중간에서 끊긴 경우. 그대로 내보내면 왜 끊겼는지 알 수 없다.
+  // 대체 모델이 답했으면 말투가 조금 다를 수 있으니 밝혀 둔다.
+  const note = usedModel === config.gemini.model ? '' : `\n_(${usedModel} 으로 답했어요)_`;
+
   if (reply && finish === 'MAX_TOKENS') {
     pushHistory(channelId, character, text, reply);
     return `${reply}…\n_(말이 길어져서 여기서 끊겼어요)_`;
@@ -252,7 +268,7 @@ export async function speak({ character, channelId, userId, text }) {
   }
 
   pushHistory(channelId, character, text, reply);
-  return reply;
+  return reply + note;
 }
 
 export default { speak, resetSession, usage, GeminiError };

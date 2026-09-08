@@ -67,6 +67,9 @@ export const config = {
     // 맞아서 별칭으로 바꿨다. -latest 별칭은 구글이 알아서 최신을 가리키므로 안 깨진다.
     // 그래도 환경변수로 덮을 수 있게 두고, 404 가 나면 쓸 수 있는 목록을 보여준다.
     model: opt('GEMINI_MODEL', 'gemini-flash-lite-latest'),
+    // 지정한 모델이 붐빌 때(503) 대신 써 볼 모델. 무료 티어의 인기 모델은 통째로
+    // 몇 십 분씩 내려앉기도 해서, 재시도만으로는 못 넘긴다.
+    fallbackModel: opt('GEMINI_MODEL_FALLBACK', 'gemini-flash-lite-latest'),
     rpm: num('GEMINI_RPM', 8),
     rpd: num('GEMINI_RPD', 300),
   },

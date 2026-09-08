@@ -149,6 +149,8 @@ async function playNpcTurn(game, seat) {
     character: seat.character,
     situation: [
       `[요트 다이스 · ${round}/${ROUNDS}라운드] 내 차례다.`,
+      // 누구에게 말하는지 알려 준다. 이게 없으면 혼잣말처럼 굴어서 말투가 흐려진다.
+      `같이 하는 사람: ${game.seats.filter((s) => s !== seat).map((s) => s.name).join(', ')}`,
       ...story,
       `그리고 ${categoryOf(key).label} 칸에 ${wouldGain}점을 적기로 했다.`,
       turnEvents({

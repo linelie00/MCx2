@@ -25,9 +25,12 @@ const SHOT_MAX = 200;
  * 말투 예시를 고른다. 무작위로 뽑으면 호출마다 톤이 흔들리고 프롬프트 캐싱도 못 쓰므로
  * 결정적으로 고른다. 세션이 골고루 섞이도록 일정 간격으로 집는다.
  */
-function pickShots(speaker, n = SHOTS) {
-  const pool = linesBySpeaker[speaker]
+function pickShots(speaker, n = SHOTS, mark = null) {
+  const long = linesBySpeaker[speaker]
     .filter((l) => l.text.length >= SHOT_MIN && l.text.length <= SHOT_MAX);
+  // 표지가 있는 줄만 추리되, 너무 적게 남으면 원래 풀로 돌아간다.
+  const marked = mark ? long.filter((l) => mark.test(l.text)) : long;
+  const pool = marked.length >= n * 2 ? marked : long;
   if (pool.length <= n) return pool;
 
   const step = pool.length / n;
@@ -147,6 +150,18 @@ function buildPrompt(key) {
  */
 const VOICE_SHOTS = 8;
 
+/**
+ * 그 사람다운 어미가 실제로 들어 있는 줄만 고르기 위한 표지.
+ *
+ * 8줄로 줄이면 하필 밋밋한 줄만 뽑힐 수 있다. 실제로 요트에서 미겔이 "채워주지, 하하!"
+ * 라고 마티암의 어미로 말한 적이 있다. 예시가 흐리면 두 사람이 섞인다.
+ * (조건에 맞는 줄이 미겔 78 / 마티암 73 이라 8줄을 고르기에 넉넉하다.)
+ */
+const VOICE_MARKS = {
+  migel: /니다|니까|습니|죠|군요|는데요|해요|입니다/,
+  matiam: /(군|지|나|네|겠어|다네)[.!?~…]|하하/,
+};
+
 function buildVoice(key) {
   const c = characters[key];
   const d = c.description;
@@ -164,7 +179,7 @@ function buildVoice(key) {
     '## 말투 — 이게 가장 중요하다',
     `아래는 실제로 ${NAME[key]}이 한 말들이다. 어휘·어미·리듬을 이대로 따라 한다.`,
     '',
-    ...pickShots(key, VOICE_SHOTS).map((l) => `- ${l.text}`),
+    ...pickShots(key, VOICE_SHOTS, VOICE_MARKS[key]).map((l) => `- ${l.text}`),
   ].join('\n');
 }
 

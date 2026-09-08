@@ -59,8 +59,18 @@ client.on('interactionCreate', async (interaction) => {
       console.error(`[봇] /${interaction.commandName} 처리 중 오류:`, err);
     }
 
+    // 둘만 쓰는 비공개 봇이라 원인을 숨길 이유가 없다. 디스코드에 바로 보여주면
+    // Railway 로그를 뒤지지 않아도 되고, 대개 code 하나로 원인이 결정된다.
+    const detail = [
+      err?.code != null ? `code ${err.code}` : null,
+      err?.status != null ? `status ${err.status}` : null,
+      err?.message,
+    ].filter(Boolean).join(' · ');
+
     // 이미 응답했는지에 따라 보내는 방법이 달라진다. 여기서 또 던지면 조용히 먹히므로 감싼다.
-    const payload = { embeds: [fail('처리 중에 문제가 생겼어요. 잠시 뒤 다시 시도해 주세요.')] };
+    const payload = {
+      embeds: [fail(`처리 중에 문제가 생겼어요.\n\`\`\`\n${detail.slice(0, 1000)}\n\`\`\``)],
+    };
     try {
       if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
       else await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });

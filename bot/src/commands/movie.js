@@ -4,8 +4,9 @@
  * 조회는 공개 API 라 누구나 쓸 수 있고, 평점 작성만 오너 전용이다.
  */
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
-import { getMovies, updateMovieRating, abs, ApiError } from '../api.js';
+import { getMovies, updateMovieRating, createMovie, abs, ApiError } from '../api.js';
 import { OWNER_META, OWNERS, ownerFor } from '../owners.js';
+import { isImage, toBlob } from '../attachments.js';
 import { base, fail, trunc, mdEscape, THEME_COLOR } from '../embeds.js';
 
 const COMMENT_MAX = 300; // 서버와 같은 값 (movieController.js)
@@ -45,6 +46,78 @@ const STAR_CHOICES = Array.from({ length: 11 }, (_, i) => {
 
 const OWNER_CHOICES = OWNERS.map((o) => ({ name: OWNER_META[o].label, value: o }));
 
+/** 새 영화 등록 — 디스코드 첨부를 포스터로 다시 올린다. */
+async function register(interaction, me, movies) {
+  const title = interaction.options.getString('제목').trim();
+  const date = interaction.options.getString('날짜').trim();
+  const director = (interaction.options.getString('감독') || '').trim();
+  const poster = interaction.options.getAttachment('포스터');
+  const hoverPoster = interaction.options.getAttachment('호버포스터');
+  const myStars = interaction.options.getNumber('내별점');
+  const myComment = (interaction.options.getString('내한줄평') || '').trim();
+
+  // 서버도 같은 형식을 요구하지만, 여기서 막으면 파일을 받아 올리기 전에 끝난다.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    await interaction.editReply({ embeds: [fail('날짜는 `2026-09-08` 형식으로 적어주세요.')] });
+    return;
+  }
+
+  // 하루 한 편이라 서버가 409 를 주지만, 미리 알려주면 어떤 영화와 겹치는지도 말해줄 수 있다.
+  const clash = movies.find((m) => m.date === date);
+  if (clash) {
+    await interaction.editReply({
+      embeds: [fail(`${date} 에는 이미 **${mdEscape(clash.title)}** 이(가) 있어요. (하루 한 편)`)],
+    });
+    return;
+  }
+
+  const bad = [poster, hoverPoster].filter(Boolean).filter((a) => !isImage(a));
+  if (bad.length) {
+    await interaction.editReply({
+      embeds: [fail(`포스터는 이미지여야 해요: ${bad.map((a) => a.name).join(', ')}`)],
+    });
+    return;
+  }
+
+  if (myComment.length > COMMENT_MAX) {
+    await interaction.editReply({
+      embeds: [fail(`한줄평은 ${COMMENT_MAX}자까지예요. (지금 ${myComment.length}자)`)],
+    });
+    return;
+  }
+
+  // 새 영화라 상대방 것은 비어 있다. 내 것만 채워 보낸다.
+  const ratings = (myStars != null || myComment)
+    ? {
+      migel: { stars: 0, comment: '' },
+      matiam: { stars: 0, comment: '' },
+      [me]: { stars: myStars ?? 0, comment: myComment },
+    }
+    : null;
+
+  try {
+    const form = new FormData();
+    // 첨부 URL 은 서명·만료되므로 지금 바로 받는다.
+    form.append('poster', await toBlob(poster), poster.name);
+    if (hoverPoster) form.append('hoverPoster', await toBlob(hoverPoster), hoverPoster.name);
+
+    const movie = await createMovie({ owner: me, form, title, director, date, ratings });
+
+    const e = new EmbedBuilder()
+      .setColor(THEME_COLOR)
+      .setTitle(`${movie.title} · ${movie.date}`)
+      .setDescription(ratingLines(movie))
+      .setFooter({ text: `등록했어요${director ? ` · ${director}` : ''}` });
+    if (movie.poster) e.setThumbnail(abs(movie.poster));
+
+    await interaction.editReply({ embeds: [e] });
+  } catch (err) {
+    await interaction.editReply({
+      embeds: [fail(err instanceof ApiError ? err.message : `등록하지 못했어요. (${err.message})`)],
+    });
+  }
+}
+
 export default {
   data: new SlashCommandBuilder()
     .setName('영화')
@@ -64,7 +137,22 @@ export default {
         .addNumberOption((o) =>
           o.setName('별점').setDescription('0~5, 0.5 단위').setRequired(true).addChoices(...STAR_CHOICES))
         .addStringOption((o) =>
-          o.setName('한줄평').setDescription(`${COMMENT_MAX}자까지`).setRequired(true))),
+          o.setName('한줄평').setDescription(`${COMMENT_MAX}자까지`).setRequired(true)))
+    .addSubcommand((s) =>
+      s.setName('등록').setDescription('본 영화를 새로 등록합니다 (오너 전용)')
+        .addStringOption((o) =>
+          o.setName('제목').setDescription('80자까지').setRequired(true))
+        .addStringOption((o) =>
+          o.setName('날짜').setDescription('본 날짜 YYYY-MM-DD (하루 한 편)').setRequired(true))
+        .addAttachmentOption((o) =>
+          o.setName('포스터').setDescription('포스터 이미지').setRequired(true))
+        .addStringOption((o) => o.setName('감독').setDescription('80자까지'))
+        .addAttachmentOption((o) =>
+          o.setName('호버포스터').setDescription('사이트에서 마우스를 올리면 바뀔 두 번째 포스터'))
+        .addNumberOption((o) =>
+          o.setName('내별점').setDescription('0~5, 0.5 단위').addChoices(...STAR_CHOICES))
+        .addStringOption((o) =>
+          o.setName('내한줄평').setDescription(`${COMMENT_MAX}자까지`))),
 
   /** 영화 제목 자동완성. 본인이 안 쓴 것을 앞에 올려 고르기 쉽게 한다. */
   async autocomplete(interaction) {
@@ -167,11 +255,17 @@ export default {
       return;
     }
 
-    // ---------------- 평점 (오너 전용)
+    // ---------------- 여기서부터 오너 전용
     if (!me) {
       await interaction.editReply({
-        embeds: [fail('평점은 오너만 남길 수 있어요.')],
+        embeds: [fail('이 명령은 오너만 쓸 수 있어요.')],
       });
+      return;
+    }
+
+    // ---------------- 등록
+    if (sub === '등록') {
+      await register(interaction, me, movies);
       return;
     }
 

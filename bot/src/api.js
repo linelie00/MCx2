@@ -89,6 +89,24 @@ export const getImages = () =>
 export const getTags = () =>
   cached('gallery:tags', GALLERY_TTL, () => request('/api/gallery/tags'));
 
+/**
+ * 이미지·영상 업로드. 서버가 multipart 만 받는다.
+ *
+ * form 은 호출부에서 파일까지 채워 넘긴다 — 파일을 어디서 가져오는지(디스코드 첨부)는
+ * API 계층이 알 필요가 없다.
+ *
+ * group 이 true 이고 파일이 2개 이상이면 앨범 한 덩어리로 묶이고, 아니면 파일마다
+ * 항목이 하나씩 생긴다. 응답은 항상 배열이다.
+ */
+export async function uploadImages({ owner, form, tags = [], group = false }) {
+  form.append('tags', JSON.stringify(tags.slice(0, 10)));  // 서버도 10개로 자른다
+  form.append('group', group ? 'true' : 'false');
+
+  const created = await request('/api/gallery/images', { method: 'POST', owner, form });
+  invalidate('gallery:');
+  return created;
+}
+
 // ---------------------------------------------------------------- 영화
 
 export const getMovies = () => cached('movies', 60 * 1000, () => request('/api/movie'));
@@ -122,6 +140,23 @@ export async function updateMovieRating({ owner, movieId, stars, comment }) {
   const updated = await request(`/api/movie/${movieId}`, { method: 'PATCH', owner, form });
   invalidate('movies'); // 방금 바꿨으니 캐시가 낡았다
   return updated;
+}
+
+/**
+ * 영화 등록. poster 는 필수이고, 파일은 호출부가 form 에 미리 담아 넘긴다.
+ *
+ * date 는 하루 한 편이라 겹치면 서버가 409 를 준다(그 문구를 그대로 보여주면 된다).
+ * ratings 는 넘긴 사람 쪽만 채워 보낸다 — 새 영화라 상대방 것은 어차피 비어 있다.
+ */
+export async function createMovie({ owner, form, title, director, date, ratings }) {
+  form.append('title', title);
+  form.append('director', director || '');
+  form.append('date', date);
+  if (ratings) form.append('ratings', JSON.stringify(ratings));
+
+  const movie = await request('/api/movie', { method: 'POST', owner, form });
+  invalidate('movies');
+  return movie;
 }
 
 // ---------------------------------------------------------------- 플레이리스트

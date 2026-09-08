@@ -1,0 +1,8 @@
+# Railway/Nixpacks 빌드 설정 (server/nixpacks.toml 선례)
+#
+# ffmpeg — yt-dlp 가 뱉은 오디오를 Ogg/Opus 로 정규화해 디스코드 음성으로 보낸다.
+#          항상 ffmpeg 를 거치게 하면 입력이 webm/opus 든 m4a/AAC 든 코드 경로가 하나로 유지된다.
+#
+# python3 는 넣지 않는다 — YOUTUBE_DL_FILENAME=yt-dlp_linux (standalone 바이너리)를 쓰기 때문.
+[phases.setup]
+aptPkgs = ["ffmpeg"]

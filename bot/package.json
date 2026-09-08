@@ -1,0 +1,21 @@
+{
+  "name": "mihearti-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "register": "node register-commands.js",
+    "build-content": "node scripts/build-content.mjs"
+  },
+  "dependencies": {
+    "@discordjs/voice": "0.19.2",
+    "@noble/ciphers": "^2.4.0",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2"
+  }
+}

@@ -1,0 +1,61 @@
+/**
+ * config — 환경변수 읽기와 검증
+ *
+ * 없으면 봇이 아예 못 뜨는 값만 필수로 본다. 나머지(Gemini, 쿠키 등)는 해당 기능이
+ * 실제로 불릴 때 없으면 그 명령만 실패시킨다 — 키 하나 때문에 봇 전체가 죽으면 곤란하다.
+ */
+import 'dotenv/config';
+
+const req = (name) => {
+  const v = (process.env[name] || '').trim();
+  if (!v) {
+    console.error(`[config] 필수 환경변수가 비어 있습니다: ${name}`);
+    console.error('         bot/.env.example 을 참고해 .env 를 채우세요.');
+    process.exit(1);
+  }
+  return v;
+};
+
+const opt = (name, fallback = '') => (process.env[name] || '').trim() || fallback;
+const num = (name, fallback) => {
+  const n = Number(opt(name));
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+
+export const config = {
+  discord: {
+    token: req('DISCORD_TOKEN'),
+    clientId: req('DISCORD_CLIENT_ID'),
+    guildId: req('DISCORD_GUILD_ID'),
+  },
+
+  // 디스코드 유저 ID ↔ 오너. 비워두면 그 사람은 쓰기 명령을 못 쓴다(읽기는 가능).
+  users: {
+    migel: opt('DISCORD_USER_MIGEL'),
+    matiam: opt('DISCORD_USER_MATIAM'),
+  },
+
+  api: {
+    // 끝 슬래시가 붙어 오면 경로를 조립할 때 // 가 되므로 미리 떼어낸다.
+    base: opt('MIHEARTI_API_BASE', 'http://localhost:8000').replace(/\/+$/, ''),
+    keys: {
+      migel: opt('OWNER_MIGEL_KEY'),
+      matiam: opt('OWNER_MATIAM_KEY'),
+    },
+  },
+
+  gemini: {
+    apiKey: opt('GEMINI_API_KEY'),
+    model: opt('GEMINI_MODEL'),
+    rpm: num('GEMINI_RPM', 8),
+    rpd: num('GEMINI_RPD', 300),
+  },
+
+  voice: {
+    idleSec: num('VOICE_IDLE_SEC', 300),
+    ytdlpExtraArgs: opt('YTDLP_EXTRA_ARGS'),
+    cookiesB64: opt('YT_COOKIES_B64'),
+  },
+};
+
+export default config;

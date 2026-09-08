@@ -1,7 +1,7 @@
 /**
  * config — 환경변수 읽기와 검증
  *
- * 없으면 봇이 아예 못 뜨는 값만 필수로 본다. 나머지(Gemini, 쿠키 등)는 해당 기능이
+ * 없으면 봇이 아예 못 뜨는 값만 필수로 본다. 나머지(Gemini 키 등)는 해당 기능이
  * 실제로 불릴 때 없으면 그 명령만 실패시킨다 — 키 하나 때문에 봇 전체가 죽으면 곤란하다.
  */
 import 'dotenv/config';
@@ -53,6 +53,9 @@ export const config = {
     matiam: opt('DISCORD_USER_MATIAM'),
   },
 
+  // 사람이 열어볼 사이트 주소(Netlify). API 주소와 다르다 — 링크로 안내할 때 쓴다.
+  site: normalizeBase(opt('SITE_BASE', 'https://mihearti.netlify.app')),
+
   api: {
     base: normalizeBase(opt('MIHEARTI_API_BASE', 'http://localhost:8000')),
     keys: {
@@ -72,12 +75,6 @@ export const config = {
     fallbackModel: opt('GEMINI_MODEL_FALLBACK', 'gemini-flash-lite-latest'),
     rpm: num('GEMINI_RPM', 8),
     rpd: num('GEMINI_RPD', 300),
-  },
-
-  voice: {
-    idleSec: num('VOICE_IDLE_SEC', 300),
-    ytdlpExtraArgs: opt('YTDLP_EXTRA_ARGS'),
-    cookiesB64: opt('YT_COOKIES_B64'),
   },
 };
 

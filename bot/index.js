@@ -1,19 +1,17 @@
 /**
  * MIHEARTI 디스코드 봇 — 진입점
  *
- * 인텐트는 Guilds + GuildVoiceStates 만 쓴다. 모든 기능이 슬래시 명령이라
- * MessageContent 같은 특권 인텐트가 필요 없다(디스코드 승인 절차를 안 밟아도 된다).
+ * 인텐트는 Guilds 하나면 된다. 모든 기능이 슬래시 명령이라 MessageContent 같은
+ * 특권 인텐트가 필요 없다(디스코드 승인 절차를 안 밟아도 된다).
  */
 import { Client, GatewayIntentBits, MessageFlags } from 'discord.js';
 import config from './src/config.js';
 import { loadCommands } from './src/loadCommands.js';
 import { fail } from './src/embeds.js';
 import { checkOwnerKeys } from './src/api.js';
-import { checkBinaries } from './src/voice/ytsource.js';
-import { PREFIX as BUTTON_PREFIX, controlRow, handle as handleButton } from './src/voice/controls.js';
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
+  intents: [GatewayIntentBits.Guilds],
 });
 
 const commands = await loadCommands();
@@ -27,33 +25,11 @@ client.once('clientReady', async (c) => {
   // 실패하는 대신 배포 로그에서 바로 드러나게 하는 것이 목적이다. 실패해도 죽이지 않는다 —
   // 조회 기능은 키 없이도 동작해야 한다.
   await checkOwnerKeys();
-  // 재생용 바이너리도 확인한다. 없으면 소리 없이 곡만 넘어가는 형태로 조용히 실패한다.
-  await checkBinaries();
 });
 
 client.on('interactionCreate', async (interaction) => {
   // 등록해 둔 서버 밖에서 온 것은 무시한다.
   if (interaction.guildId !== config.discord.guildId) return;
-
-  // 재생 알림에 붙은 버튼. 명령이 아니라 여기서 바로 처리한다.
-  if (interaction.isButton() && interaction.customId.startsWith(BUTTON_PREFIX)) {
-    try {
-      const { text, refresh } = handleButton(
-        interaction.customId.slice(BUTTON_PREFIX.length),
-        interaction.guildId,
-      );
-      // 버튼 결과는 누른 사람에게만 보여준다. 채널이 조작 로그로 뒤덮이지 않게.
-      await interaction.reply({ content: text, flags: MessageFlags.Ephemeral });
-      // 일시정지/재생처럼 버튼 모양이 바뀌어야 하는 경우엔 원래 메시지를 고친다.
-      if (refresh) {
-        await interaction.message.edit({ components: [controlRow(interaction.guildId)] })
-          .catch(() => {});
-      }
-    } catch (err) {
-      console.error('[봇] 버튼 처리 오류:', err);
-    }
-    return;
-  }
 
   const command = interaction.isAutocomplete() || interaction.isChatInputCommand()
     ? commands.get(interaction.commandName)

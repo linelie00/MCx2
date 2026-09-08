@@ -8,12 +8,8 @@
 
 ## 필요한 것
 
-- **Node 22 이상.** `@discordjs/voice` 가 `>=22.12.0` 을 요구한다.
-  ```bash
-  nvm install 22 && nvm use 22
-  ```
-- ffmpeg 는 따로 안 깔아도 된다 — `ffmpeg-static` 패키지로 들고 온다.
-  시스템에 있으면 그쪽을 먼저 쓴다.
+- **Node 20 이상.** 내장 `fetch`/`FormData` 를 그대로 쓴다.
+- 네이티브 빌드가 필요한 의존성은 없다. `npm install` 이면 끝이다.
 
 ## 로컬 실행
 
@@ -37,9 +33,7 @@ npm run dev
 3. Settings → **Watch Paths = `/bot/**`**
 4. **기존 `server` 서비스에도 Watch Paths = `/server/**` 를 추가한다.**
    안 하면 봇만 고쳐도 API 가 같이 재배포된다.
-5. Variables 에 `.env.example` 의 값들 + `NIXPACKS_NODE_VERSION=22`
-   - `YOUTUBE_DL_FILENAME=yt-dlp_linux` 와 `YOUTUBE_DL_SKIP_PYTHON_CHECK=1` 은
-     **빌드(npm install) 때 필요하다.** 없으면 파이썬이 없다며 설치가 실패한다.
+5. Variables 에 `.env.example` 의 값들
    - `MIHEARTI_API_BASE` 는 `server` 서비스의 공개 도메인
    - `OWNER_*_KEY` 는 `server` 와 같은 값
 6. 볼륨·공개 도메인·PORT **모두 불필요**. 워커 서비스로 둔다.
@@ -54,29 +48,21 @@ npm run dev
 |---|---|---|
 | `/주사위` | 누구나 | 면·개수·보정을 받아 굴린다 |
 | `/뽑기` | 누구나 | 쉼표로 구분한 항목에서 무작위 선택 |
-| `/음성테스트` | 누구나 | 배포 환경에서 음성 UDP 가 뚫리는지 진단 |
 | `/대사` `/그림` `/영화` `/플리` | 조회는 누구나 | 사이트 데이터 조회·수정 |
+| `/플리 듣기` | 누구나 | 사이트·유튜브 링크로 안내 |
 | `/캐입` | 누구나 | 미겔·마티암과 대화 (Gemini) |
-| `/플리 재생` 계열 | 누구나 | 음성 채널에서 재생 |
 
-## 음성이 안 될 때
+## 음성 재생을 뺀 이유
 
-Railway 에서 디스코드 음성 UDP 가 막히는 사례가 보고돼 있다(미해결).
-`/음성테스트` 가 **Ready 단계에서 타임아웃**하면 코드 문제가 아니라 호스트 문제다.
-그 경우 봇만 다른 호스트로 옮기면 된다 — 봇은 API 를 HTTP 로만 쓰므로 이전 비용이 거의 없다.
+봇이 음성 채널에서 직접 트는 기능이 한때 있었지만 뺐다.
 
-> 유튜브 추출에는 **JS 런타임**이 필요하다. 없으면 챌린지를 못 풀어
-> "Sign in to confirm you're not a bot" 으로 막힌다. 가정용 IP 에서는 챌린지가 잘 안 나와
-> 문제가 드러나지 않지만 데이터센터 IP 에서는 바로 걸린다.
-> Node 앱이라 node 가 항상 있으므로 `--js-runtimes node` 를 기본으로 붙인다(설치할 것 없음).
+- 유튜브가 **데이터센터 IP 를 차단**한다. 같은 쿠키로 가정용 IP 에서는 되는데
+  Railway 에서는 "Sign in to confirm you're not a bot" 으로 막혔다.
+  쿠키를 넣으면 잠깐 되다가 40분쯤 뒤 다시 막혔고, PO 토큰도 이미 막힌 IP 는 못 살린다.
+- 추출 도구(yt-dlp)를 상용 호스트에 두는 것 자체가 **약관에 걸릴 소지**가 있다.
 
-재생이 되다가 나중에 깨졌다면 순서대로:
-
-1. Railway 에서 **Redeploy** — `youtube-dl-exec` 가 설치 시 최신 yt-dlp 를 받으므로
-   코드 변경 없이 대응되는 경우가 많다
-2. `YTDLP_EXTRA_ARGS` 조정 (배포 없이 변수만) — 예: `--extractor-args youtube:player_client=android_vr`
-3. `YT_COOKIES_B64` 주입 — **반드시 버리는 구글 계정으로**. 데이터센터 IP 에서 쓰면
-   세션이 빨리 무효화되고 최악의 경우 계정 제재를 받는다
+대신 `/플리 듣기` 가 사이트 링크와 유튜브 링크(전곡 임시 재생목록)를 준다.
+되살리고 싶으면 이 기능을 뺀 커밋을 revert 하면 된다 — 가정용 IP 에서는 잘 동작했다.
 
 ## 데이터 재생성
 

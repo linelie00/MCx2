@@ -34,13 +34,25 @@ console.log(`[카지노] 대사 ${Object.values(POOL).reduce((a, v) => a + v.len
 const recent = new Map();
 const KEEP = 3;
 
+/** 그 줄이 쓰는 자리표시자들. `'{name}씨 {amount}'` → ['name','amount'] */
+const holes = (text) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+
 /**
  * 그 상황의 대사 한 줄. 없는 키면 null 을 준다 — 대사는 있으면 좋은 것이라
  * 빠진 키 때문에 판이 멈추면 안 된다.
  */
 export function line(key, vars = {}) {
-  const pool = POOL[key];
-  if (!pool?.length) return null;
+  const all = POOL[key];
+  if (!all?.length) return null;
+
+  // **채울 수 없는 자리표시자가 든 줄은 아예 안 고른다.**
+  // 안 그러면 "{hand} 였습니다요" 가 그대로 나간다 — 쇼다운 없이 이겼을 때처럼
+  // 값이 없는 경우가 실제로 있다. 다 못 채우면 자리표시자가 없는 줄로 물러선다.
+  // 하나도 못 채우면 **아무 말도 안 한다.** 깨진 줄을 내보내느니 조용한 편이 낫다.
+  const usable = all.filter((t) => holes(t).every((k) => vars[k] != null));
+  const plain = all.filter((t) => holes(t).length === 0);
+  const pool = usable.length ? usable : plain;
+  if (!pool.length) return null;
 
   // 목록이 짧으면 피할 수 있는 만큼만 피한다. 다 피하면 고를 게 없어진다.
   const keep = Math.min(KEEP, pool.length - 1);

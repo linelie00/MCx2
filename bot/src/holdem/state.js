@@ -1,0 +1,374 @@
+/**
+ * state — 진행 중인 홀덤 판
+ *
+ * 요트·블랙잭의 state.js 와 뼈대가 같다(채널당 한 판, 메모리에만, TTL 청소,
+ * serial/rev, 에러는 문자열로 돌려주기). 홀덤만의 차이는 셋이다.
+ *
+ *   1. **한 핸드에 베팅 라운드가 넷이다.** phase 가 곧 스트리트다.
+ *   2. **버튼이 돈다.** 블라인드 자리와 첫 행동자가 핸드마다 바뀐다.
+ *   3. **숨은 정보가 있다.** `seat.hole` 은 그 사람만 본다 — 판을 그리는 쪽과
+ *      대사 메모를 만드는 쪽이 각자 가려야 한다. 이 파일은 가리지 않고 들고만 있다.
+ *
+ * 디스코드 API 를 부르지 않는다. Message 를 들고만 있고 그리는 건 명령 쪽이다.
+ */
+import { randomBytes } from 'node:crypto';
+import { newShoe, shuffle, draw } from '../casino/cards.js';
+import { ledger } from '../casino/wallet.js';
+import {
+  SMALL_BLIND, BIG_BLIND, MAX_SEATS, BOARD_AT,
+  newSeat, live, actionable, nextActor, blindSeats, put, firstToAct,
+  owed, minRaiseTo, legalActions, raiseOptions, roundClosed, endStreet, potTotal, award,
+} from './rules.js';
+import { OWNER_META, ownerFor } from '../owners.js';
+import { THEME_COLOR } from '../embeds.js';
+
+export { MAX_SEATS };
+export const IDLE_MS = 10 * 60 * 1000;
+
+/** 홀덤 자리에 앉을 때 받는 스택. 블라인드 20 기준 50 BB — 깊어야 폴드가 의미를 갖는다. */
+export const BUY_IN = 1000;
+
+const games = new Map();          // channelId → game
+const serial = () => randomBytes(3).toString('hex');
+
+// ---------------------------------------------------------------- 자리
+
+/** 사람 자리. 오너면 사이트와 같은 이름(겨울/사백)과 색을 쓴다. */
+export function humanSeat(user, displayName) {
+  const owner = ownerFor(user.id);
+  const meta = owner ? OWNER_META[owner] : null;
+  return newSeat({
+    kind: 'human',
+    id: user.id,
+    userId: user.id,
+    name: meta ? meta.label : (displayName || user.globalName || user.username),
+    color: meta ? meta.color : THEME_COLOR,
+  });
+}
+
+/** NPC 자리. id 접두사 `npc:` 는 칩 영구 저장이 NPC 를 걸러 내는 표식이다. */
+export function npcSeat(character) {
+  const meta = OWNER_META[character];
+  if (!meta) throw new Error(`모르는 캐릭터: ${character}`);
+  return newSeat({
+    kind: 'npc',
+    id: `npc:${character}`,
+    character,
+    name: meta.character,
+    color: meta.color,
+  });
+}
+
+// ---------------------------------------------------------------- 판
+
+export function create({ channelId, homeChannelId, guildId, starterId }) {
+  const game = {
+    serial: serial(),
+    rev: 0,
+    channelId,
+    homeChannelId,
+    guildId,
+    starterId,
+    message: null,
+    phase: 'lobby',      // lobby → preflop → flop → turn → river → showdown → settled → done
+    seats: [],
+    button: -1,          // 첫 핸드에서 0 이 된다
+    turn: -1,            // 지금 행동할 자리
+    deck: [],
+    board: [],           // 커뮤니티 카드
+    toCall: 0,           // 이번 라운드에 맞춰야 할 총액(자리의 bet 기준)
+    minRaise: BIG_BLIND, // 다음 레이즈의 최소 증분
+    handNo: 0,
+    results: null,       // 직전 정산. settled 에서 보여 준다
+    chips: null,         // 동기 장부(wallet.ledger)
+    pendingChat: [],
+    lastAt: Date.now(),
+    opened: false,
+    said: new Set(),
+    spoken: { migel: [], matiam: [] },
+    aiHandNo: 0,
+    aiLeft: 0,
+    driving: false,
+    rekick: false,
+    closed: false,
+    endedReason: null,
+  };
+  games.set(channelId, game);
+  return game;
+}
+
+export const get = (channelId) => games.get(channelId) || null;
+export const remove = (channelId) => games.delete(channelId);
+
+/** 스레드 안에서 눌렀든 원래 채널에서 명령을 쳤든 같은 판을 찾아 준다. */
+export function forChannel(channelId) {
+  const direct = games.get(channelId);
+  if (direct) return direct;
+  for (const g of games.values()) if (g.homeChannelId === channelId) return g;
+  return null;
+}
+
+export function touch(game) {
+  game.rev += 1;
+  game.lastAt = Date.now();
+  return game;
+}
+
+export const seatOf = (game, userId) => game.seats.find((s) => s.userId === userId) || null;
+export const seatIndexOf = (game, userId) => game.seats.findIndex((s) => s.userId === userId);
+export const hasNpc = (game, character) =>
+  game.seats.some((s) => s.kind === 'npc' && s.character === character);
+
+export function addSeat(game, seat) {
+  if (game.phase !== 'lobby') return '이미 시작한 판이에요.';
+  if (game.seats.length >= MAX_SEATS) return `자리가 다 찼어요. (최대 ${MAX_SEATS}자리)`;
+  if (seat.kind === 'human' && seatOf(game, seat.userId)) return '이미 앉아 있어요.';
+  if (seat.kind === 'npc' && hasNpc(game, seat.character)) return `${seat.name}은(는) 이미 앉아 있어요.`;
+  game.seats.push(seat);
+  touch(game);
+  return null;
+}
+
+/** 판을 시작한다. 잔액은 부르는 쪽이 미리 불러와서 넘긴다(load 는 async 라 여기 못 둔다). */
+export function start(game, balances) {
+  if (game.seats.length < 2) return '두 자리 이상이어야 시작할 수 있어요.';
+  game.chips = ledger(balances);
+  for (const s of game.seats) s.chips = game.chips.get(s.id);
+  if (game.seats.filter((s) => s.chips >= BIG_BLIND).length < 2) {
+    return '빅블라인드를 낼 수 있는 사람이 둘은 있어야 해요.';
+  }
+  beginHand(game);
+  return null;
+}
+
+// ---------------------------------------------------------------- 한 핸드
+
+const card = (game) => draw(game.deck);
+
+/**
+ * 새 핸드. 버튼을 한 칸 옮기고, 블라인드를 걷고, 두 장씩 돌린다.
+ *
+ * **덱은 핸드마다 한 벌을 새로 섞는다.** 블랙잭처럼 6덱 슈를 이어 쓰면 같은 카드가
+ * 두 장 나와 플러시·페어 판정이 깨진다.
+ */
+export function beginHand(game) {
+  for (const s of game.seats) {
+    s.out = s.chips < BIG_BLIND && s.chips <= 0 ? true : s.chips <= 0;
+    s.hole = [];
+    s.committed = 0;
+    s.bet = 0;
+    s.acted = false;
+    s.folded = false;
+    s.allIn = false;
+    s.lastAction = null;
+  }
+
+  const playing = game.seats.filter((s) => !s.out);
+  if (playing.length < 2) { end(game, 'broke'); return false; }
+
+  game.handNo += 1;
+  game.deck = shuffle(newShoe(1));
+  game.board = [];
+  game.results = null;
+
+  // 버튼을 다음 참가자로.
+  let b = game.button;
+  do { b = (b + 1) % game.seats.length; } while (game.seats[b].out);
+  game.button = b;
+
+  // 블라인드. 못 내면 있는 만큼 내고 올인이다.
+  const { small, big } = blindSeats(game.seats, game.button);
+  put(game.seats[small], SMALL_BLIND);
+  put(game.seats[big], BIG_BLIND);
+  game.seats[small].lastAction = 'SB';
+  game.seats[big].lastAction = 'BB';
+
+  for (let i = 0; i < 2; i += 1) {
+    for (const s of playing) s.hole.push(card(game));
+  }
+
+  game.phase = 'preflop';
+  game.toCall = BIG_BLIND;
+  game.minRaise = BIG_BLIND;
+  game.turn = firstToAct(game.seats, game.button, 'preflop');
+
+  // 블라인드가 이미 전원 올인이면 곧장 흘려보낸다.
+  settleIfNoAction(game);
+  touch(game);
+  return true;
+}
+
+export const currentSeat = (game) => (game.turn >= 0 ? game.seats[game.turn] ?? null : null);
+export const pot = (game) => potTotal(game.seats);
+
+/** 지금 차례인 사람이 고를 수 있는 것. */
+export const actionsFor = (game) => (currentSeat(game)
+  ? legalActions(currentSeat(game), { toCall: game.toCall, minRaise: game.minRaise })
+  : new Set());
+
+/** 레이즈 버튼에 걸 금액들. */
+export const raisesFor = (game) => (currentSeat(game)
+  ? raiseOptions(currentSeat(game), {
+    toCall: game.toCall, minRaise: game.minRaise, pot: pot(game),
+  })
+  : []);
+
+export const toCallFor = (game, seat) => owed(seat, game.toCall);
+
+/**
+ * 한 수 둔다. **동기다** — 인터랙션 처리 안에서 부르므로 await 이 끼면 안 된다.
+ * `to` 는 레이즈일 때 이번 라운드에 맞출 총액.
+ */
+export function act(game, action, to = 0) {
+  const seat = currentSeat(game);
+  if (!seat) return '지금은 둘 수 없어요.';
+  if (!actionsFor(game).has(action)) return '지금은 못 하는 수예요.';
+
+  if (action === 'fold') {
+    seat.folded = true;
+    seat.acted = true;
+    seat.lastAction = 'Fold';
+  } else if (action === 'check') {
+    seat.acted = true;
+    seat.lastAction = 'Check';
+  } else if (action === 'call') {
+    const paid = put(seat, owed(seat, game.toCall));
+    seat.acted = true;
+    seat.lastAction = seat.allIn ? `All-in ${paid}` : `Call ${paid}`;
+  } else {
+    // raise / allin — 둘 다 "얼마까지 올리느냐" 로 다룬다.
+    const target = action === 'allin' ? seat.bet + seat.chips : to;
+    const full = target >= minRaiseTo(game.toCall, game.minRaise);
+    const before = game.toCall;
+
+    put(seat, target - seat.bet);
+    seat.acted = true;
+    seat.lastAction = seat.allIn ? `All-in ${seat.bet}` : `Raise ${seat.bet}`;
+
+    if (seat.bet > before) {
+      // 최소에 못 미치는 올인은 **베팅을 다시 열지 않는다.** 열어 주면 이미 액션한
+      // 사람들이 다시 돌고, 그게 라운드가 안 닫히는 흔한 원인이다.
+      if (full) {
+        game.minRaise = seat.bet - before;
+        for (const s of game.seats) if (s !== seat && !s.folded && !s.allIn) s.acted = false;
+      }
+      game.toCall = seat.bet;
+    }
+  }
+
+  advance(game);
+  touch(game);
+  return null;
+}
+
+/** 다음 행동자로. 라운드가 닫혔으면 스트리트를 넘기고, 더 넘길 게 없으면 쇼다운. */
+export function advance(game) {
+  if (live(game.seats).length <= 1) { game.phase = 'showdown'; game.turn = -1; return; }
+
+  if (!roundClosed(game.seats, game.toCall)) {
+    game.turn = nextActor(game.seats, game.turn);
+    if (game.turn >= 0) return;
+  }
+
+  nextStreet(game);
+}
+
+/** 스트리트를 넘긴다. 행동할 사람이 없으면 남은 보드를 끝까지 깐다. */
+function nextStreet(game) {
+  const order = ['preflop', 'flop', 'turn', 'river'];
+  let at = order.indexOf(game.phase);
+
+  for (;;) {
+    if (at >= order.length - 1) { game.phase = 'showdown'; game.turn = -1; return; }
+    at += 1;
+    const street = order[at];
+
+    endStreet(game.seats);
+    game.toCall = 0;
+    game.minRaise = BIG_BLIND;
+    game.phase = street;
+    while (game.board.length < BOARD_AT[street]) game.board.push(card(game));
+
+    // 아직 베팅할 사람이 둘 이상이면 여기서 멈추고 차례를 준다.
+    if (actionable(game.seats).length >= 2) {
+      game.turn = firstToAct(game.seats, game.button, street);
+      if (game.turn >= 0) return;
+    }
+    // 아니면 다음 스트리트로 계속 — 보드만 깔면서 쇼다운까지 간다.
+    game.turn = -1;
+  }
+}
+
+/** 블라인드만으로 이미 판이 끝난 경우(전원 올인)를 흘려보낸다. */
+function settleIfNoAction(game) {
+  if (live(game.seats).length <= 1 || actionable(game.seats).length >= 2) return;
+  if (actionable(game.seats).length === 1 && game.toCall > 0) {
+    const one = actionable(game.seats)[0];
+    if (owed(one, game.toCall) > 0) return;        // 아직 콜/폴드를 골라야 한다
+  }
+  nextStreet(game);
+}
+
+// ---------------------------------------------------------------- 정산
+
+/** 팟을 나눠 준다. 칩은 여기서만 움직인다. */
+export function settle(game) {
+  const { gain, pots, shown } = award(game.seats, game.board, game.button);
+
+  for (let i = 0; i < game.seats.length; i += 1) {
+    const s = game.seats[i];
+    if (s.committed) game.chips.take(s.id, s.committed);
+    if (gain[i]) game.chips.give(s.id, gain[i]);
+    s.chips = game.chips.get(s.id);
+  }
+
+  game.results = {
+    pots,
+    shown,
+    rows: game.seats.map((s, i) => ({
+      seat: s, net: gain[i] - s.committed, won: gain[i], put: s.committed,
+    })),
+  };
+  game.phase = 'settled';
+  touch(game);
+}
+
+/** 다음 핸드로. 둘이 안 남으면 판이 끝난다. */
+export function nextHand(game) {
+  return beginHand(game);
+}
+
+export function end(game, reason) {
+  game.phase = 'done';
+  game.turn = -1;
+  game.endedReason = reason;
+  touch(game);
+}
+
+/** 시작할 때와 견준 증감. 결과 화면과 wallet.commit 이 쓴다. */
+export const standings = (game) => game.seats
+  .map((seat) => ({ seat, chips: seat.chips, delta: game.chips?.deltas()[seat.id] ?? 0 }))
+  .sort((a, b) => b.chips - a.chips);
+
+export function expired(now = Date.now()) {
+  const out = [];
+  for (const game of games.values()) {
+    if (game.phase === 'done') {
+      if (now - game.lastAt > IDLE_MS) games.delete(game.channelId);
+      continue;
+    }
+    if (now - game.lastAt > IDLE_MS && !game.driving) {
+      end(game, 'idle');
+      out.push(game);
+    }
+  }
+  return out;
+}
+
+export default {
+  MAX_SEATS, IDLE_MS, BUY_IN,
+  create, get, remove, forChannel, touch, seatOf, seatIndexOf, hasNpc,
+  humanSeat, npcSeat, addSeat, start, beginHand, currentSeat, pot,
+  actionsFor, raisesFor, toCallFor, act, advance, settle, nextHand, end,
+  standings, expired,
+};

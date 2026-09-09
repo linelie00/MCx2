@@ -10,6 +10,9 @@ import { loadCommands } from './src/loadCommands.js';
 import { fail } from './src/embeds.js';
 import { checkOwnerKeys } from './src/api.js';
 import { useCustomFaces } from './src/yacht/render.js';
+import {
+  useCardEmoji, emojiName, BACK_NAME, SUITS, RANKS,
+} from './src/casino/cards.js';
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -41,29 +44,64 @@ client.once('clientReady', async (c) => {
   // 조회 기능은 키 없이도 동작해야 한다.
   await checkOwnerKeys();
 
-  // 서버에 dice1~dice6 이름으로 주사위 그림을 올려 뒀으면 요트가 그걸 쓴다.
-  // dice1k~dice6k(다른 색)까지 있으면 남긴 주사위를 색으로 구분한다.
-  // 둘 다 없으면 키캡 숫자(1️⃣~6️⃣)에 [] 표시다 — 아무 설정 없이도 보이게 하려는 기본값이다.
+  await loadEmoji(c);
+});
+
+/**
+ * 게임에 쓸 그림 이모지를 찾아 갈아 끼운다.
+ *
+ * **앱 이모지를 먼저 본다.** 앱 이모지는 앱당 2000개까지라 카드 53장이 들어가고,
+ * 서버 슬롯(무료 50칸)을 안 먹으며 어느 서버에서나 쓸 수 있다. 서버 이모지는 예전에
+ * 주사위를 거기 올려 뒀기 때문에 뒤로 남겨 둔 폴백이다.
+ *
+ * 못 찾아도 게임은 돈다 — 주사위는 키캡 숫자, 카드는 `**A**♠️` 로 그린다.
+ * 그래서 여기서 실패해도 죽이지 않고 로그만 남긴다.
+ */
+async function loadEmoji(c) {
+  const all = new Map();
+  try {
+    for (const e of (await c.application.emojis.fetch()).values()) all.set(e.name, e.toString());
+  } catch (err) {
+    console.warn('[봇] 앱 이모지 확인 실패:', err.message);
+  }
   try {
     const guild = await c.guilds.fetch(config.discord.guildId);
-    const emojis = await guild.emojis.fetch();
-    const pick = (name) => emojis.find((x) => x.name === name)?.toString() ?? null;
-    const bySuffix = (suffix) =>
-      ['', ...Array.from({ length: 6 }, (_, i) => pick(`dice${i + 1}${suffix}`))];
-
-    const found = bySuffix('');
-    const kept = bySuffix('k');
-    if (found.some(Boolean) || kept.some(Boolean)) {
-      useCustomFaces(found, kept);
-      console.log(
-        `[봇] 주사위 이모지 ${found.filter(Boolean).length}/6`
-        + ` (남긴 것 ${kept.filter(Boolean).length}/6) 를 서버에서 찾았습니다.`,
-      );
+    for (const e of (await guild.emojis.fetch()).values()) {
+      if (!all.has(e.name)) all.set(e.name, e.toString());   // 앱 쪽이 우선
     }
   } catch (err) {
-    console.warn('[봇] 주사위 이모지 확인 실패(키캡 숫자를 씁니다):', err.message);
+    console.warn('[봇] 서버 이모지 확인 실패:', err.message);
   }
-});
+
+  const pick = (name) => all.get(name) ?? null;
+
+  // 주사위 — dice1~6, 그리고 남긴 것을 색으로 구분할 dice1k~6k
+  const dice = (suffix) =>
+    ['', ...Array.from({ length: 6 }, (_, i) => pick(`dice${i + 1}${suffix}`))];
+  const faces = dice('');
+  const kept = dice('k');
+  if (faces.some(Boolean) || kept.some(Boolean)) {
+    useCustomFaces(faces, kept);
+    console.log(`[봇] 주사위 이모지 ${faces.filter(Boolean).length}/6`
+      + ` (남긴 것 ${kept.filter(Boolean).length}/6)`);
+  }
+
+  // 카드 — card_as … card_kc 와 뒷면
+  const cards = {};
+  for (const suit of SUITS) {
+    for (const rank of RANKS) {
+      const name = emojiName({ rank, suit });
+      const e = pick(name);
+      if (e) cards[name] = e;
+    }
+  }
+  const back = pick(BACK_NAME);
+  if (back) cards[BACK_NAME] = back;
+  if (Object.keys(cards).length) {
+    useCardEmoji(cards);
+    console.log(`[봇] 카드 이모지 ${Object.keys(cards).length}/53`);
+  }
+}
 
 client.on('interactionCreate', async (interaction) => {
   // 등록해 둔 서버 밖에서 온 것은 무시한다.

@@ -34,12 +34,14 @@ const COL_W = 7;
  * 클라이언트마다 폭이 갈려 표를 어긋나게 하므로 안 쓴다.
  */
 const HINTS = {
-  aces: '눈의 합',
-  deuces: '눈의 합',
-  threes: '눈의 합',
-  fours: '눈의 합',
-  fives: '눈의 합',
-  sixes: '눈의 합',
+  // 위칸을 전부 "눈의 합" 이라고만 적어 두니 어느 눈을 세는 건지가 안 보였다.
+  // 라벨이 1~6 이라 더 헷갈린다. 세는 눈을 그대로 적는다.
+  aces: '1의 합',
+  deuces: '2의 합',
+  threes: '3의 합',
+  fours: '4의 합',
+  fives: '5의 합',
+  sixes: '6의 합',
   choice: '눈의 합',
   fourKind: '눈의 합',
   fullHouse: '눈의 합',

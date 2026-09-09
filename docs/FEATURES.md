@@ -3,7 +3,7 @@
 미하티(MIHEARTI)에 추가된 주요 기능과 백엔드 도입의 큰 흐름을 정리한 문서입니다.
 (최종 갱신: 2026-09-09)
 
-> 정적 페이지(Home/World/Character)에 이어, **갤러리·스토리 뷰어·방명록·플레이리스트**와
+> 정적 페이지(Home/World/Character)에 이어, **갤러리·스토리 뷰어·방명록·플레이리스트·영화 기록**과
 > 이를 뒷받침하는 **Express API + 로컬 파일 저장소**가 추가되었습니다.
 
 ---
@@ -27,20 +27,24 @@ server/
     │   └── paths.js           데이터/업로드 경로 (DATA_DIR=볼륨 대응, 미설정 시 로컬)
     ├── middleware/
     │   └── requireOwner.js    X-Owner-Key 검증 (쓰기 보호)
-    ├── routes/                gallery.js · auth.js · guestbook.js · playlist.js
-    ├── controllers/           galleryController.js · guestbookController.js · playlistController.js
+    ├── routes/                gallery.js · auth.js · guestbook.js · playlist.js · movie.js
+    ├── controllers/           galleryController.js · guestbookController.js
+    │                          playlistController.js · movieController.js
     ├── services/
     │   ├── storageService.js  로컬 저장 + 치수 측정 + 영상 poster(ffmpeg)
     │   ├── metaStore.js       gallery.json 읽기/쓰기 (없으면 seed 복사)
     │   ├── guestbookStore.js  guestbook.json 읽기/쓰기
     │   ├── playlistStore.js   playlists.json 읽기/쓰기 (없으면 seed 복사)
+    │   ├── movieStore.js      movies.json 읽기/쓰기 (없으면 seed 복사)
     │   └── youtubeService.js  YouTube Data API v3 (videoId 추출 · 메타 조회 · 검색)
     └── data/
         ├── gallery.seed.json     기본 태그 시드 (커밋)
         ├── gallery.json          라이브 갤러리 데이터 (gitignore)
         ├── guestbook.json        라이브 방명록 데이터 (gitignore)
         ├── playlists.seed.json   빈 구조 시드 (커밋)
-        └── playlists.json        라이브 플레이리스트 데이터 (gitignore)
+        ├── playlists.json        라이브 플레이리스트 데이터 (gitignore)
+        ├── movies.seed.json      빈 구조 시드 (커밋)
+        └── movies.json           라이브 영화 데이터 (gitignore)
 ```
 
 ### 의존성
@@ -85,6 +89,12 @@ POST   /api/playlist/:id/tracks                 (owner) {url,note} → 메타 �
 PATCH  /api/playlist/:id/tracks/order           (owner) 트랙 순서  ※ ':trackId'보다 먼저
 PATCH  /api/playlist/:id/tracks/:trackId        (owner) note 수정
 DELETE /api/playlist/:id/tracks/:trackId        (owner)
+
+# 영화 (조회 공개, 쓰기는 오너 — 전부 멀티파트)
+GET    /api/movie                   전체 목록
+POST   /api/movie                   (owner) 등록. poster(필수) + hoverPoster(선택)
+PATCH  /api/movie/:id               (owner) 수정 — 평점만 고쳐도 멀티파트다
+DELETE /api/movie/:id               (owner)
 ```
 
 ---
@@ -248,16 +258,87 @@ Track    { id, videoId, title, channel, thumbnail, duration(초), note?, addedAt
 
 ---
 
-## 8. 데이터 관리 정책
+## 8. 영화 기록 (/movie)
+
+둘이 같이 본 영화를 남기는 페이지. **심야 영화관 컨셉의 풀블리드 다크 모드**로,
+다른 페이지의 양피지 톤과 일부러 다르게 간다.
+`Pages/Movie.js` + `Components/movie/*` + `Styles/Movie.css`.
+
+위에서 아래로: 네온사인 → (오너만) **코멘트가 필요한 영화** → **최근 본 영화**(캐러셀) →
+**포스터 아카이브**(전체 그리드) → **관람 캘린더**. 포스터나 날짜를 누르면 티켓 모달이 열린다.
+
+### 데이터 모델 (`movies.json`)
+
+```txt
+Movie { id, title, director, date('YYYY-MM-DD'), poster, hoverPosterImage?,
+        ratings: { migel:{stars,comment}, matiam:{stars,comment} }, createdAt }
+```
+- **날짜당 한 편.** 클라이언트가 저장 버튼을 막고 서버가 409 로 한 번 더 막는다.
+- `stars` 는 0~5, 0.5 단위. `comment` 는 서버에서 300자로 자른다.
+- 오너 이름·색은 `Data/movies.js` 의 `movieOwners` 가 갖는다(겨울/사백 + 색).
+  정적 영화 배열은 비어 있다 — **화면에 보이는 것은 전부 API 에서 온다.**
+
+### 포스터 캐러셀
+
+- 트랙을 옮기는 대신 카드마다 **원형 최단거리 offset** 을 CSS 변수로 넘기고 CSS 가 위치를
+  잡는다(`translateX(offset × 190px)` + `scale`/`opacity`). 끝에서 처음으로 넘어갈 때
+  되감기가 없다.
+- 3.5초마다 자동 회전하되 **카드에 마우스를 올리면 멈춘다.** `hoverPosterImage` 가 있으면
+  올렸을 때 그 이미지로 바뀐다.
+- 가운데 카드를 누르면 티켓이 열리고, 옆 카드를 누르면 그 카드가 가운데로 온다.
+
+### 관람 캘린더
+
+- 날짜 → 영화를 `YYYY-MM-DD` 문자열 키로 찾는다.
+- **처음 보여 주는 달은 오늘이 아니라 가장 최근 영화가 있는 달**이다. 기록을 보러 온
+  페이지에서 빈 이번 달을 띄울 이유가 없다.
+- 오너에게만 칸 위에 `편집` 알약이 뜬다(전체 정보 수정 다이얼로그로 간다).
+
+### 티켓 모달
+
+영화를 **극장 티켓**으로 그린다 — 본권(포스터·제목·감독·관람일·양쪽 별점) + 점선 절취선 +
+`ADMIT TWO` 부본(바코드, id 뒤 6자리로 만든 일련번호).
+
+- 커서 위치를 최대 **8도** 기울기로 바꾼다. **편집 중에는 끈다** — 입력하는데 판이 흔들리면 안 된다.
+- 별점·코멘트만 이 자리에서 고치고, 제목·포스터 같은 나머지는 캘린더의 `편집` 으로 간다.
+- `z-index: 10000`. 네비게이션 바가 9999 라, 그 위로 올려야 상단 닫기(×)가 안 가린다.
+  추가/수정 다이얼로그는 다시 그 위(10001).
+
+### 오너 전용
+
+`+ 영화 추가`, 캘린더 `편집`, 티켓의 `별점·코멘트 수정`·`삭제`, 그리고
+**코멘트가 필요한 영화** 구역 전체. 마지막 것은 **지금 로그인한 오너 기준**으로,
+자기가 한줄평을 안 쓴 영화만 모아 준다.
+
+### 알아둘 것
+
+- **"안 씀" 판정은 별점이 아니라 코멘트가 비었는지로 한다.** 등록 다이얼로그가 별점을
+  기본 4로 채우기 때문에 별점으로 보면 전부 "썼음" 이 된다.
+- **`ratings` 는 통째로 덮어쓴다.** 한쪽만 보내면 상대 평점이 날아간다. 웹 UI 는 항상 둘 다
+  보내지만, 봇처럼 밖에서 고칠 때는 읽기-병합-쓰기를 해야 한다(12번 참고).
+- **평점만 고쳐도 멀티파트다.** 라우트가 multer 뒤에 있어 `express.json()` 이 안 걸려 있다.
+- `Movie.css` 는 `.movie` 에만 `overflow: hidden` 을 준다(`.content` 는 안 건드린다 —
+  ARCHITECTURE 의 sticky 규약). 캐러셀 카드가 화면 밖으로 나가므로 이 clip 이 필요하고,
+  대신 **`.movie` 안에서는 `position: sticky` 를 쓸 수 없다.**
+- **반응형 기준이 표준(375/767/1023/1024)과 다르다.** 이 페이지만 480/600/620 에서 꺾인다.
+  손볼 때 알고 있어야 한다.
+- 서버가 죽어 있으면 **아무 말 없이 빈 페이지**가 된다(`.catch(() => {})`). 정적 폴백이
+  없어져서 네온사인만 남는다.
+- CSS 변수 이름이 값과 안 맞는다. `--mv-green` 은 실제로 붉은 주황(`#e2472f`)이고
+  `--mv-green-core` 는 청록이다. 이름만 보고 고치지 말 것.
+
+---
+
+## 9. 데이터 관리 정책
 
 - **라이브 데이터는 git 추적에서 분리**: `gallery.json`, `guestbook.json`, `playlists.json`,
-  `uploads/`는 `.gitignore`. git 작업(checkout/reset 등)에 사용자 데이터가 덮이지 않도록.
+  `movies.json`, `uploads/`는 `.gitignore`. git 작업(checkout/reset 등)에 사용자 데이터가 덮이지 않도록.
 - 기본값은 `*.seed.json`(커밋). 새 클론/파일 부재 시 store가 시드를 자동 복사.
 - 백업이 필요하면 `server/src/data/*.json` + `server/uploads/`를 별도로 보관.
 
 ---
 
-## 9. 환경변수 (server/.env)
+## 10. 환경변수 (server/.env)
 
 ```txt
 OWNER_MATIAM_KEY=...   # 마티암오너 패스코드
@@ -270,7 +351,7 @@ YOUTUBE_API_KEY=...    # 플레이리스트 곡 추가/검색용 (YouTube Data A
 
 ---
 
-## 10. 실행
+## 11. 실행
 
 ```bash
 # 클라이언트 (CRA, :3000)
@@ -285,7 +366,7 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 
 ---
 
-## 11. 디스코드 봇 (`bot/`)
+## 12. 디스코드 봇 (`bot/`)
 
 둘만 쓰는 비공개 서버용. Railway 에 **별도 서비스**로 올린다(배포는 `DEPLOY.md` 9번).
 

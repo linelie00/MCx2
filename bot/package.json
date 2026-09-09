@@ -11,7 +11,8 @@
     "dev": "node --watch index.js",
     "register": "node register-commands.js",
     "build-content": "node scripts/build-content.mjs",
-    "check-keys": "node check-keys.js"
+    "check-keys": "node check-keys.js",
+    "check-wallet": "node scripts/check-wallet.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

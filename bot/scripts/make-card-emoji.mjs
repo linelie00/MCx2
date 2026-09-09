@@ -25,9 +25,10 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
 import 'dotenv/config';
 import { SUITS, RANKS, emojiName, BACK_NAME } from '../src/casino/cards.js';
+import { toPng } from './lib/png.mjs';
+import { upload } from './lib/appEmoji.mjs';
 
 const SIZE = 128;
 const SS = 4;                      // 4배로 그린 뒤 줄여 계단을 없앤다
@@ -188,52 +189,6 @@ function downsample(src) {
   return out;
 }
 
-// ---------------------------------------------------------------- PNG
-
-const CRC = (() => {
-  const t = new Int32Array(256);
-  for (let n = 0; n < 256; n += 1) {
-    let c = n;
-    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c;
-  }
-  return t;
-})();
-
-const crc32 = (buf) => {
-  let c = 0xffffffff;
-  for (const b of buf) c = CRC[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-};
-
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([len, body, crc]);
-}
-
-function toPng(rgba) {
-  const raw = Buffer.alloc((SIZE * 4 + 1) * SIZE);
-  for (let y = 0; y < SIZE; y += 1) {
-    raw[y * (SIZE * 4 + 1)] = 0;
-    rgba.copy(raw, y * (SIZE * 4 + 1) + 1, y * SIZE * 4, (y + 1) * SIZE * 4);
-  }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(SIZE, 0);
-  ihdr.writeUInt32BE(SIZE, 4);
-  ihdr[8] = 8;
-  ihdr[9] = 6;
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
 // ---------------------------------------------------------------- 만들기
 
 function everyCard() {
@@ -241,11 +196,11 @@ function everyCard() {
   for (const suit of SUITS) {
     for (const rank of RANKS) {
       const rgba = downsample(drawCard(rank, suit));
-      out.push({ name: emojiName({ rank, suit }), rgba, png: toPng(rgba) });
+      out.push({ name: emojiName({ rank, suit }), rgba, png: toPng(rgba, SIZE) });
     }
   }
   const back = downsample(drawBack());
-  out.push({ name: BACK_NAME, rgba: back, png: toPng(back) });
+  out.push({ name: BACK_NAME, rgba: back, png: toPng(back, SIZE) });
   return out;
 }
 
@@ -283,68 +238,7 @@ function contactSheet(cards, cols) {
     blit(c.rgba, SIZE, i * SMALL, rows * SIZE + 8, SMALL);
   });
 
-  const raw = Buffer.alloc((sheetW * 4 + 1) * sheetH);
-  for (let y = 0; y < sheetH; y += 1) {
-    raw[y * (sheetW * 4 + 1)] = 0;
-    out.copy(raw, y * (sheetW * 4 + 1) + 1, y * sheetW * 4, (y + 1) * sheetW * 4);
-  }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(sheetW, 0);
-  ihdr.writeUInt32BE(sheetH, 4);
-  ihdr[8] = 8; ihdr[9] = 6;
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-// ---------------------------------------------------------------- 올리기
-
-const API = 'https://discord.com/api/v10';
-
-async function api(pathname, init = {}) {
-  const res = await fetch(`${API}${pathname}`, {
-    ...init,
-    headers: {
-      Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
-      'Content-Type': 'application/json',
-      ...init.headers,
-    },
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} — ${await res.text()}`);
-  return res.status === 204 ? null : res.json();
-}
-
-async function upload(cards, force) {
-  const app = await api('/applications/@me');
-  const existing = (await api(`/applications/${app.id}/emojis`)).items ?? [];
-  const byName = new Map(existing.map((e) => [e.name, e]));
-  console.log(`앱 이모지 ${existing.length}/2000 개가 이미 있습니다.\n`);
-
-  let made = 0;
-  let skipped = 0;
-  for (const card of cards) {
-    const old = byName.get(card.name);
-    if (old && !force) { skipped += 1; continue; }
-    if (old) await api(`/applications/${app.id}/emojis/${old.id}`, { method: 'DELETE' });
-
-    await api(`/applications/${app.id}/emojis`, {
-      method: 'POST',
-      body: JSON.stringify({
-        name: card.name,
-        image: `data:image/png;base64,${card.png.toString('base64')}`,
-      }),
-    });
-    made += 1;
-    process.stdout.write(`\r  올리는 중 ${made}/${cards.length - skipped}  (${card.name})   `);
-    // 이모지 생성은 레이트리밋이 빡빡하다. 천천히 간다.
-    await new Promise((r) => { setTimeout(r, 350); });
-  }
-  console.log(`\n\n올림 ${made}개${skipped ? ` · 이미 있어서 건너뜀 ${skipped}개` : ''}.`);
-  if (skipped) console.log('다시 올리려면 --force 를 붙이세요.');
-  console.log('봇을 재시작하면 부팅할 때 찾아서 씁니다.');
+  return toPng(out, sheetW, sheetH);
 }
 
 // ---------------------------------------------------------------- 실행
@@ -373,5 +267,5 @@ if (args.includes('--sheet')) {
   for (const c of cards) fs.writeFileSync(path.join(outDir, `${c.name}.png`), c.png);
   console.log(`${outDir} 에 저장했습니다. (올리지 않았습니다)`);
 } else {
-  await upload(cards, force);
+  await upload(cards, { force, what: '카드' });
 }

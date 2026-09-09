@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pickRandom } from '../pickOfDay.js';
 import { describe, best5 } from '../casino/poker.js';
+import { preflopScore } from './ai.js';
 
 const FILE = path.join(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'holdem-lines.json',
@@ -103,6 +104,23 @@ const FEEL = {
 };
 
 /**
+ * 손 느낌 한마디.
+ *
+ * 보드가 깔린 뒤에는 만들어진 손으로 보면 되는데, **프리플랍에는 그러면 안 된다.**
+ * 두 장짜리 best5 는 AA 를 그냥 "페어"(그저 그렇다)로, AKs 를 "하이카드"(별로다)로
+ * 읽는다 — 프리플랍 최강 두 손이 시무룩해진다. 그때는 NPC 판단이 쓰는 것과 같은
+ * 시작패 점수를 쓴다.
+ */
+const feelOf = (hole, board) => (board.length
+  ? FEEL[best5([...hole, ...board]).category]
+  : ((score) => {
+    if (score >= 0.6) return '아주 좋다';
+    if (score >= 0.45) return '좋다';
+    if (score >= 0.28) return '그저 그렇다';
+    return '별로다';
+  })(preflopScore(hole)));
+
+/**
  * 지금 판이 어떻게 생겼는지.
  *
  * 남의 두 장은 여기 절대 안 들어간다. 화면에는 안 보이는데 모델에게만 새는 길이다.
@@ -131,7 +149,7 @@ function table(game, speaker) {
     if (me && s.hole.length) {
       mine = open
         ? ` · 내 패 ${plainHand(s.hole)} ← 나`
-        : ` · 내 손 느낌: ${FEEL[best5([...s.hole, ...game.board]).category]} ← 나`;
+        : ` · 내 손 느낌: ${feelOf(s.hole, game.board)} ← 나`;
     }
     rows.push(`${s.name}: 칩 ${s.chips}${tag ? ` · ${tag}` : ''}${mine}`);
   }

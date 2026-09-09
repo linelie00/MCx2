@@ -127,7 +127,7 @@ async function say(game, character, key, vars = {}, { always = false, p, live: l
 
 const seatSays = (game, seat, key, vars, opts = {}) => (
   seat.kind === 'npc'
-    ? say(game, seat.character, `player.${seat.character}.${key}`, vars, { p: 0.5, live: 0.3, ...opts })
+    ? say(game, seat.character, `player.${seat.character}.${key}`, vars, { p: 0.55, live: 0.3, ...opts })
     : Promise.resolve(false)
 );
 
@@ -170,7 +170,7 @@ async function runDriver(game) {
           await showBoard(game, STREET_NAME[street]);
           const talker = game.seats.find((s) => s.kind === 'npc' && !s.folded && !s.out);
           if (talker && await seatSays(game, talker, 'street', { street: STREET_NAME[street] },
-            { p: 0.3 })) await repost(game);
+            { p: 0.4 })) await repost(game);
         } else {
           await draw(game);
         }
@@ -196,9 +196,15 @@ async function runDriver(game) {
         raises: state.raisesFor(game),
       });
       // 고른 수를 먼저 말하고 둔다. 결과를 보고 말하면 "선택할 때의 반응" 이 안 된다.
+      //
+      // **폴드도 늘 말한다.** 그 판에서 그 사람이 빠지는 유일한 순간이라, 여기서 조용하면
+      // 한 핸드 내내 한마디도 안 하고 사라지는 일이 생긴다(실제로 그랬다).
+      // 체크·콜은 한 라운드에 여러 번 오므로 가끔만.
       const big = move.action === 'allin' || move.action === 'raise';
+      const speaks = big || move.action === 'fold';
       const amount = move.action === 'allin' ? seat.bet + seat.chips : move.to;
-      await seatSays(game, seat, move.action, { amount }, { always: big, live: big ? 0.6 : 0.25 });
+      await seatSays(game, seat, move.action, { amount },
+        { always: speaks, live: speaks ? 0.6 : 0.25 });
 
       state.act(game, move.action, move.to);
       await draw(game);

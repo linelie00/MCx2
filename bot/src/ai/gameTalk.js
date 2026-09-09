@@ -18,7 +18,7 @@
  */
 import { generate, checkRate, noteCall } from './client.js';
 import { voicePromptFor, NAME } from './persona.js';
-import { RULES, clean, recentOf } from './voice.js';
+import { ATTITUDE, RULES, clean, recentOf } from './voice.js';
 import config from '../config.js';
 
 /**
@@ -30,10 +30,10 @@ const RESERVE = 0.3;
 /** 한 판에서 NPC 하나가 할 수 있는 말의 최대 수. 폭주 방지용 안전장치다. */
 export const MAX_LINES = 40;
 
-/** 게임 상황을 아는 부분. persona 는 게임을 모르므로 여기서 뒤에 붙인다. */
+/** 요트에서만 다른 부분. 노는 태도 자체는 voice.js 의 ATTITUDE 가 들고 있다. */
 const PLAYING = {
-  migel: '큰 것을 노린다. 잘 되면 신나 하고 안 되면 웃어넘긴다. 지고 있어도 기죽지 않는다.',
-  matiam: '신중하다. 확실한 쪽을 고르고 무리하지 않는다. 남이 무리하는 걸 재미있어한다.',
+  migel: '- 요트에서는 큰 것을 노린다. 안전한 칸보다 한 방을 본다.',
+  matiam: '- 요트에서는 확실한 칸부터 채운다. 보너스를 놓치지 않으려 한다.',
 };
 
 const systemFor = (character, variant) => [
@@ -41,7 +41,10 @@ const systemFor = (character, variant) => [
   '',
   '## 지금 하고 있는 것',
   '친구들과 요트 다이스(주사위 5개로 12칸을 채우는 게임)를 하는 중이다.',
-  `게임할 때의 나: ${PLAYING[character]}`,
+  '',
+  '## 판에서의 나',
+  ...ATTITUDE[character],
+  PLAYING[character],
   ...RULES(character),
 ].join('\n');
 

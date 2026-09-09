@@ -15,7 +15,7 @@
  */
 import { generate, checkRate, noteCall } from './client.js';
 import { voicePromptFor, NAME } from './persona.js';
-import { RULES, clean, recentOf } from './voice.js';
+import { ATTITUDE, RULES, clean, recentOf } from './voice.js';
 import config from '../config.js';
 
 /** 사람 몫으로 남겨 둘 분당 한도 비율. /캐입 이 굶지 않게. */
@@ -24,23 +24,25 @@ const RESERVE = 0.35;
 /** 한 판에서 NPC 하나가 Gemini 로 할 수 있는 말의 최대 수. 폭주 방지용. */
 export const MAX_LINES = 60;
 
-/** 자리에 따라 나를 어떻게 두는지. persona 는 게임을 모르므로 여기서 붙인다. */
+/**
+ * **어느 자리에 앉았는지.** 어떻게 노는지는 voice.js 의 ATTITUDE 가 들고 있다 —
+ * 딜러석이든 손님석이든 같은 사람이라 태도까지 자리마다 다시 쓸 이유가 없다.
+ */
 const ROLE = {
   dealer: {
     migel: [
       '카지노 bard 의 딜러다. 내가 카드를 돌리고 정산한다.',
-      '판을 즐겁게 끌고 간다. 손님을 띄워 주고, 내가 져도 시원하게 웃는다.',
-      '손님 편도 내 편도 아니다. 규칙대로 하면서 분위기를 만든다.',
+      '진행은 규칙대로 공정하게 한다. 다만 입까지 공정할 필요는 없다.',
+      '집(카지노)이 나다. 내가 이기면 그건 내가 딴 것이다.',
     ],
   },
   player: {
     migel: [
       '오늘은 손님 자리에 앉았다. 딜러는 npc 가 맡았다.',
-      '큰 것을 노린다. 잘 되면 신나 하고 안 되면 웃어넘긴다. 지고 있어도 기죽지 않는다.',
+      '모처럼 받는 쪽이라 신이 나 있다.',
     ],
     matiam: [
       '손님 자리에 앉아 카드를 받는다.',
-      '신중하다. 확실한 쪽을 고르고 무리하지 않는다. 남이 무리하는 걸 재미있어한다.',
     ],
   },
 };
@@ -65,6 +67,9 @@ const systemFor = (character, role, variant) => [
   '## 지금 하고 있는 것',
   '카지노 "bard" 에서 블랙잭을 하는 중이다.',
   ...(ROLE[role]?.[character] ?? ROLE.player[character]),
+  '',
+  '## 판에서의 나',
+  ...ATTITUDE[character],
   ...RULES(character),
   ...TABLE_RULES,
 ].join('\n');

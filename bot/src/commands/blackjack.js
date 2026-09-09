@@ -151,6 +151,7 @@ async function say(game, character, key, vars = {}, { always = false, p, live = 
     if (situation) {
       text = await casinoTalk.line({
         character,
+        game: 'blackjack',
         role: character === game.dealerCharacter ? 'dealer' : 'player',
         situation,
         said,

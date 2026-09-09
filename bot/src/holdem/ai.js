@@ -119,7 +119,11 @@ export function equity(hole, board, opponents, { samples = 400, rand = Math.rand
 // ---------------------------------------------------------------- 판단
 
 /**
- * 지금 무엇을 할지. `{ action, to }`.
+ * 지금 무엇을 할지. `{ action, to, strength, bluff }`.
+ *
+ * `strength`(0~1)와 `bluff` 는 **대사가 쓴다.** 밀고 있는 것이 진심인지 허세인지를
+ * 알려 주지 않으면 NPC 가 블러프하면서 "영 별로지만 밀어 봅니다요" 하고 스스로
+ * 광고한다 — 포커에서 제일 재미있는 자리가 대사에서 죽는다.
  *
  * `legal` 과 `raises` 는 state 가 준 것을 그대로 받는다 — 표가 시키는 수를 낼 수 없을 때
  * (칩이 모자라 레이즈가 불가능하다든지) 물러설 곳을 여기서 정하지 않으면 버그가 산다.
@@ -145,23 +149,25 @@ export function chooseAction(styleKey, {
 
   // 셀 때는 올린다. 문턱은 프리플랍이 더 높다 — 두 장만 보고는 확신할 게 없다.
   const strongAt = board.length === 0 ? 0.62 : 0.72;
+  const out = (action, to = 0, bluff = false) => ({ action, to, strength, bluff });
+
   if (strength >= strongAt && can('raise') && raises.length) {
-    return { action: 'raise', to: bigRaise().to };
+    return out('raise', bigRaise().to);
   }
 
   // 블러프 — 이길 것 같지 않은데 밀어 본다. 미겔이 이걸로 산다.
   if (toCall === 0 && strength < 0.4 && can('raise') && raises.length && rand() < style.bluff) {
-    return { action: 'raise', to: pick(0).to };
+    return out('raise', pick(0).to, true);
   }
 
   if (toCall === 0) {
-    if (strength >= 0.55 && can('raise') && raises.length) return { action: 'raise', to: pick(0).to };
-    return can('check') ? { action: 'check', to: 0 } : { action: 'call', to: 0 };
+    if (strength >= 0.55 && can('raise') && raises.length) return out('raise', pick(0).to);
+    return can('check') ? out('check') : out('call');
   }
 
-  if (edge > 0) return { action: 'call', to: 0 };
-  if (can('fold')) return { action: 'fold', to: 0 };
-  return can('check') ? { action: 'check', to: 0 } : { action: 'call', to: 0 };
+  if (edge > 0) return out('call');
+  if (can('fold')) return out('fold');
+  return can('check') ? out('check') : out('call');
 }
 
 export default { STYLES, preflopScore, equity, chooseAction };

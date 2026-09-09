@@ -162,8 +162,16 @@ function allowed(said) {
  * `game` 은 GAMES 의 키다. 모르는 게임이면 조용히 null — 대사가 없을 뿐 판은 돈다.
  * situation 은 지금 판이 어떻게 생겼고 방금 무슨 일이 있었는지를 적은 메모이고,
  * 만드는 곳은 각 게임의 lines.js 다 — 이 파일은 판을 읽을 줄 모른다.
+ *
+ * `veto(text)` 는 **지어 온 줄을 버릴 이유**를 보는 검사다. 문자열을 돌려주면 그 줄을
+ * 버리고 null 을 준다 — 부르는 쪽이 캔드 대사로 물러선다. 홀덤에서 NPC 가 자기 홀
+ * 카드를 흘리는 것을 막으려고 생겼다. 프롬프트에 "밝히지 마라" 를 적는 것만으로는
+ * 안 막힌다는 걸 이미 봤고, 한 번 새면 그 판이 통째로 망가진다. 프롬프트가 1차,
+ * 이것이 2차 방어다. 무엇이 새면 안 되는지는 게임마다 다르니 판단은 부르는 쪽이 한다.
  */
-export async function line({ game, character, role = 'player', situation, said = [] }) {
+export async function line({
+  game, character, role = 'player', situation, said = [], veto,
+}) {
   // 기본값을 두지 않는다. 두면 새 게임이 game 을 빠뜨렸을 때 조용히 블랙잭 프롬프트로
   // 돌아가서, 포커 판에서 미겔이 Hit/Stand 를 말하는 식으로 티 안 나게 망가진다.
   if (!GAMES[game]) {
@@ -195,7 +203,17 @@ export async function line({ game, character, role = 'player', situation, said =
     // 줄바꿈 자체는 이상하지 않지만, 길어지면 판이 대사에 묻힌다.
     const rows = String(res.text || '').split('\n').map(clean).filter(Boolean);
     if (!rows.length) return null;
-    return rows.slice(0, 2).join('\n');
+    const out = rows.slice(0, 2).join('\n');
+
+    // 걸리면 **줄을 통째로 버린다.** 새는 낱말만 지우면 문장이 깨지고, 지운 자리가
+    // 오히려 티가 난다. 캔드 대사로 조용히 물러서는 편이 낫다.
+    const why = veto?.(out);
+    if (why) {
+      console.warn(`[${game}] ${NAME[character] ?? character} 대사 버림(${why}):`,
+        out.replace(/\n/g, ' ').slice(0, 60));
+      return null;
+    }
+    return out;
   } catch (err) {
     console.warn(`[${game}] ${NAME[character] ?? character} 대사 실패:`,
       err.message?.slice(0, 120));

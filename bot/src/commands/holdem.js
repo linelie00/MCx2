@@ -25,7 +25,9 @@ import {
   holeMessage, turnCall, resultEmbed,
 } from '../holdem/render.js';
 import { handText, isJumboable } from '../casino/cards.js';
-import { line, sometimes, memo, handName } from '../holdem/lines.js';
+import {
+  line, sometimes, memo, handName, spoilerVeto,
+} from '../holdem/lines.js';
 import * as casinoTalk from '../ai/casinoTalk.js';
 import { sayAsOrPlain } from '../discord/webhook.js';
 import { base, fail } from '../embeds.js';
@@ -132,7 +134,14 @@ async function say(game, character, key, vars = {}, { always = false, p, live: l
     const said = (game.spoken[character] ??= []);
     const situation = memo(game, key, vars, character);
     if (situation) {
-      text = await casinoTalk.line({ game: 'holdem', character, role: 'player', situation, said });
+      text = await casinoTalk.line({
+        game: 'holdem',
+        character,
+        role: 'player',
+        situation,
+        said,
+        veto: spoilerVeto(game, character),
+      });
     }
     if (text) { game.aiLeft -= 1; said.push(text); }
   }
@@ -250,6 +259,10 @@ async function runDriver(game) {
       // **폴드도 늘 말한다.** 그 판에서 그 사람이 빠지는 유일한 순간이라, 여기서 조용하면
       // 한 핸드 내내 한마디도 안 하고 사라지는 일이 생긴다(실제로 그랬다).
       // 체크·콜은 한 라운드에 여러 번 오므로 가끔만.
+      // 무슨 마음으로 두는지를 자리에 적어 둔다. 대사가 읽는다 — 허세인지 진심인지를
+      // 알려 주지 않으면 블러프하면서 별로라고 스스로 광고한다(holdem/lines.js).
+      seat.stance = { action: move.action, strength: move.strength, bluff: move.bluff };
+
       const big = move.action === 'allin' || move.action === 'raise';
       const speaks = big || move.action === 'fold';
       const amount = move.action === 'allin' ? seat.bet + seat.chips : move.to;

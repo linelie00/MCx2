@@ -79,6 +79,7 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     toCall: 0,           // 이번 라운드에 맞춰야 할 총액(자리의 bet 기준)
     minRaise: BIG_BLIND, // 다음 레이즈의 최소 증분
     handNo: 0,
+    hist: [],           // 이번 핸드에 누가 뭘 했는지. 전부 공개 정보 — 대사가 읽는다
     results: null,       // 직전 정산. settled 에서 보여 준다
     chips: null,         // 동기 장부(wallet.ledger)
     pendingChat: [],
@@ -164,6 +165,7 @@ export function beginHand(game) {
     s.folded = false;
     s.allIn = false;
     s.lastAction = null;
+    s.stance = null;        // 이번 수를 무슨 마음으로 뒀는지 (대사용)
   }
 
   const playing = game.seats.filter((s) => !s.out);
@@ -172,6 +174,7 @@ export function beginHand(game) {
   game.handNo += 1;
   game.deck = shuffle(newShoe(1));
   game.board = [];
+  game.hist = [];
   game.results = null;
 
   // 버튼을 다음 참가자로.
@@ -191,6 +194,8 @@ export function beginHand(game) {
   }
 
   game.phase = 'preflop';
+  note(game, game.seats[small]);
+  note(game, game.seats[big]);
   game.toCall = BIG_BLIND;
   game.minRaise = BIG_BLIND;
   game.turn = firstToAct(game.seats, game.button, 'preflop');
@@ -222,6 +227,17 @@ export const toCallFor = (game, seat) => owed(seat, game.toCall);
  * 한 수 둔다. **동기다** — 인터랙션 처리 안에서 부르므로 await 이 끼면 안 된다.
  * `to` 는 레이즈일 때 이번 라운드에 맞출 총액.
  */
+/**
+ * 방금 한 수를 흐름에 적는다.
+ *
+ * 화면 표의 "방금" 칸은 **마지막 하나**만 보여 준다. 그걸로는 "미겔이 플랍부터 계속
+ * 올린다" 같은 말을 할 수가 없다 — 포커 잡담의 절반이 그런 말인데. 전부 화면에
+ * 보였던 공개 정보라 대사에 넘겨도 새는 것이 없다.
+ */
+const note = (game, seat) => game.hist.push(
+  { street: game.phase, name: seat.name, act: seat.lastAction },
+);
+
 export function act(game, action, to = 0) {
   const seat = currentSeat(game);
   if (!seat) return '지금은 둘 수 없어요.';
@@ -259,6 +275,7 @@ export function act(game, action, to = 0) {
     }
   }
 
+  note(game, seat);
   advance(game);
   touch(game);
   return null;

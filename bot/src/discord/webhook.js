@@ -17,6 +17,18 @@ import { trunc } from '../embeds.js';
 const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
 
 /**
+ * 웹훅에 띄울 이름. **페르소나가 없는 화자도 여기 들어온다.**
+ *
+ * 카지노 딜러 `npc` 는 미겔이 손님 자리에 앉았을 때만 나오는 진행 역할이라 성격도 말투도
+ * 없다. 그래서 `persona.js` 의 `NAME`(= Gemini 프롬프트를 만드는 캐릭터 명단)이 아니라
+ * 여기서 이름을 붙인다. `characters.json` 에 넣으면 부팅 때 persona 가 그 캐릭터의
+ * 프롬프트를 만들다 터지고, `owners.js` 에 넣으면 `/영화` 선택지로 샌다.
+ *
+ * 아바타는 `assets/<key>.png` 를 웹훅 만들 때 한 번 구워 넣는다 — `assets/npc.png`.
+ */
+const DISPLAY = { ...NAME, npc: 'npc' };
+
+/**
  * 채널 × 캐릭터마다 웹훅 하나. 한 번 만들면 재사용한다.
  * 봇이 재시작하면 캐시는 비지만, 채널에 이미 있는 웹훅을 찾아 쓰므로 새로 만들지 않는다.
  */
@@ -34,7 +46,7 @@ export async function getWebhook(channel, character) {
   const hit = cache.get(cacheKey);
   if (hit) return hit;
 
-  const wanted = NAME[character];
+  const wanted = DISPLAY[character] ?? character;
   const existing = await host.fetchWebhooks();
   let hook = existing.find((w) => w.name === wanted && w.owner?.id === host.client.user.id);
 
@@ -75,7 +87,7 @@ export async function sayAsOrPlain(channel, character, content, label = '봇') {
   } catch (err) {
     console.warn(`[${label}] 웹훅 실패, 일반 메시지로 대체:`, err.message);
     return channel
-      .send({ content: `**${NAME[character] ?? character}** ${trunc(content, 1900)}` })
+      .send({ content: `**${DISPLAY[character] ?? character}** ${trunc(content, 1900)}` })
       .catch((e) => {
         console.warn(`[${label}] 대사 전송 실패:`, e.message);
         return null;

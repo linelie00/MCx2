@@ -24,6 +24,9 @@ import {
   PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, holeEmbed, resultEmbed,
 } from '../holdem/render.js';
 import { handText } from '../casino/cards.js';
+import { line, sometimes, memo, handName } from '../holdem/lines.js';
+import * as casinoTalk from '../ai/casinoTalk.js';
+import { sayAsOrPlain } from '../discord/webhook.js';
 import { base, fail } from '../embeds.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
@@ -78,6 +81,74 @@ async function showBoard(game, label) {
   await repost(game);
 }
 
+// ---------------------------------------------------------------- 대사
+//
+// 블랙잭과 같은 얼개다 — Gemini 로 먼저 지어 보고 안 되면 미리 써 둔 줄로 물러선다.
+// 대사는 전부 드라이버 안에서만 나간다(웹훅이 느려서 인터랙션 응답 경로에 두면 안 된다).
+
+/** 한 핸드에 Gemini 로 지을 수 있는 대사 수. 홀덤은 라운드가 넷이라 자리가 더 많다. */
+const AI_PER_HAND = 3;
+
+function aiBudget(game) {
+  if (game.aiHandNo !== game.handNo) {
+    game.aiHandNo = game.handNo;
+    game.aiLeft = AI_PER_HAND;
+  }
+  return game.aiLeft;
+}
+
+/**
+ * 그 캐릭터로 한 줄. 말했으면 true.
+ *
+ * 메모는 **화자별로** 만든다(holdem/lines.js) — 블랙잭처럼 모두의 카드를 넘기면
+ * NPC 가 남의 홀 카드를 말한다.
+ */
+async function say(game, character, key, vars = {}, { always = false, p, live: liveP = 0 } = {}) {
+  if (!always && !sometimes(p)) return false;
+  if (!game.message?.channel) return false;
+
+  let text = null;
+  if (liveP && aiBudget(game) > 0 && Math.random() < liveP) {
+    const said = (game.spoken[character] ??= []);
+    const situation = memo(game, key, vars, character);
+    if (situation) {
+      text = await casinoTalk.line({ game: 'holdem', character, role: 'player', situation, said });
+    }
+    if (text) { game.aiLeft -= 1; said.push(text); }
+  }
+
+  if (!text) text = line(key, vars);
+  if (!text) return false;
+
+  await sayAsOrPlain(game.message.channel, character, text, '홀덤');
+  await sleep(700);
+  return true;
+}
+
+const seatSays = (game, seat, key, vars, opts = {}) => (
+  seat.kind === 'npc'
+    ? say(game, seat.character, `player.${seat.character}.${key}`, vars, { p: 0.5, live: 0.3, ...opts })
+    : Promise.resolve(false)
+);
+
+/** 옆자리 반응. 수를 둔 사람이 아닌 다른 NPC 가 말한다. */
+async function banter(game, actor, key, vars = {}, p = 0.4) {
+  const watchers = game.seats.filter((s) => s.kind === 'npc' && s !== actor && !s.out && !s.folded);
+  if (!watchers.length) return false;
+  const w = watchers[Math.floor(Math.random() * watchers.length)];
+  return say(game, w.character, `banter.${w.character}.${key}`,
+    { name: actor.name, ...vars }, { p, live: 0.55 });
+}
+
+/** 판을 열며 하는 인사. bard 주인인 미겔이 있으면 미겔이, 없으면 마티암이 한다. */
+async function openTable(game) {
+  game.opened = true;
+  const host = game.seats.find((s) => s.character === 'migel')
+    ?? game.seats.find((s) => s.kind === 'npc');
+  if (host) await seatSays(game, host, 'welcome', {}, { always: true, live: 1 });
+  await repost(game);
+}
+
 // ---------------------------------------------------------------- 드라이버
 
 const STREET_NAME = { flop: '플랍', turn: '턴', river: '리버' };
@@ -90,12 +161,19 @@ async function runDriver(game) {
 
     for (;;) {
       if (game.phase === 'done') return;
+      if (!game.opened) await openTable(game);
 
       // 스트리트가 바뀌었으면 보드를 알리고 판을 다시 띄운다.
       if (game.phase !== street) {
         street = game.phase;
-        if (STREET_NAME[street]) await showBoard(game, STREET_NAME[street]);
-        else await draw(game);
+        if (STREET_NAME[street]) {
+          await showBoard(game, STREET_NAME[street]);
+          const talker = game.seats.find((s) => s.kind === 'npc' && !s.folded && !s.out);
+          if (talker && await seatSays(game, talker, 'street', { street: STREET_NAME[street] },
+            { p: 0.3 })) await repost(game);
+        } else {
+          await draw(game);
+        }
       }
 
       if (game.phase === 'showdown') { await settleAndShow(game); continue; }
@@ -117,8 +195,19 @@ async function runDriver(game) {
         legal: state.actionsFor(game),
         raises: state.raisesFor(game),
       });
+      // 고른 수를 먼저 말하고 둔다. 결과를 보고 말하면 "선택할 때의 반응" 이 안 된다.
+      const big = move.action === 'allin' || move.action === 'raise';
+      const amount = move.action === 'allin' ? seat.bet + seat.chips : move.to;
+      await seatSays(game, seat, move.action, { amount }, { always: big, live: big ? 0.6 : 0.25 });
+
       state.act(game, move.action, move.to);
       await draw(game);
+
+      // 큰 수에는 옆자리가 한마디 한다.
+      if (big || move.action === 'fold') {
+        const key = move.action === 'fold' ? 'fold' : (move.action === 'allin' ? 'allin' : 'raise');
+        if (await banter(game, seat, key, { amount }, big ? 0.5 : 0.22)) await repost(game);
+      }
     }
   } finally {
     game.driving = false;
@@ -130,8 +219,29 @@ async function runDriver(game) {
 /** 팟을 나누고 결과를 보여준다. 칩 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다. */
 async function settleAndShow(game) {
   state.settle(game);
+
+  // **결과를 먼저 붙잡아 둔다.** 아래 await 이 도는 동안 사람이 [다음 핸드] 를 누르면
+  // beginHand 가 game.results 를 비운다. 그러면 이 함수가 null 을 읽고 터진다.
+  const results = game.results;
+
   await repost(game);
   await commit(game.guildId, game.chips.deltas());
+
+  // 결과에 반응한다. 이긴 사람은 늘, 진 사람은 가끔.
+  const shown = new Map((results.shown ?? []).map((x) => [x.seatIndex, x.hand]));
+  const winners = results.rows.filter((r) => r.won > 0);
+  let spoke = false;
+
+  for (let i = 0; i < results.rows.length; i += 1) {
+    const r = results.rows[i];
+    if (r.seat.kind !== 'npc' || (r.put === 0 && r.won === 0)) continue;
+    const key = r.won > 0 ? (winners.length > 1 ? 'chop' : 'win') : 'lose';
+    spoke = await seatSays(game, r.seat, key, {
+      amount: `${Math.abs(r.net)}칩`,
+      hand: handName(shown.get(i)),
+    }, { always: r.won > 0, live: 0.55 }) || spoke;
+  }
+  if (spoke) await repost(game);
 }
 
 function kick(game) {

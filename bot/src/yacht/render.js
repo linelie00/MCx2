@@ -15,44 +15,12 @@ import {
 } from './rules.js';
 import { MAX_SEATS, current, ranking, filledCount } from './state.js';
 import { base, THEME_COLOR } from '../embeds.js';
+import { width, clipW, padEndW, padStartW } from '../text.js';
 
 export const PREFIX = 'yacht';
 
 const cid = (game, action, arg) =>
   [PREFIX, game.serial, game.rev, action, arg].filter((x) => x !== undefined).join(':');
-
-// ---------------------------------------------------------------- 폭 맞추기
-//
-// 한글은 고정폭 글꼴에서 라틴 문자의 두 배를 차지한다. 그냥 padEnd 를 쓰면 이름이 한글인
-// 열에서 표가 어긋난다. 게임 전용이라 공용 embeds.js 를 불리지 않고 여기 둔다.
-
-const isWide = (cp) =>
-  (cp >= 0x1100 && cp <= 0x115f) || (cp >= 0x2e80 && cp <= 0xa4cf)
-  || (cp >= 0xac00 && cp <= 0xd7a3) || (cp >= 0xf900 && cp <= 0xfaff)
-  || (cp >= 0xfe30 && cp <= 0xfe6f) || (cp >= 0xff00 && cp <= 0xff60)
-  || (cp >= 0xffe0 && cp <= 0xffe6);
-
-export function width(text) {
-  let w = 0;
-  for (const ch of String(text)) w += isWide(ch.codePointAt(0)) ? 2 : 1;
-  return w;
-}
-
-/** 보이는 폭 기준으로 자른다. */
-function clipW(text, n) {
-  let out = '';
-  let w = 0;
-  for (const ch of String(text)) {
-    const cw = isWide(ch.codePointAt(0)) ? 2 : 1;
-    if (w + cw > n) break;
-    out += ch;
-    w += cw;
-  }
-  return out;
-}
-
-const padEndW = (text, n) => `${text}${' '.repeat(Math.max(0, n - width(text)))}`;
-const padStartW = (text, n) => `${' '.repeat(Math.max(0, n - width(text)))}${text}`;
 
 // ---------------------------------------------------------------- 점수표
 
@@ -322,6 +290,6 @@ export function resultEmbed(game) {
 }
 
 export default {
-  PREFIX, faceOf, faceEmoji, faces, useCustomFaces, width, scoreTable,
+  PREFIX, faceOf, faceEmoji, faces, useCustomFaces, scoreTable,
   lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 };

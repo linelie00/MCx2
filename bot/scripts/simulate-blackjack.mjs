@@ -56,8 +56,10 @@ function playHand(styleKey, chips, lastWon) {
   if (!peeked) {
     for (let i = 0; i < hands.length; i += 1) {
       const hand = hands[i];
-      // 스플릿한 에이스는 한 장만 받고 끝
-      if (hand.splitAce && hand.cards.length === 1) hand.cards.push(draw(shoe));
+      // 쪼개서 생긴 손은 차례가 오면 바로 두 번째 장을 받는다.
+      if (hand.cards.length === 1) hand.cards.push(draw(shoe));
+      // 쪼갠 에이스는 그 한 장으로 끝.
+      if (hand.splitAce) continue;
 
       for (;;) {
         const mine = hands.filter((h) => h.seatIndex === 0).length;

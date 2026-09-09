@@ -221,7 +221,17 @@ export function memo(game, key, vars = {}, speaker = null) {
 
   const closes = event === 'broke' || event.startsWith('close');
   const head = closes ? closing(game, speaker) : table(game, speaker);
-  return [head, '', '## 지금', make(vars)]
+
+  // 홀 카드를 깔 때까지는 아무도 그걸 못 본다. 표에 "엎어 둔 카드 한 장" 이라고
+  // 적어 두는 것만으로는 부족했다 — 미겔이 배분이나 차례 알림에서 "(제 엎어 둔
+  // 카드를 탁 소리 나게 뒤집으며)" 같은 지문을 지어냈다. 말로 못 박는다.
+  // reveal 은 뒤집는 순간 그 자체라 빼야 한다(그 자리에서만 holeUp 이 아직 false 다).
+  const hidden = event !== 'reveal' && !closes && game.dealer?.length && !game.holeUp
+    ? '딜러가 엎어 둔 카드는 아직 아무도 못 봤다.'
+      + ' 그것을 뒤집거나 무슨 카드인지 아는 것처럼 말하지 않는다.'
+    : null;
+
+  return [head, '', '## 지금', make(vars), hidden]
     .filter((s) => s !== null).join('\n').trim();
 }
 

@@ -108,6 +108,10 @@ const DEALER_MOMENT = {
   bust: () => '내가 21을 넘겨 Bust 했다. 남은 손님들이 전부 이겼다.',
   blackjack: () => '내게 Blackjack 이 붙었다. 손님들에게는 안된 일이다.',
   insuranceOffer: () => '내 앞장이 A 라서 Insurance 를 살지 물어본다.',
+  dealtBlackjack: (v) => `방금 돌린 첫 두 장에서 ${v.name}에게 Blackjack 이 떴다.`
+    + ' 아직 내 밑장은 열지 않았고 정산도 안 했다. 지금은 그저 축하할 자리다.',
+  made21: (v) => `${v.name}이(가) 카드를 더 받아 합이 딱 21이 됐다.`
+    + ' Blackjack 은 아니지만 넘지 않고 맞춘 것이다. 아직 정산 전이다.',
   bet: (v) => `${v.name}이(가) ${v.amount}을 걸었다.`,
   'bet.allin': (v) => `${v.name}이(가) 가진 칩을 전부(${v.amount}) 걸었다. 올인이다.`,
   'result.win': (v) => `${v.name}이(가) 나를 이겼다. ${v.amount}을 내준다.`,
@@ -135,7 +139,10 @@ const PLAYER_MOMENT = {
   lose: (v) => `내가 졌다. ${v.amount}을 잃었다.`,
   push: () => '딜러와 비겼다. 건 돈은 그대로 돌아온다.',
   bust: () => '한 장을 더 받았다가 21을 넘겨 Bust 했다.',
-  blackjack: () => '첫 두 장이 21이다. Blackjack 이다.',
+  blackjack: () => '방금 받은 첫 두 장이 21이다. Blackjack 이다.'
+    + ' 아직 딜러 밑장은 안 열렸고 정산도 안 했다.',
+  made21: () => '카드를 더 받아 합이 딱 21이 됐다. Blackjack 은 아니지만 넘지 않고 맞췄다.'
+    + ' 여기서 더 받을 이유는 없다.',
   closeWin: (v) => `판이 끝났다. 오늘 밤 나는 ${v.amount}을 따고 일어난다.`,
   closeLose: (v) => `판이 끝났다. 오늘 밤 나는 ${v.amount}을 잃었다.`,
   closeEven: () => '판이 끝났다. 따지도 잃지도 않고 본전이다.',
@@ -148,6 +155,7 @@ const WATCHING = '지금 내 차례가 아니고, 나는 아무 수도 두지 �
 const BANTER_MOMENT = {
   bust: (v) => `옆자리 ${v.name}이(가) 21을 넘겨 Bust 했다. ${WATCHING}`,
   blackjack: (v) => `옆자리 ${v.name}에게 Blackjack 이 떴다. ${WATCHING}`,
+  made21: (v) => `옆자리 ${v.name}이(가) 카드를 더 받아 합을 딱 21로 맞췄다. ${WATCHING}`,
   double: (v) => `옆자리 ${v.name}이(가) Double 을 걸었다. ${WATCHING}`,
   split: (v) => `옆자리 ${v.name}이(가) Split 했다. ${WATCHING}`,
   surrender: (v) => `옆자리 ${v.name}이(가) Surrender 했다. ${WATCHING}`,

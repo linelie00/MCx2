@@ -89,10 +89,12 @@ async function repost(game) {
  * 때문인데, 정작 누구 패인지 알 수가 없어 헷갈렸다. 글자가 섞이면 이모지는 작아지지만,
  * 카드 그림을 작아도 읽히게 그려 뒀으므로 맥락을 얻는 편이 낫다.
  */
-async function showMove(game, { name, action, card, cards }) {
+async function showMove(game, { name, action, card, cards, split = false }) {
   const head = `**${name}** — ${action}${card ? ` ${cardText(card)}` : ''}`;
   const { total, bust } = handValue(cards);
-  const tag = bust ? '　_Bust_' : (isBlackjack(cards) ? '　_Blackjack_' : '');
+  // 쪼갠 손의 21은 Blackjack 이 아니다(1:1 로 친다). 판의 handLine 은 이미 그렇게
+  // 적고 있는데 여기만 안 그래서, 같은 손이 두 군데에서 다르게 보였다.
+  const tag = bust ? '　_Bust_' : (!split && isBlackjack(cards) ? '　_Blackjack_' : '');
   const body = `${handText(cards)}　**${total}**${tag}`;
 
   await game.message.channel.send({ content: `${head}\n${body}` })
@@ -217,6 +219,48 @@ async function banterAtDealer(game, event) {
 }
 
 /**
+ * 21이 된 손을 **그 자리에서** 축하한다.
+ *
+ * 21은 배분 때(Blackjack) 아니면 한 장 더 받다가(3장 이상) 결정되는데, 반응이 정산까지
+ * 밀려 있었다. 그때쯤이면 딜러가 카드를 다 뽑고 정산표까지 나온 뒤라 판이 제일
+ * 뜨거운 순간을 그냥 지나쳐 버린다.
+ *
+ * 첫 두 장인지 아닌지로 말을 나눈다. 배당이 다르기도 하지만(3:2 대 1:1) 무엇보다
+ * 놀랄 거리가 다르다 — Blackjack 은 받은 운이고 3장 21은 만든 것이다.
+ *
+ * 아직 딜러 밑장을 안 열었으므로 **배당 이야기는 하지 않는다.** 딜러도 Blackjack 이면
+ * 푸시다. 여기서는 축하만 하고, 얼마를 받는지는 정산에서 말한다.
+ */
+async function cheer21(game, hand) {
+  hand.cheered = true;
+  const seat = state.seatOfHand(game, hand);
+  const natural = !hand.fromSplit && isBlackjack(hand.cards);
+  const key = natural ? 'blackjack' : 'made21';
+
+  await dealerSays(game, natural ? 'dealtBlackjack' : 'made21', { name: seat.name },
+    { always: true, live: natural ? 0.85 : 0.6 });
+  await playerSays(game, seat, key, {}, { always: true, live: natural ? 0.8 : 0.6 });
+  await banter(game, seat, key, { p: natural ? 0.5 : 0.35 });
+  await repost(game);
+}
+
+/**
+ * 아직 축하 안 한 21이 있으면 축하한다.
+ *
+ * 드라이버가 한 바퀴 돌 때마다 훑는다. 사람이 Hit 해서 21이 되든 NPC 가 그러든
+ * 결국 여기를 지나므로, 누가 만들었는지 자리마다 따로 붙일 필요가 없다.
+ * 이미 축하한 손은 hand.cheered 로 거른다 — 손 인덱스는 Split 때 밀리므로 못 쓴다.
+ */
+async function cheerAll21(game) {
+  for (const hand of game.hands) {
+    if (hand.cheered) continue;
+    const { total, bust } = handValue(hand.cards);
+    if (bust || total !== 21) continue;
+    await cheer21(game, hand);
+  }
+}
+
+/**
  * 판을 접으며 하는 인사. 딜러가 마무리하고, NPC 손님들이 각자 결산에 반응한다.
  *
  * 시작할 때 인사를 하고 끝날 때 아무 말도 없으면 판이 끊긴 것처럼 보인다. 여기는
@@ -296,6 +340,7 @@ async function playNpcHand(game) {
         action: ACTION_LABEL[action] ?? action,
         card: hand.cards[hand.cards.length - 1],
         cards: hand.cards,
+        split: hand.fromSplit,
       });
     } else if (spoke) {
       // 스플릿·스탠드·서렌더는 새 카드가 없다. 대사가 나갔으면 판이 위로 밀렸으니 다시 띄운다.
@@ -323,6 +368,7 @@ async function runDriver(game) {
     for (;;) {
       if (game.phase === 'done') return;
       if (!game.opened) await openTable(game);
+      await cheerAll21(game);
 
       // --- 베팅: NPC 는 알아서 건다
       if (game.phase === 'betting') {
@@ -344,9 +390,10 @@ async function runDriver(game) {
         await draw(game);
         for (const hand of game.hands) {
           await sleep(700);
-          await showMove(game, {
-            name: state.seatOfHand(game, hand).name, action: '배분', cards: hand.cards,
-          });
+          const seat = state.seatOfHand(game, hand);
+          await showMove(game, { name: seat.name, action: '배분', cards: hand.cards });
+          // 그 손의 카드 알림 바로 밑에 붙어야 누구 것인지 헷갈리지 않는다.
+          if (isBlackjack(hand.cards)) await cheer21(game, hand);
         }
 
         if (state.needsInsurance(game)) {
@@ -485,7 +532,10 @@ async function settleAndShow(game) {
 
   let budget = RESULT_BUDGET;
   for (const r of game.results) {
-    const big = r.outcome === 'blackjack' || r.outcome === 'bust' || r.outcome === 'surrender';
+    // 이미 그 자리에서 축하한 손은 여기서 또 떠들지 않는다. 배당 이야기는 남아 있으니
+    // 아주 막지는 않고 예산 안으로 내린다.
+    const big = (r.outcome === 'blackjack' && !r.hand.cheered)
+      || r.outcome === 'bust' || r.outcome === 'surrender';
     if (!big && budget <= 0) continue;
 
     const vars = { name: r.seat.name, amount: `${Math.abs(r.net)}칩` };
@@ -768,6 +818,7 @@ async function handlePlaying(interaction, game, action, arg) {
       action: ACTION_LABEL[arg] ?? arg,
       card: hand.cards[hand.cards.length - 1],
       cards: [...hand.cards],
+      split: hand.fromSplit,
     });
   }
   return false;

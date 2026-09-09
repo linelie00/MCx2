@@ -161,6 +161,22 @@ async function banter(game, actor, key, vars = {}, p = 0.4) {
     { name: actor.name, ...vars }, { p, live: 0.55 });
 }
 
+/**
+ * 판을 접으며 하는 인사. 앉아 있던 NPC 가 각자 한마디씩.
+ *
+ * 시작할 때 인사를 하고 끝날 때 아무 말도 없으면 판이 끊긴 것처럼 보인다.
+ * 판에 한 번뿐인 자리라 전원 무조건 말하고, 마지막 핸드가 예산을 다 썼어도 따로 받는다.
+ */
+async function closeTable(game) {
+  game.aiHandNo = -1;
+  for (const { seat, delta } of state.standings(game)) {
+    if (seat.kind !== 'npc') continue;
+    await seatSays(game, seat, 'close', { amount: `${Math.abs(delta)}칩` },
+      { always: true, live: 0.8 });
+  }
+  await repost(game);
+}
+
 /** 판을 열며 하는 인사. bard 주인인 미겔이 있으면 미겔이, 없으면 마티암이 한다. */
 async function openTable(game) {
   game.opened = true;
@@ -285,14 +301,27 @@ async function settleAndShow(game) {
 }
 
 function kick(game) {
-  if (game.phase === 'lobby' || game.phase === 'done') return;
+  if (game.phase === 'lobby') return;
   if (game.driving) { game.rekick = true; return; }
+
+  // 끝난 판이라도 마무리 인사는 한 번 한다. 한 핸드도 안 돌고 접었으면 할 말이 없다.
+  if (game.phase === 'done') {
+    if (game.closed || !game.handNo) return;
+    game.closed = true;
+    closeTable(game).catch((err) => console.error('[홀덤] 마무리 대사 오류:', err));
+    return;
+  }
+
   runDriver(game).catch((err) => console.error('[홀덤] 드라이버 오류:', err));
 }
 
+// 방치로 끝난 판도 마무리 인사를 한다 — 인터랙션 없이 끝나는 유일한 길이다.
+
 // 방치된 판을 접는다.
 setInterval(() => {
-  for (const game of state.expired()) draw(game);
+  for (const game of state.expired()) {
+    draw(game).then(() => kick(game)).catch(() => {});
+  }
 }, 60_000).unref();
 
 // ---------------------------------------------------------------- 명령
@@ -379,6 +408,7 @@ async function execute(interaction) {
     flags: MessageFlags.Ephemeral,
   });
   await draw(liveGame);
+  kick(liveGame);                  // 한 핸드라도 돌았으면 마무리 인사를 한다
 }
 
 // ---------------------------------------------------------------- 버튼

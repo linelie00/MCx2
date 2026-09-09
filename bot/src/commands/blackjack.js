@@ -25,8 +25,9 @@ import {
 } from '../blackjack/render.js';
 import { cardText, handText, handValue, isBlackjack } from '../casino/cards.js';
 import {
-  line, sometimes, betKey, RESULT_KEY, REACT_KEY,
+  line, sometimes, betKey, memo, RESULT_KEY, REACT_KEY,
 } from '../blackjack/lines.js';
+import * as casinoTalk from '../ai/casinoTalk.js';
 import { sayAsOrPlain } from '../discord/webhook.js';
 import { base, fail } from '../embeds.js';
 
@@ -106,15 +107,59 @@ async function showMove(game, { name, action, card, cards }) {
 // 마찬가지다 — 버튼을 누르면 kick() 이 드라이버를 깨우므로 거기서 말하면 된다.
 
 /**
+ * 한 핸드에 Gemini 로 지을 수 있는 대사 수.
+ *
+ * 한 핸드에 대사 자리가 스무 번 넘게 오는데 전부 Gemini 로 가면 분당 한도를 혼자
+ * 다 쓰고 사람이 치는 /캐입 이 굶는다. 그렇다고 판 시작·블랙잭 같은 큰 자리만
+ * 지으면 평범한 핸드는 늘 똑같은 소리라 티가 난다. 그래서 **핸드마다 몇 장씩**
+ * 나눠 쓴다 — 큰 자리를 먼저 채우고, 남으면 평범한 자리에서도 가끔 나간다.
+ */
+const AI_PER_HAND = 4;
+
+function aiBudget(game) {
+  if (game.aiHandNo !== game.handNo) {
+    game.aiHandNo = game.handNo;
+    game.aiLeft = AI_PER_HAND;
+  }
+  return game.aiLeft;
+}
+
+/**
  * 그 캐릭터로 한 줄 말한다. 말했으면 true.
+ *
+ * **Gemini 로 지어 보고, 안 되면 미리 써 둔 줄로 물러선다.** 한도가 찼든 키가
+ * 없든 API 가 죽었든 판은 늘 말이 있는 채로 돈다 — 요트에서는 그럴 때 대사가
+ * 그냥 비었는데, 여기서는 캔드 대사가 바닥에 깔려 있다. `live` 가 그 자리를
+ * Gemini 로 지을 확률이고, 0 이면 언제나 캔드다.
+ *
+ * `npc` 딜러는 Gemini 를 쓰지 않는다 — 페르소나가 없어 지을 말투가 없고, 짧고
+ * 사무적인 것이 그 자리의 성격이다.
  *
  * 판이 위로 밀리므로 부른 쪽이 곧 showMove 나 repost 로 다시 띄워야 한다.
  * 여기서 매번 repost 하면 대사 한 줄마다 판이 하나씩 늘어난다.
  */
-async function say(game, character, key, vars = {}, { always = false, p } = {}) {
+async function say(game, character, key, vars = {}, { always = false, p, live = 0 } = {}) {
   if (!always && !sometimes(p)) return false;
-  const text = line(key, vars);
-  if (!text || !game.message?.channel) return false;
+  if (!game.message?.channel) return false;
+
+  let text = null;
+  if (live && character !== 'npc' && aiBudget(game) > 0 && Math.random() < live) {
+    const said = (game.spoken[character] ??= []);
+    const situation = memo(game, key, vars, character);
+    if (situation) {
+      text = await casinoTalk.line({
+        character,
+        role: character === game.dealerCharacter ? 'dealer' : 'player',
+        situation,
+        said,
+      });
+    }
+    if (text) { game.aiLeft -= 1; said.push(text); }
+  }
+
+  if (!text) text = line(key, vars);
+  if (!text) return false;
+
   await sayAsOrPlain(game.message.channel, character, text, '블랙잭');
   await sleep(700);
   return true;
@@ -132,13 +177,15 @@ const DEALER_CHATTINESS = { migel: 0.72, npc: 0.3 };
 const dealerSays = (game, key, vars, opts = {}) =>
   say(game, game.dealerCharacter, `dealer.${game.dealerCharacter}.${key}`, vars, {
     p: DEALER_CHATTINESS[game.dealerCharacter],
+    live: 0.2,
     ...opts,
   });
 
 /** NPC 플레이어가 말한다. 사람 자리는 말하지 않는다. */
 const playerSays = (game, seat, key, vars, opts = {}) => (
   seat.kind === 'npc'
-    ? say(game, seat.character, `player.${seat.character}.${key}`, vars, { p: 0.62, ...opts })
+    ? say(game, seat.character, `player.${seat.character}.${key}`, vars,
+      { p: 0.62, live: 0.25, ...opts })
     : Promise.resolve(false)
 );
 
@@ -156,8 +203,9 @@ async function banter(game, actor, event, { p = 0.4 } = {}) {
   const watchers = game.seats.filter((s) => s.kind === 'npc' && s !== actor && !s.out);
   if (!watchers.length) return false;
   const watcher = watchers[Math.floor(Math.random() * watchers.length)];
+  // 옆자리 반응은 판을 보고 지을 때 가장 잘 산다. 여기는 Gemini 쪽에 무게를 준다.
   return say(game, watcher.character, `banter.${watcher.character}.${event}`,
-    { name: actor.name }, { p });
+    { name: actor.name }, { p, live: 0.6 });
 }
 
 /** 마티암이 딜러 미겔에게 거는 말. 미겔이 딜러일 때만. */
@@ -165,16 +213,18 @@ async function banterAtDealer(game, event) {
   if (game.dealerCharacter !== 'migel') return false;
   const matiam = game.seats.find((s) => s.character === 'matiam' && !s.out);
   if (!matiam) return false;
-  return say(game, 'matiam', `banter.matiam.${event}`, {}, { p: 0.45 });
+  return say(game, 'matiam', `banter.matiam.${event}`, {}, { p: 0.45, live: 0.7 });
 }
 
 /** 판을 열며 하는 인사. 딜러가 누구든 한 번은 반드시 한다. */
 async function openTable(game) {
   game.opened = true;
-  await dealerSays(game, 'welcome', {}, { always: true });
+  await dealerSays(game, 'welcome', {}, { always: true, live: 1 });
   // 미겔이 손님 자리에 앉았으면 "오늘은 내가 플레이어다" 를 본인이 덧붙인다.
   for (const seat of game.seats) {
-    if (seat.kind === 'npc') await playerSays(game, seat, 'welcome', {}, { always: true });
+    if (seat.kind === 'npc') {
+      await playerSays(game, seat, 'welcome', {}, { always: true, live: 1 });
+    }
   }
   await repost(game);
 }
@@ -201,7 +251,8 @@ async function playNpcHand(game) {
     // 고른 수를 먼저 말하고 둔다. 결과를 보고 말하면 "선택할 때의 반응" 이 안 된다.
     // 흔한 hit/stand 는 가끔만, 드물고 판이 갈리는 수(더블·스플릿·서렌더)는 늘 말한다.
     const rare = action === 'double' || action === 'split' || action === 'surrender';
-    const spoke = await playerSays(game, seat, action, {}, { always: rare });
+    const spoke = await playerSays(game, seat, action, {},
+      { always: rare, live: rare ? 0.7 : 0.25 });
 
     const before = hand.cards.length;
     const res = state.act(game, action);
@@ -394,10 +445,10 @@ async function settleAndShow(game) {
   const dealerBust = handValue(game.dealer).bust;
   const dealerBj = isBlackjack(game.dealer);
   if (dealerBust) {
-    await dealerSays(game, 'bust', {}, { always: true });
+    await dealerSays(game, 'bust', {}, { always: true, live: 0.9 });
     await banterAtDealer(game, 'dealerBust');
   } else if (dealerBj) {
-    await dealerSays(game, 'blackjack', {}, { always: true });
+    await dealerSays(game, 'blackjack', {}, { always: true, live: 0.9 });
     await banterAtDealer(game, 'dealerBlackjack');
   }
 
@@ -407,10 +458,12 @@ async function settleAndShow(game) {
     if (!big && budget <= 0) continue;
 
     const vars = { name: r.seat.name, amount: `${Math.abs(r.net)}칩` };
-    if (await dealerSays(game, `result.${RESULT_KEY[r.outcome]}`, vars, { always: big })) {
+    if (await dealerSays(game, `result.${RESULT_KEY[r.outcome]}`, vars,
+      { always: big, live: big ? 0.8 : 0.25 })) {
       budget -= 1;
     }
-    if (await playerSays(game, r.seat, REACT_KEY[r.outcome], vars, { always: big })) {
+    if (await playerSays(game, r.seat, REACT_KEY[r.outcome], vars,
+      { always: big, live: big ? 0.8 : 0.3 })) {
       budget -= 1;
     }
     // 사람이 터지거나 블랙잭이 뜨면 NPC 가 한마디 한다. NPC 끼리는 두던 자리에서

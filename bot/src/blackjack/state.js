@@ -102,6 +102,10 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     // 다시 도는데, 그때마다 같은 베팅·같은 차례를 또 말하면 안 된다. 판이 사라질 때
     // 같이 사라지므로 따로 비우지 않는다.
     said: new Set(),
+    // 캐릭터별로 이 판에서 실제로 한 말. Gemini 로 지을 때 되풀이를 막으려고 얹는다.
+    spoken: { migel: [], matiam: [] },
+    aiHandNo: 0,         // Gemini 예산을 몇 번째 핸드 것으로 잡아 뒀는지
+    aiLeft: 0,
     driving: false,
     rekick: false,       // 드라이버가 도는 동안 들어온 클릭이 있었는지
     endedReason: null,

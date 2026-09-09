@@ -90,7 +90,10 @@ const MOMENT = {
   win: (v) => `이번 판을 이겨 ${v.amount}을 가져간다.${v.hand ? ` 내 손은 ${v.hand}.` : ''}`,
   lose: (v) => `이번 판에서 ${v.amount}을 잃었다.`,
   chop: (v) => `똑같은 손이 나와 팟을 나눠 가졌다. 내 몫은 ${v.amount}.`,
-  close: () => '판을 접는다. 오늘은 여기까지다.',
+  // "판을 접는다" 라고 썼다가 마티암이 그대로 "Fold." 했다. 포커에서 접는다는 곧 Fold다.
+  close: (v) => `오늘 판이 다 끝났다. 자리에서 일어나며 인사한다.${
+    v.delta > 0 ? ` 오늘 ${v.amount}을 벌었다.`
+      : (v.delta < 0 ? ` 오늘 ${v.amount}을 잃었다.` : ' 오늘은 본전이다.')}`,
 };
 
 const BANTER = {
@@ -207,6 +210,31 @@ function table(game, speaker, event) {
 }
 
 /**
+ * 판을 접을 때의 메모 — **한 핸드가 아니라 하루치 결산이다.**
+ *
+ * 여기에 `table()` 을 그대로 쓰면 안 된다. 지난 핸드의 보드·흐름·"방금 Fold"·내 패가
+ * 고스란히 남아 있어서, 모델이 그걸 지금 판으로 읽는다. 실제로 마티암이 작별 인사
+ * 자리에서 "오늘은 여기서 그만 빼야겠군. Fold." 했고, 미겔은 아까 깐 손을 한 번 더
+ * 자랑했다. 끝난 판의 카드는 말할 거리가 아니라 **군더더기**라 아예 안 넣는다.
+ */
+function closing(game, speaker, vars) {
+  const rows = (vars.table ?? []).map(({ name, chips, delta }) => {
+    const sign = delta > 0 ? `+${delta}` : String(delta);
+    return `${name}: ${chips}칩 (${sign})${name === vars.me ? ' ← 나' : ''}`;
+  });
+  return [
+    '## 오늘의 결산',
+    `${game.handNo}핸드를 했다. 판은 이걸로 끝이다.`,
+    ...rows,
+    '',
+    '## 지금',
+    MOMENT.close(vars),
+    '※ 지금 카드를 받고 있는 것이 아니다. **수를 두지 않는다** —'
+      + ' Fold·Call·Raise 같은 말은 나오면 안 된다. 무슨 패였는지도 이제 와 꺼내지 않는다.',
+  ].join('\n');
+}
+
+/**
  * Gemini 에게 넘길 상황 메모. 캔드 대사와 **같은 키**로 만든다 —
  * 어느 쪽이 나가든 말하는 순간이 달라지지 않게.
  */
@@ -215,6 +243,7 @@ export function memo(game, key, vars = {}, speaker = null) {
   const event = rest.join('.');
   const make = (kind === 'banter' ? BANTER : MOMENT)[event];
   if (!make) return null;
+  if (event === 'close') return closing(game, speaker, vars);
 
   const at = kind === 'banter' || !OWN_MOVE.has(event) ? null : event;
   return [table(game, speaker, at), '', '## 지금', make(vars)].join('\n').trim();

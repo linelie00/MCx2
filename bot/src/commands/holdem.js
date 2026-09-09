@@ -178,9 +178,14 @@ async function banter(game, actor, key, vars = {}, p = 0.4) {
  */
 async function closeTable(game) {
   game.aiHandNo = -1;
-  for (const { seat, delta } of state.standings(game)) {
+  const final = state.standings(game);
+  const rows = final.map(({ seat, chips, delta }) => ({ name: seat.name, chips, delta }));
+
+  for (const { seat, delta } of final) {
     if (seat.kind !== 'npc') continue;
-    await seatSays(game, seat, 'close', { amount: `${Math.abs(delta)}칩` },
+    // 결산 전체를 넘긴다 — 누가 얼마를 벌고 잃었는지 알아야 남에게 말을 걸 수 있다.
+    await seatSays(game, seat, 'close',
+      { amount: `${Math.abs(delta)}칩`, delta, table: rows, me: seat.name },
       { always: true, live: 0.8 });
   }
   await repost(game);

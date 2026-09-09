@@ -4,7 +4,7 @@
  * 조회는 공개, 쓰기는 오너 전용(라우트에서 requireOwner).
  *
  * movie shape:
- *   { id, title, director, date, poster, hoverPosterImage?, accent,
+ *   { id, title, director, date, poster, hoverPosterImage?,
  *     ratings: { migel:{stars,comment}, matiam:{stars,comment} }, createdAt }
  */
 const crypto = require('crypto');
@@ -51,7 +51,7 @@ exports.list = (req, res) => {
   res.json(store.read().movies);
 };
 
-// 추가 — multipart: title, director, date, accent, ratings(JSON) + poster(필수), hoverPoster(선택)
+// 추가 — multipart: title, director, date, ratings(JSON) + poster(필수), hoverPoster(선택)
 exports.create = (req, res) => {
   const filesByField = req.files || {};
   const posterFile = (filesByField.poster || [])[0];

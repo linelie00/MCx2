@@ -2,7 +2,7 @@
  * movieStore — movies.json 읽기/쓰기 (playlistStore와 동일 패턴)
  * 개인 규모이므로 DB 없이 단일 JSON 파일을 동기 입출력한다.
  * shape: { movies: [{ id, title, director, date, poster, hoverPosterImage?,
- *           accent, ratings: { migel:{stars,comment}, matiam:{stars,comment} }, createdAt }] }
+ *           ratings: { migel:{stars,comment}, matiam:{stars,comment} }, createdAt }] }
  */
 const fs = require('fs');
 const path = require('path');

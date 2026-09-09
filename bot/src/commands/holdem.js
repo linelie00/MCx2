@@ -37,6 +37,22 @@ import { base, fail } from '../embeds.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
+/**
+ * NPC·모브가 수를 두기 전에 쉬는 시간.
+ *
+ * 생각하는 것처럼 보이라고 두는 뜸인데, **자리 수만큼 그대로 곱해진다.** 여덟
+ * 자리에서 0.9초씩 쉬면 한 스트리트에만 7초가 그냥 흐른다. 자리가 많을수록 줄인다.
+ */
+const thinkPause = (game) => Math.max(320, 950 - game.seats.length * 80);
+
+/**
+ * 모브가 체크·콜에도 한마디 할 확률.
+ *
+ * 큰 수와 폴드는 늘 말한다. 문제는 자잘한 수인데, 여덟 자리에서 다 말하면 한
+ * 핸드에 서른 줄이 넘는다. 자리가 늘면 그만큼 조용해진다.
+ */
+const chatterOdds = (game) => Math.min(0.34, 1.2 / game.seats.length);
+
 /** 자기만 보이는 거절. 판을 건드리지 않는다. */
 const deny = (interaction, text) =>
   interaction.reply({ embeds: [fail(text)], flags: MessageFlags.Ephemeral });
@@ -182,7 +198,7 @@ const MOVE_TEXT = {
  * 늘, 체크·콜은 가끔. 어차피 자리 표의 "방금" 칸에 다 남는다.
  */
 async function mobSays(game, seat, action, amount, always) {
-  if (!always && !sometimes(0.3)) return;
+  if (!always && !sometimes(chatterOdds(game))) return;
   if (!game.message?.channel) return;
   const text = MOVE_TEXT[action]?.(amount);
   if (!text) return;
@@ -284,7 +300,7 @@ async function runDriver(game) {
         return;
       }
 
-      await sleep(900);
+      await sleep(thinkPause(game));
       if (game.phase === 'done') return;
 
       const move = chooseAction(seat.style ?? seat.character, {

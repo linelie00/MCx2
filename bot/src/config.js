@@ -62,6 +62,10 @@ export const config = {
       migel: opt('OWNER_MIGEL_KEY'),
       matiam: opt('OWNER_MATIAM_KEY'),
     },
+    // 카지노 계정(칩·칭호·아이템) 전용 키. 오너 패스코드와 **다른 값**이다 —
+    // 오너 패스코드는 사이트에서 사람이 직접 넣는 값이라, 그걸로 칩을 만질 수 있으면
+    // 브라우저에서 남의 잔액을 고칠 수 있게 된다. 비어 있으면 판이 안 열린다.
+    botKey: opt('BOT_KEY'),
   },
 
   gemini: {

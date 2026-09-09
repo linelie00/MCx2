@@ -44,13 +44,20 @@ export class ApiError extends Error {
  * 공통 요청. owner 를 주면 그 사람의 패스코드를 헤더에 싣는다.
  * body 가 FormData 면 Content-Type 을 직접 정하지 않는다 — undici 가 boundary 를 붙인다.
  */
-async function request(path, { method = 'GET', owner = null, json, form } = {}) {
+async function request(path, {
+  method = 'GET', owner = null, bot = false, json, form,
+} = {}) {
   const headers = {};
 
   if (owner) {
     const key = keyFor(owner);
     if (!key) throw new ApiError(401, { error: `${owner} 패스코드가 봇에 설정돼 있지 않아요.` });
     headers['X-Owner-Key'] = key;
+  }
+
+  if (bot) {
+    if (!config.api.botKey) throw new ApiError(401, { error: '봇 키(BOT_KEY)가 설정돼 있지 않아요.' });
+    headers['X-Bot-Key'] = config.api.botKey;
   }
 
   let body;
@@ -199,6 +206,29 @@ export async function updatePlaylist({ owner, playlistId, patch }) {
   return playlist;
 }
 
+// ---------------------------------------------------------------- 카지노 계정
+
+/**
+ * 칩·칭호·아이템. 넷 다 **캐시를 쓰지 않는다.**
+ *
+ * 다른 조회는 60초쯤 묵은 값이어도 그만이지만, 잔액은 방금 정산한 값을 봐야 한다.
+ * 캐시된 잔액으로 판을 열면 그 차이가 다음 커밋에 그대로 얹혀 **칩이 복제된다.**
+ */
+export const getAccounts = (ids) =>
+  request(`/api/accounts?ids=${encodeURIComponent(ids.join(','))}`, { bot: true });
+
+/** 판을 열 때. due 한 NPC 를 채우고 전원 잔액을 준다. */
+export const openAccounts = (ids) =>
+  request('/api/accounts/open', { method: 'POST', bot: true, json: { ids } });
+
+/** 정산. **잔액이 아니라 증감**을 보낸다 — 락이 없는 스토어에서 안전한 유일한 방식이다. */
+export const postAccountDeltas = (deltas) =>
+  request('/api/accounts/deltas', { method: 'POST', bot: true, json: { deltas } });
+
+/** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
+export const claimDaily = (id) =>
+  request('/api/accounts/claim', { method: 'POST', bot: true, json: { id } });
+
 // ---------------------------------------------------------------- 자가진단
 
 /**
@@ -222,6 +252,27 @@ export async function checkOwnerKeys() {
   }
 }
 
+/**
+ * 부팅 시 봇 키가 통하는지 확인한다.
+ *
+ * 오너 키와 같은 이유다 — 첫 판이 "잔액을 못 읽었어요" 로 거절되는 대신 **배포 로그**
+ * 첫 줄에서 드러나게 한다. 여기가 막혀 있으면 카지노 게임이 통째로 안 열리므로,
+ * 오너 키보다 오히려 더 일찍 알아야 한다.
+ */
+export async function checkBotKey() {
+  if (!config.api.botKey) {
+    console.warn('[api] BOT_KEY 미설정 — 칩을 못 읽어 카지노 판이 안 열립니다.');
+    return;
+  }
+  try {
+    await getAccounts(['npc:migel']);
+    console.log('[api] 봇 키 확인: ✔');
+  } catch (err) {
+    console.warn(`[api] 봇 키 확인 실패 — 카지노 판이 안 열립니다: ${err.message}`);
+  }
+}
+
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
+  getAccounts, openAccounts, postAccountDeltas, claimDaily, checkBotKey,
 };

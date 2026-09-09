@@ -38,6 +38,13 @@ const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const deny = (interaction, text) =>
   interaction.reply({ embeds: [fail(text)], flags: MessageFlags.Ephemeral });
 
+/**
+ * ack 를 이미 보낸 뒤의 거절. `deny` 는 reply 라서 그 자리에서는 못 쓴다 —
+ * 한 인터랙션에 응답은 한 번뿐이다.
+ */
+const denyLate = (interaction, text) =>
+  interaction.followUp({ embeds: [fail(text)], flags: MessageFlags.Ephemeral });
+
 // ---------------------------------------------------------------- 그리기
 
 function payloadFor(game) {
@@ -299,7 +306,10 @@ async function settleAndShow(game) {
   const results = game.results;
 
   await repost(game);
-  await commit(game.guildId, game.chips.deltas());
+  // **성공했을 때만** 기준점을 옮긴다. 실패하면 밀린 몫이 장부에 남아 있다가
+  // 다음 커밋이 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
+  game.saveFailed = !(await commit(game.guildId, game.chips.deltas()));
+  if (!game.saveFailed) game.chips.rebase();
 
   // 결과에 반응한다. 이긴 사람은 늘, 진 사람은 가끔.
   const shown = new Map((results.shown ?? []).map((x) => [x.seatIndex, x.hand]));
@@ -492,12 +502,29 @@ async function handleLobby(interaction, game, action, arg) {
       await deny(interaction, '판을 연 사람만 시작할 수 있어요.');
       return true;
     }
-    // 잔액 불러오기는 async 다. 상태를 바꾸기 전에 끝내 둔다.
-    // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
-    const balances = buyIn(await load(game.guildId, game.seats.map((s) => s.id)));
+
+    // **먼저 응답을 잡는다.** load 는 HTTP 라 콜드 스타트 한 번이면 3초를 넘기고,
+    // 그러면 클릭이 통째로 날아간다(10062). 상수를 돌려주던 동안에는 안 보이던 함정이다.
+    // 여기서부터는 이 가지가 draw·kick 까지 직접 책임진다(true 를 주면 뒤가 안 돈다).
+    await interaction.deferUpdate();
+
+    let balances;
+    try {
+      // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
+      balances = buyIn(await load(game.guildId, game.seats.map((s) => s.id)));
+    } catch (err) {
+      // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 칩이 복제된다 — 실제 잔액이
+      // 200인 사람이 1000으로 놀고, 다음 커밋이 성공할 때 그 차액이 서버에 얹힌다.
+      await denyLate(interaction, `칩 잔액을 읽지 못해 판을 열 수 없어요. ${err.message}`);
+      return true;
+    }
+
     const err = state.start(game, balances);
-    if (err) { await deny(interaction, err); return true; }
-    return false;
+    if (err) { await denyLate(interaction, err); return true; }
+
+    await draw(game);
+    kick(game);
+    return true;
   }
 
   if (action === 'cancel') {

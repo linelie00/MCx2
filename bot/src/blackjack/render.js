@@ -30,6 +30,9 @@ const cid = (game, action, arg) =>
 const btn = (game, action, label, style = ButtonStyle.Secondary, arg) =>
   new ButtonBuilder().setCustomId(cid(game, action, arg)).setLabel(label).setStyle(style);
 
+/** 칩을 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
+const savedMark = (game) => (game.saveFailed ? ' · ⚠ 칩 저장 안 됨' : '');
+
 // ---------------------------------------------------------------- 칩 표
 
 const NAME_W = 10;
@@ -211,7 +214,7 @@ export function boardEmbed(game) {
     title,
     description: lines.join('\n'),
     color: seat?.color ?? THEME_COLOR,
-    footer: `딜러: ${dealerName} · Blackjack 3:2 · Dealer stands on 17`,
+    footer: `딜러: ${dealerName} · Blackjack 3:2 · Dealer stands on 17${savedMark(game)}`,
   });
 }
 
@@ -293,7 +296,7 @@ export function resultEmbed(game) {
     title: '블랙잭 — bard 영업 종료',
     description: [head, note].filter(Boolean).join('\n\n'),
     color: rows[0]?.seat.color ?? THEME_COLOR,
-    footer: `${game.handNo}핸드`,
+    footer: `${game.handNo}핸드${savedMark(game)}`,
   });
 }
 

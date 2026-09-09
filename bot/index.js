@@ -8,7 +8,7 @@ import { Client, GatewayIntentBits, MessageFlags } from 'discord.js';
 import config from './src/config.js';
 import { loadCommands } from './src/loadCommands.js';
 import { fail } from './src/embeds.js';
-import { checkOwnerKeys } from './src/api.js';
+import { checkOwnerKeys, checkBotKey } from './src/api.js';
 import { useCustomFaces } from './src/yacht/render.js';
 import {
   useCardEmoji, emojiName, BACK_NAME, SUITS, RANKS,
@@ -43,6 +43,7 @@ client.once('clientReady', async (c) => {
   // 실패하는 대신 배포 로그에서 바로 드러나게 하는 것이 목적이다. 실패해도 죽이지 않는다 —
   // 조회 기능은 키 없이도 동작해야 한다.
   await checkOwnerKeys();
+  await checkBotKey();
 
   await loadEmoji(c);
 });

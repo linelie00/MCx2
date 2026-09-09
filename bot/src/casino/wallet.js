@@ -1,21 +1,28 @@
 /**
  * wallet — 칩
  *
- * 지금은 판마다 초기화된다. 판을 열 때 모두에게 START_CHIPS 를 주고, 판이 끝나면 잊는다.
- * 그런데 **나중에 영구 저장으로 바꾸고 다른 게임과도 공유**할 생각이라, 그때 호출부를
- * 안 고쳐도 되도록 이음매를 지금 만들어 둔다.
+ * 칩은 **서버에 영구 저장된다.** 세 게임이 한 잔액을 나눠 쓰고, 판이 끝나도 남는다.
+ * 저장소는 사이트 서버의 `/api/accounts` 다 — 봇 서비스에는 볼륨이 없어서 봇이 직접
+ * 파일에 쓸 데가 없고, 있더라도 재배포마다 날아간다.
  *
- * 이음매를 진짜로 만드는 규칙 둘:
+ * 규칙 둘이 이 파일의 모양을 정한다.
  *
- *   1. load 와 commit 은 **오늘부터 async 다.** 지금은 상수와 no-op 이지만, 부르는 쪽이
- *      이미 await 하도록 짜여 있으므로 파일이든 HTTP 든 여기만 바꾸면 된다.
- *   2. commit 은 잔액이 아니라 **증감(delta)** 을 받는다. 서버의 JSON 스토어는 락이 없어서
- *      (yacht/state.js 머리말 참고) 나중에 붙일 때 delta 적용만이 안전하다.
+ *   1. **잔액이 아니라 증감(delta)을 보낸다.** 서버의 JSON 스토어에는 락이 없다.
+ *      잔액을 통째로 보내면 두 판이 동시에 정산할 때 나중 것이 앞의 것을 지운다.
+ *      증감은 더하기라 순서가 섞여도 결과가 같다.
+ *   2. **load 는 던지고 commit 은 안 던진다.** 잔액을 못 읽었는데 진행하면 칩이
+ *      복제되므로 판을 열면 안 되고, 못 썼을 때는 인메모리 장부에서만 움직인 것이라
+ *      판을 막을 이유가 없다. 밀린 몫은 다음 커밋이 만회한다(ledger.rebase 참고).
  *
  * 판이 도는 동안은 동기 ledger 만 만진다. 버튼 처리 안에 await 이 끼면 "상태 변경은
- * 동기로" 라는 불변식이 깨지기 때문이다. load 는 판 시작 때 한 번, commit 은 정산 때
- * 한 번 — 둘 다 인터랙션 응답 경로 **밖**(NPC 드라이버 안)에서 부른다.
+ * 동기로" 라는 불변식이 깨지기 때문이다.
+ *
+ * **주의 — `load` 는 인터랙션 3초 시한 안에 있다.** 시작 버튼을 누른 그 인터랙션에서
+ * 부른다. 그래서 부르는 쪽이 `deferUpdate()` 로 **먼저 응답을 잡아 두고** 불러야 한다.
+ * 상수를 돌려주던 동안에는 티가 안 났지만, HTTP 가 들어간 지금은 콜드 스타트 한 번에
+ * 클릭이 통째로 날아간다(10062). `commit` 은 드라이버 안이라 시한과 무관하다.
  */
+import { openAccounts, postAccountDeltas } from '../api.js';
 
 /** 처음 보는 사람의 잔액. 등록 절차가 없다 — 저장소에 없으면 이 값으로 친다. */
 export const START_CHIPS = 1000;
@@ -53,22 +60,42 @@ export const roundToUnit = (amount) => Math.max(0, Math.floor(amount / CHIP_UNIT
 /**
  * 판을 시작할 때 잔액을 불러온다.
  *
- * 지금은 누구에게나 START_CHIPS 를 준다. 영구 저장으로 갈 때 이 함수 하나만
- * 실제 읽기로 바꾸면 되고, 부르는 쪽은 이미 await 하고 있다.
+ * **실패하면 던진다.** 부르는 쪽은 그걸 받아 **판을 안 여는 것**이 맞다.
+ * 못 읽었다고 START_CHIPS 로 진행하면 칩이 복제된다 — 실제 잔액이 200인 사람이
+ * 1000으로 놀고, 나중에 커밋이 성공하면 그 차액이 그대로 서버에 얹힌다.
+ *
+ * 여는 김에 서버가 미겔·마티암의 일일 충전도 처리한다(하루 한 번, 1000 미만이면
+ * 1000으로). 판정을 서버에 둔 이유는 봇이 재시작해도 잊지 않아야 하고, 잔액과 같은
+ * 파일에 있어야 한 번의 쓰기로 끝나기 때문이다.
+ *
+ * 길드는 안 본다 — 계정은 디스코드 유저 하나에 하나다.
  */
 export async function load(guildId, userIds) {
-  return Object.fromEntries(userIds.map((id) => [id, START_CHIPS]));
+  const { accounts } = await openAccounts(userIds);
+  return Object.fromEntries(userIds.map((id) => [id, accounts?.[id]?.chips ?? START_CHIPS]));
 }
 
 /**
- * 정산 결과를 남긴다. deltas 는 `{ userId: ±n }`.
+ * 정산 결과를 남긴다. deltas 는 `{ id: ±n }`. **성공 여부를 돌려준다.**
  *
- * 지금은 아무것도 안 한다 — 판마다 초기화라 남길 데가 없다.
- * 영구 저장으로 갈 때 여기가 쓰기가 된다.
+ * 던지지 않는 이유는 저장이 판을 막을 이유가 아니어서다 — 대사가 그렇듯 있으면 좋은
+ * 것이다. 실패하면 부르는 쪽이 판에 "저장 안 됨" 을 띄우고 계속 돈다. 칩은 인메모리
+ * 장부에서만 움직였으므로 그 핸드가 없던 일이 될 뿐이고, `ledger.rebase` 를 안 하니
+ * 밀린 몫은 다음 커밋이 성공할 때 함께 반영된다.
+ *
+ * 0인 증감은 빼고 보낸다. 앉기만 하고 아무 일 없던 계정에까지 updatedAt 을 찍을
+ * 이유가 없다.
  */
 export async function commit(guildId, deltas) {
-  void guildId;
-  void deltas;
+  const moved = Object.fromEntries(Object.entries(deltas).filter(([, n]) => n !== 0));
+  if (!Object.keys(moved).length) return true;
+  try {
+    await postAccountDeltas(moved);
+    return true;
+  } catch (err) {
+    console.warn('[카지노] 칩 저장 실패 — 다음 정산에서 다시 시도합니다:', err.message);
+    return false;
+  }
 }
 
 /**

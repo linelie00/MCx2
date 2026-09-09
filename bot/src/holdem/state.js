@@ -96,6 +96,7 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     driving: false,
     rekick: false,
     closed: false,
+    saveFailed: false,  // 직전 정산에서 칩을 못 저장했는지 (판에 한 줄 띄운다)
     endedReason: null,
   };
   games.set(channelId, game);

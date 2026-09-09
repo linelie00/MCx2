@@ -31,6 +31,9 @@ const btn = (game, action, label, style = ButtonStyle.Secondary, arg) =>
 const holeBtn = (game) => btn(game, 'hole', '내 패', ButtonStyle.Primary)
   .setDisabled(!game.seats.some((s) => s.hole.length));
 
+/** 칩을 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
+const savedMark = (game) => (game.saveFailed ? ' · ⚠ 칩 저장 안 됨' : '');
+
 // ---------------------------------------------------------------- 자리 표
 
 const NAME_W = 9;
@@ -230,7 +233,7 @@ export function boardEmbed(game) {
     title,
     description: lines.join('\n'),
     color: seat?.color ?? THEME_COLOR,
-    footer: `팟 ${pot(game)} · 블라인드 ${SMALL_BLIND}/${BIG_BLIND}`
+    footer: `팟 ${pot(game)} · 블라인드 ${SMALL_BLIND}/${BIG_BLIND}${savedMark(game)}`
       + ` · 버튼 ${game.seats[game.button]?.name ?? '-'}`,
   });
 }
@@ -322,7 +325,7 @@ export function resultEmbed(game) {
   return base({
     title: '홀덤 — 판이 끝났어요',
     description: rows.join('\n'),
-    footer: `${game.handNo}핸드`,
+    footer: `${game.handNo}핸드${savedMark(game)}`,
   });
 }
 

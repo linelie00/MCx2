@@ -109,6 +109,7 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     driving: false,
     rekick: false,       // 드라이버가 도는 동안 들어온 클릭이 있었는지
     closed: false,       // 마무리 인사를 했는지
+    saveFailed: false,  // 직전 정산에서 칩을 못 저장했는지 (판에 한 줄 띄운다)
     endedReason: null,
   };
   games.set(channelId, game);

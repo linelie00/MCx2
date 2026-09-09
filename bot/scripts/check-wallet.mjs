@@ -37,7 +37,7 @@ const makeServer = (balances) => {
 };
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-const user = (n) => ({ id: `u${n}`, username: `사람${n}` });
+const user = (n) => ({ id: `10000000000000000${n}`, username: `사람${n}` });
 
 let failed = 0;
 function check(name, fn) {
@@ -129,7 +129,9 @@ function playTable(kind, hands, { dropEvery = 0 } = {}) {
     ? [{ n: 1 }, { n: 2 }, { npc: 'migel' }]
     : [{ n: 1 }, { n: 2 }, { npc: 'migel' }, { npc: 'matiam' }];
 
-  const server = makeServer({ u1: 5000, u2: 1000, 'npc:migel': 1000, 'npc:matiam': 1000 });
+  const server = makeServer({
+    100000000000000001: 5000, 100000000000000002: 1000, 'npc:migel': 1000, 'npc:matiam': 1000,
+  });
   let played = 0;
   let tables = 0;
 

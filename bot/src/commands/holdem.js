@@ -21,7 +21,8 @@ import { chooseAction } from '../holdem/ai.js';
 import { live } from '../holdem/rules.js';
 import { load, commit } from '../casino/wallet.js';
 import {
-  PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, holeMessage, turnCall, resultEmbed,
+  PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
+  holeMessage, turnCall, resultEmbed,
 } from '../holdem/render.js';
 import { handText, isJumboable } from '../casino/cards.js';
 import { line, sometimes, memo, handName } from '../holdem/lines.js';
@@ -301,10 +302,19 @@ const data = new SlashCommandBuilder()
   .setDescription('카지노 bard 에서 텍사스 홀덤을 합니다.')
   .addSubcommand((s) => s.setName('시작').setDescription('새 판을 엽니다'))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
+  .addSubcommand((s) => s.setName('족보').setDescription('손의 순서를 알려줍니다'))
   .addSubcommand((s) => s.setName('그만').setDescription('진행 중인 판을 접습니다'));
 
 async function execute(interaction) {
   const sub = interaction.options.getSubcommand();
+
+  // 족보는 판이 없어도 볼 수 있어야 한다. 판이 도는 중이라면 남의 화면을 밀지 않게
+  // 나만 보이게 띄운다 — 규칙을 확인하는 사이에 판이 위로 올라가면 곤란하다.
+  if (sub === '족보') {
+    await interaction.reply({ embeds: [ranking()], flags: MessageFlags.Ephemeral });
+    return;
+  }
+
   const existing = state.forChannel(interaction.channelId);
   const liveGame = existing && existing.phase !== 'done' ? existing : null;
 

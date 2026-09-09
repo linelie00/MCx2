@@ -10,9 +10,9 @@
  * 켜 두고 명령 쪽에서 사람마다 거절한다. 한 사람만 누르는 playing 단계에서만 끈다.
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { handValue, handText, isBlackjack } from '../casino/cards.js';
+import { handValue, handText, isBlackjack, example } from '../casino/cards.js';
 import {
-  BET_UNITS, OUTCOME_LABEL, insuranceCost, MIN_BET, MAX_HANDS_PER_SEAT,
+  BET_UNITS, OUTCOME_LABEL, insuranceCost, MIN_BET,
 } from './rules.js';
 import { START_CHIPS } from '../casino/wallet.js';
 import {
@@ -88,24 +88,40 @@ function handLine(game, hand) {
  * 액수는 rules.js 에서 가져온다 — 여기에 숫자를 다시 적으면 언젠가 어긋난다.
  */
 export const howto = () => base({
-  title: '🃏 카지노 bard — 블랙잭 규칙',
+  title: '🃏 카지노 bard — 블랙잭이 처음이신가요?',
   description: [
-    '카드 합이 **21에 가까우면 이깁니다.** 넘으면 그 자리에서 집니다(Bust).',
-    'A 는 1 또는 11, J·Q·K 는 10이에요. 딜러보다 높으면 이깁니다.',
+    '**딜러보다 21에 가까우면 이깁니다.** 다만 21을 넘기면 그 자리에서 집니다(Bust).',
     '',
-    '**Hit** 한 장 더 · **Stand** 그만 받기',
-    '**Double** 건 돈을 두 배로 올리고 **한 장만** 더 받기 (첫 두 장일 때)',
-    `**Split** 같은 값 두 장을 갈라 손을 둘로 (한 자리 최대 ${MAX_HANDS_PER_SEAT}손)`,
-    '**Surrender** 절반만 잃고 물러나기 (첫 두 장, Split·Double 전에만)',
-    '**Insurance** 딜러 앞장이 A 일 때만, 베팅의 절반을 걸고 2배로 돌려받기',
+    '**■ 카드 세는 법**',
+    `숫자는 그대로, **J·Q·K 는 10**, **A 는 1 또는 11** 중 유리한 쪽으로 셉니다.`,
+    `${example('Ah Ks')} → **21** (A 를 11로) · ${example('Ah 9d 5c')} → **15** (A 를 1로)`,
     '',
-    '**딜러 규칙** — 17 이상이면 무조건 섭니다. A 가 섞인 17(소프트 17)에서도 서요.',
-    '첫 두 장이 21이면 **Blackjack — 1.5배.** 비기면(Push) 건 돈이 그대로 돌아옵니다.',
+    '**■ 한 판의 흐름**',
+    '1. 칩을 겁니다',
+    `2. 각자 두 장씩, 딜러도 두 장 — 그중 한 장만 보여 줍니다 ${example('Ks')} + 엎어 둔 한 장`,
+    '3. 손님부터 차례로 더 받을지 정합니다',
+    '4. 다 끝나면 딜러가 자기 카드를 까고 **17 이상이 될 때까지** 받습니다',
+    '5. 딜러보다 높으면 이기고, 딜러가 21을 넘기면 남은 사람 전부 이깁니다',
     '',
+    '**■ 고를 수 있는 것**',
+    `**Hit** 한 장 더 — ${example('Ts 6h')} 16 에서 한 장 더 받아 보기`,
+    '**Stand** 그만 받기 — 이 패로 딜러와 겨룹니다',
+    `**Double** 건 돈을 두 배로 올리고 **딱 한 장만** 더 — ${example('6s 5h')} 11 처럼 좋을 때`,
+    `**Split** 같은 값 두 장을 갈라 **두 손으로** — ${example('8s 8h')} 는 16 하나보다 8 둘이 낫습니다`,
+    '　(가른 만큼 돈을 더 걸어야 해요. 한 자리에서 최대 4손까지.)',
+    '**Surrender** 절반만 잃고 물러나기 — 첫 두 장일 때만',
+    `**Insurance** 딜러 앞장이 ${example('Ad')} 일 때만. 베팅의 절반을 걸고, 딜러가 Blackjack 이면 2배로 돌려받습니다`,
+    '',
+    '**■ 배당**',
+    `첫 두 장이 21이면 **Blackjack** — ${example('Ah Ks')} 건 돈의 **1.5배**를 받습니다.`,
+    '보통 승리는 1배, **비기면(Push) 건 돈이 그대로** 돌아옵니다.',
+    '',
+    '**■ 이 테이블의 규칙**',
+    `카드는 6벌을 섞어 씁니다. 딜러는 **17 이상이면 무조건 섭니다** — A 가 섞인 17에서도요.`,
     `칩은 각자 **${START_CHIPS}개**로 시작하고 베팅은 ${BET_UNITS.join(' · ')} 또는 All-in.`,
-    `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있어요. ${MIN_BET}칩도 못 걸면 자동으로 빠집니다.`,
+    `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있고, ${MIN_BET}칩도 못 걸면 자동으로 빠집니다.`,
   ].join('\n'),
-  footer: '카드는 6벌을 섞어 씁니다 · 10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
+  footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
 });
 
 // ---------------------------------------------------------------- 대기실

@@ -123,8 +123,21 @@ export function handText(cards, { hole = false } = {}) {
  */
 export const isJumboable = (text) => /^(?:<a?:\w+:\d+>\s*)+$/.test(text.trim());
 
+/**
+ * `'As Kh 7d'` 처럼 짧게 적은 것을 카드로. **설명문의 예시 패를 만드는 용도**다.
+ * 진짜 패는 슈에서 뽑으므로 이걸 쓸 일이 없다.
+ *
+ * 랭크는 a 2~9 t j q k, 무늬는 s h d c. 대소문자는 가리지 않는다.
+ */
+export const cardsFrom = (text) => text.trim().split(/\s+/)
+  .map((it) => ({ rank: it[0].toLowerCase(), suit: it[1].toLowerCase() }));
+
+/** 예시 패를 한 줄로. cardsFrom + handText 를 한 번에. */
+export const example = (text) => handText(cardsFrom(text));
+
 export default {
   SUITS, RANKS, newShoe, shuffle, draw, needsShuffle,
   rankValue, handValue, isBlackjack,
-  useCardEmoji, hasCardEmoji, cardText, backText, handText, emojiName, BACK_NAME, isJumboable,
+  useCardEmoji, hasCardEmoji, cardText, backText, handText, emojiName, BACK_NAME,
+  isJumboable, cardsFrom, example,
 };

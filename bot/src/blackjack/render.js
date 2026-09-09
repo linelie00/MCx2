@@ -11,7 +11,10 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { handValue, handText, isBlackjack } from '../casino/cards.js';
-import { BET_UNITS, OUTCOME_LABEL, insuranceCost } from './rules.js';
+import {
+  BET_UNITS, OUTCOME_LABEL, insuranceCost, MIN_BET, MAX_HANDS_PER_SEAT,
+} from './rules.js';
+import { START_CHIPS } from '../casino/wallet.js';
 import {
   MAX_SEATS, active, currentHand, currentSeat, seatOfHand, actionsFor,
   dealerUp, standings, allIn,
@@ -74,6 +77,36 @@ function handLine(game, hand) {
   return `${mark}**${who}** · ${hand.bet}칩\n　${handText(hand.cards)}　**${total}**`
     + (tags.length ? `　_${tags.join(' · ')}_` : '');
 }
+
+/**
+ * 판을 열 때 한 번 띄우는 규칙 안내.
+ *
+ * 블랙잭은 집집마다 룰이 다르다. 3:2 인지 6:5 인지, 딜러가 소프트 17에서 서는지,
+ * 서렌더가 있는지 없는지로 판단이 완전히 갈리는데 판에는 그걸 적을 자리가 없다.
+ * rules.js 머리말에 못 박아 둔 것과 **같은 내용**을 손님이 읽을 말로 적는다.
+ *
+ * 액수는 rules.js 에서 가져온다 — 여기에 숫자를 다시 적으면 언젠가 어긋난다.
+ */
+export const howto = () => base({
+  title: '🃏 카지노 bard — 블랙잭 규칙',
+  description: [
+    '카드 합이 **21에 가까우면 이깁니다.** 넘으면 그 자리에서 집니다(Bust).',
+    'A 는 1 또는 11, J·Q·K 는 10이에요. 딜러보다 높으면 이깁니다.',
+    '',
+    '**Hit** 한 장 더 · **Stand** 그만 받기',
+    '**Double** 건 돈을 두 배로 올리고 **한 장만** 더 받기 (첫 두 장일 때)',
+    `**Split** 같은 값 두 장을 갈라 손을 둘로 (한 자리 최대 ${MAX_HANDS_PER_SEAT}손)`,
+    '**Surrender** 절반만 잃고 물러나기 (첫 두 장, Split·Double 전에만)',
+    '**Insurance** 딜러 앞장이 A 일 때만, 베팅의 절반을 걸고 2배로 돌려받기',
+    '',
+    '**딜러 규칙** — 17 이상이면 무조건 섭니다. A 가 섞인 17(소프트 17)에서도 서요.',
+    '첫 두 장이 21이면 **Blackjack — 1.5배.** 비기면(Push) 건 돈이 그대로 돌아옵니다.',
+    '',
+    `칩은 각자 **${START_CHIPS}개**로 시작하고 베팅은 ${BET_UNITS.join(' · ')} 또는 All-in.`,
+    `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있어요. ${MIN_BET}칩도 못 걸면 자동으로 빠집니다.`,
+  ].join('\n'),
+  footer: '카드는 6벌을 섞어 씁니다 · 10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
+});
 
 // ---------------------------------------------------------------- 대기실
 

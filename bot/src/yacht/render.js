@@ -10,7 +10,7 @@
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import {
-  CATEGORIES, UPPER_KEYS, BONUS_NEED, BONUS_SCORE, ROUNDS,
+  CATEGORIES, UPPER_KEYS, BONUS_NEED, BONUS_SCORE, ROUNDS, MAX_ROLLS,
   scoreAll, openCategories, totals, bonusLost,
 } from './rules.js';
 import { MAX_SEATS, current, ranking, filledCount } from './state.js';
@@ -93,6 +93,36 @@ export function scoreTable(game) {
 
   return ['```', head, ...upper, sub, bonus, rule, ...lower, rule, total, '```'].join('\n');
 }
+
+/**
+ * 판을 열 때 한 번 띄우는 규칙 안내.
+ *
+ * 점수표 오른쪽 안내 열은 좁아서 "1의 합" 정도밖에 못 적는다. 처음 하는 사람이
+ * 알아야 할 것 — 몇 번까지 굴리는지, 고른 칸을 왜 못 되돌리는지, 맞는 칸이 없을 때
+ * 어떻게 하는지 — 은 거기 안 들어가서 따로 한 번만 띄운다.
+ *
+ * 룰이 갈리는 지점은 rules.js 머리말과 같은 것을 적는다. 한국식 12칸이라 포카드와
+ * 풀하우스가 서양 Yahtzee 와 다른데, 그걸 모르면 점수가 잘못 나온 줄 안다.
+ */
+export const howto = () => base({
+  title: '🎲 요트 다이스 — 이렇게 합니다',
+  description: [
+    '주사위 다섯 개를 굴려 **12칸을 하나씩 채웁니다.** 12턴이면 끝, 합계가 높은 사람이 이겨요.',
+    '',
+    `**한 턴** — 굴리고, 남길 주사위를 골라 다시 굴리기를 **최대 ${MAX_ROLLS}번.** 그 다음 칸 하나를 고릅니다.`,
+    '한 번 고른 칸은 다시 못 써요. 맞는 칸이 없으면 **아무 칸에나 0점을 적어도 됩니다.**',
+    '',
+    '**위칸 1~6** — 그 눈만 세서 더해요. 3이 세 개면 9점.',
+    `위칸 소계가 **${BONUS_NEED} 이상이면 보너스 +${BONUS_SCORE}.**`,
+    '',
+    '**초이스** — 다섯 개 전부의 합',
+    '**포카드** — 같은 눈이 4개 이상이면 **다섯 개 전부의 합** (네 개만 더하지 않아요)',
+    '**풀하우스** — 3개 + 2개면 **다섯 개 전부의 합** (25점 고정이 아니에요)',
+    '**S스트** — 연속 4개면 15점 · **L스트** — 연속 5개면 30점',
+    '**요트** — 다섯 개가 모두 같으면 50점',
+  ].join('\n'),
+  footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
+});
 
 // ---------------------------------------------------------------- 대기실
 

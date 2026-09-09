@@ -20,7 +20,7 @@ import { line as npcLine, turnLines as npcTurnLines } from '../ai/gameTalk.js';
 import { sayAsOrPlain } from '../discord/webhook.js';
 import * as state from '../yacht/state.js';
 import {
-  PREFIX, faces, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
+  PREFIX, faces, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 } from '../yacht/render.js';
 import { base, fail } from '../embeds.js';
 
@@ -341,13 +341,12 @@ async function execute(interaction) {
     }
     if (against) state.start(game);
 
-    // 스레드를 못 만들었으면 방금 띄운 안내를 판으로 바꿔 쓴다(메시지를 하나 아낀다).
-    if (room.id === interaction.channelId) {
-      await interaction.editReply(payloadFor(game));
-      game.message = anchor;
-    } else {
-      game.message = await room.send(payloadFor(game));
-    }
+    // 규칙 안내를 판보다 먼저 한 번. 스레드를 못 만들었을 때도 순서가 맞게, 판은
+    // 항상 새 메시지로 보낸다(예전엔 안내 메시지를 판으로 덮어써서 하나 아꼈는데,
+    // 그러면 규칙이 판 아래로 가서 버튼이 위에 오게 된다).
+    await room.send({ embeds: [howto()] })
+      .catch((err) => console.warn('[요트] 규칙 안내 실패:', err.message));
+    game.message = await room.send(payloadFor(game));
     kickNpc(game);
     return;
   }

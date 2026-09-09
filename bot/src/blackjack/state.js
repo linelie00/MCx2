@@ -108,6 +108,7 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     aiLeft: 0,
     driving: false,
     rekick: false,       // 드라이버가 도는 동안 들어온 클릭이 있었는지
+    closed: false,       // 마무리 인사를 했는지
     endedReason: null,
   };
   games.set(channelId, game);

@@ -116,6 +116,10 @@ const DEALER_MOMENT = {
   'result.playerBust': (v) => `${v.name}이(가) 21을 넘겨 Bust 했다.`,
   'result.playerBlackjack': (v) => `${v.name}에게 Blackjack 이 떴다. 1.5배로 준다.`,
   'result.surrender': (v) => `${v.name}이(가) Surrender 했다. 절반만 돌려준다.`,
+  close: (v) => ['판이 끝나 테이블을 닫는다. 오늘 밤은 여기까지다.',
+    v.name ? `가장 많이 딴 사람은 ${v.name}(${v.amount}).` : null,
+  ].filter(Boolean).join(' '),
+  broke: () => '손님들 칩이 다 떨어져서 더 이상 베팅할 수가 없다. 그래서 판을 닫는다.',
 };
 
 const PLAYER_MOMENT = {
@@ -132,16 +136,23 @@ const PLAYER_MOMENT = {
   push: () => '딜러와 비겼다. 건 돈은 그대로 돌아온다.',
   bust: () => '한 장을 더 받았다가 21을 넘겨 Bust 했다.',
   blackjack: () => '첫 두 장이 21이다. Blackjack 이다.',
+  closeWin: (v) => `판이 끝났다. 오늘 밤 나는 ${v.amount}을 따고 일어난다.`,
+  closeLose: (v) => `판이 끝났다. 오늘 밤 나는 ${v.amount}을 잃었다.`,
+  closeEven: () => '판이 끝났다. 따지도 잃지도 않고 본전이다.',
 };
 
+// 옆자리 반응은 **구경하는 자리**다. 이걸 못 박아 두지 않으면 남이 Bust 한 것을
+// 보고 자기가 "Stand!" 를 선언하며 끝낸다(실제로 그랬다).
+const WATCHING = '지금 내 차례가 아니고, 나는 아무 수도 두지 않는다.';
+
 const BANTER_MOMENT = {
-  bust: (v) => `옆자리 ${v.name}이(가) 21을 넘겨 Bust 했다. 내 일이 아니다.`,
-  blackjack: (v) => `옆자리 ${v.name}에게 Blackjack 이 떴다. 내 일이 아니다.`,
-  double: (v) => `옆자리 ${v.name}이(가) Double 을 걸었다. 내 일이 아니다.`,
-  split: (v) => `옆자리 ${v.name}이(가) Split 했다. 내 일이 아니다.`,
-  surrender: (v) => `옆자리 ${v.name}이(가) Surrender 했다. 내 일이 아니다.`,
-  dealerBust: () => '딜러인 미겔이 21을 넘겨 Bust 했다. 미겔에게 한마디 한다.',
-  dealerBlackjack: () => '딜러인 미겔에게 Blackjack 이 붙었다. 미겔에게 한마디 한다.',
+  bust: (v) => `옆자리 ${v.name}이(가) 21을 넘겨 Bust 했다. ${WATCHING}`,
+  blackjack: (v) => `옆자리 ${v.name}에게 Blackjack 이 떴다. ${WATCHING}`,
+  double: (v) => `옆자리 ${v.name}이(가) Double 을 걸었다. ${WATCHING}`,
+  split: (v) => `옆자리 ${v.name}이(가) Split 했다. ${WATCHING}`,
+  surrender: (v) => `옆자리 ${v.name}이(가) Surrender 했다. ${WATCHING}`,
+  dealerBust: () => `딜러인 미겔이 21을 넘겨 Bust 했다. 미겔에게 한마디 한다. ${WATCHING}`,
+  dealerBlackjack: () => `딜러인 미겔에게 Blackjack 이 붙었다. 미겔에게 한마디 한다. ${WATCHING}`,
 };
 
 const MOMENT = { dealer: DEALER_MOMENT, player: PLAYER_MOMENT, banter: BANTER_MOMENT };
@@ -175,6 +186,22 @@ function table(game, speaker) {
 }
 
 /**
+ * 판을 접을 때 보여 줄 것. 카드가 아니라 **오늘 얼마를 따고 잃었는지**다.
+ *
+ * 마무리 인사에 마지막 핸드 테이블을 그대로 넘겼더니 마티암이 판이 끝난 줄 모르고
+ * 방금 터진 패 이야기를 했다. 끝난 자리에서는 끝난 것만 보여 준다.
+ */
+function closing(game, speaker) {
+  const deltas = game.chips?.deltas() ?? {};
+  const rows = game.seats.map((s) => {
+    const d = deltas[s.id] ?? 0;
+    const me = s.character === speaker ? ' ← 나' : '';
+    return `${s.name}: ${d > 0 ? `+${d}` : d}칩 (남은 칩 ${s.chips})${me}`;
+  });
+  return ['## 오늘의 결산', ...rows].join('\n');
+}
+
+/**
  * Gemini 에게 넘길 상황 메모. 캔드 대사와 **같은 키**로 만든다 —
  * 어느 쪽이 나가든 말하는 순간이 달라지지 않게 하려는 것이다.
  */
@@ -184,7 +211,9 @@ export function memo(game, key, vars = {}, speaker = null) {
   const make = MOMENT[kind]?.[event] ?? MOMENT[kind]?.[event.split('.')[0]];
   if (!make) return null;
 
-  return [table(game, speaker), '', '## 지금', make(vars)]
+  const closes = event === 'broke' || event.startsWith('close');
+  const head = closes ? closing(game, speaker) : table(game, speaker);
+  return [head, '', '## 지금', make(vars)]
     .filter((s) => s !== null).join('\n').trim();
 }
 

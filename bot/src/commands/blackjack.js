@@ -216,6 +216,37 @@ async function banterAtDealer(game, event) {
   return say(game, 'matiam', `banter.matiam.${event}`, {}, { p: 0.45, live: 0.7 });
 }
 
+/**
+ * 판을 접으며 하는 인사. 딜러가 마무리하고, NPC 손님들이 각자 결산에 반응한다.
+ *
+ * 시작할 때 인사를 하고 끝날 때 아무 말도 없으면 판이 끊긴 것처럼 보인다. 여기는
+ * 한 판에 딱 한 번뿐인 자리라 전원 무조건 말하게 두고 Gemini 쪽에 무게를 준다.
+ *
+ * 정산 결과 화면은 이미 떠 있으므로 대사만 얹고 마지막에 한 번 다시 띄운다.
+ */
+async function closeTable(game) {
+  const rows = state.standings(game);
+  const top = [...rows].sort((a, b) => b.delta - a.delta).find((r) => r.delta > 0);
+  const broke = game.endedReason === 'broke';
+
+  // 마지막 핸드가 예산을 다 썼더라도 마무리 인사는 지어 준다. 판에 한 번뿐인 자리다.
+  game.aiHandNo = -1;
+
+  await dealerSays(game, broke ? 'broke' : 'close', {
+    name: top?.seat.name,
+    amount: top ? `+${top.delta}칩` : null,
+  }, { always: true, live: 0.9 });
+
+  for (const { seat, delta } of rows) {
+    if (seat.kind !== 'npc') continue;
+    const key = delta > 0 ? 'closeWin' : (delta < 0 ? 'closeLose' : 'closeEven');
+    await playerSays(game, seat, key, { amount: `${Math.abs(delta)}칩` },
+      { always: true, live: 0.8 });
+  }
+
+  await repost(game);
+}
+
 /** 판을 열며 하는 인사. 딜러가 누구든 한 번은 반드시 한다. */
 async function openTable(game) {
   game.opened = true;
@@ -486,14 +517,25 @@ async function settleAndShow(game) {
  * 끝나 버려서 아무도 다음 차례로 넘겨 주지 않는다.
  */
 function kick(game) {
-  if (game.phase === 'done' || game.phase === 'lobby') return;
+  if (game.phase === 'lobby') return;
   if (game.driving) { game.rekick = true; return; }
+
+  // 끝난 판이라도 마무리 인사는 한 번 한다. 한 장도 안 돌린 채 접었으면 할 말이 없다.
+  if (game.phase === 'done') {
+    if (game.closed || !game.handNo) return;
+    game.closed = true;
+    closeTable(game).catch((err) => console.error('[블랙잭] 마무리 대사 오류:', err));
+    return;
+  }
+
   runDriver(game).catch((err) => console.error('[블랙잭] 드라이버 오류:', err));
 }
 
-// 방치된 판을 접는다.
+// 방치된 판을 접는다. 인터랙션 없이 끝나는 유일한 길이라 마무리 인사도 여기서 깨운다.
 setInterval(() => {
-  for (const game of state.expired()) draw(game);
+  for (const game of state.expired()) {
+    draw(game).then(() => kick(game)).catch(() => {});
+  }
 }, 60_000).unref();
 
 // ---------------------------------------------------------------- 명령
@@ -574,6 +616,7 @@ async function execute(interaction) {
     flags: MessageFlags.Ephemeral,
   });
   await draw(live);
+  kick(live);                    // 한 판이라도 돌았으면 마무리 인사를 한다
 }
 
 // ---------------------------------------------------------------- 버튼

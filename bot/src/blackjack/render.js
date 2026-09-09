@@ -51,8 +51,13 @@ function chipTable(game) {
   return ['```', head, '-'.repeat(NAME_W + COL_W * 2), ...rows, '```'].join('\n');
 }
 
-/** 한 손을 한 줄로. 카드와 합계, 그리고 지금 두는 손이면 표시. */
-function handLine(game, hand, i) {
+/**
+ * 한 손을 한 줄로. 카드와 합계, 그리고 지금 두는 손이면 표시.
+ *
+ * 손 번호는 **그 사람 안에서** 센다. 전체 hands 의 인덱스를 쓰면 앞사람 손 수만큼
+ * 밀려서 "마티암 #2, 마티암 #3" 이 되고, 마티암이 셋 있는 것처럼 보인다.
+ */
+function handLine(game, hand) {
   const seat = seatOfHand(game, hand);
   const { total, bust } = handValue(hand.cards);
   const mark = game.phase === 'playing' && game.hands[game.turn] === hand ? '▸ ' : '　';
@@ -63,8 +68,8 @@ function handLine(game, hand, i) {
     hand.doubled ? 'Double' : null,
   ].filter(Boolean);
 
-  const many = game.hands.filter((h) => h.seatIndex === hand.seatIndex).length > 1;
-  const who = many ? `${seat.name} #${i + 1}` : seat.name;
+  const mine = game.hands.filter((h) => h.seatIndex === hand.seatIndex);
+  const who = mine.length > 1 ? `${seat.name} #${mine.indexOf(hand) + 1}` : seat.name;
 
   return `${mark}**${who}** · ${hand.bet}칩\n　${handText(hand.cards)}　**${total}**`
     + (tags.length ? `　_${tags.join(' · ')}_` : '');
@@ -121,7 +126,7 @@ export function boardEmbed(game) {
   }
 
   if (game.hands.length) {
-    lines.push(...game.hands.map((h, i) => handLine(game, h, i)), '');
+    lines.push(...game.hands.map((h) => handLine(game, h)), '');
   }
 
   if (game.phase === 'insurance') {

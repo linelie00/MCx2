@@ -28,34 +28,36 @@ import { openAccounts, postAccountDeltas } from '../api.js';
 export const START_CHIPS = 1000;
 
 /**
- * 한 판에 들고 앉을 수 있는 최대. 나머지는 계정에 남는다.
+ * 불러온 잔액을 **한 판에 들고 앉을 만큼**으로 줄인다. `cap` 은 그 자리의 등급이
+ * 정한다(`casino/stakes.js` 의 `stack`).
  *
  * 잔액 전부를 들고 앉게 두면 블랙잭 All-in **버튼 하나가 평생 모은 돈을 건다.**
- * 홀덤은 제로섬이라 한 핸드에 남의 저금이 통째로 넘어가고, 매일 1000으로 채워지는
+ * 홀덤은 제로섬이라 한 핸드에 남의 저금이 통째로 넘어가고, 매일 1000까지만 채워지는
  * 미겔은 부자 앞에서 늘 숏스택인데 holdem/ai.js 는 50BB 기준으로 맞춰 놨다.
  *
  * **맡겨 두는 방식(고정 바이인 + 판 끝에 반환)이 아니다.** 판이 정상 종료되지 않는
  * 길이 셋이나 있어서(방치 정리·봇 재시작·재배포) 맡긴 칩이 사라진다. 대신 그냥
  * **덜 들고 앉는다** — 나머지는 계정에서 아예 나가지 않으므로, 20000 가진 사람이
- * 1000을 다 잃으면 -1000 이 얹혀 19000 이 된다. 지금의 증감 모델 그대로다.
+ * 한 스택을 다 잃으면 그 몫만 얹힌다. 지금의 증감 모델 그대로다.
  *
  * 대가는 판 안에서 재바이인이 없다는 것. 그게 카지노 테이블이다.
  */
-export const TABLE_STACK = 1000;
-
-/** 불러온 잔액을 판에 들고 앉을 만큼으로 줄인다. */
-export const buyIn = (balances, cap = TABLE_STACK) => Object.fromEntries(
-  Object.entries(balances).map(([id, n]) => [id, Math.min(n, cap)]),
-);
+export function buyIn(balances, cap) {
+  // 상한을 빠뜨리면 Math.min 이 조용히 NaN 을 만들고, 그 NaN 이 장부를 거쳐 증감으로
+  // 나간다. 서버가 정수가 아니라고 막아 주긴 하지만 그건 마지막 그물이다 — 돈을
+  // 다루는 자리에서는 여기서 크게 터지는 편이 낫다.
+  if (!Number.isFinite(cap)) throw new Error(`buyIn: 상한이 없습니다 (${cap})`);
+  return Object.fromEntries(Object.entries(balances).map(([id, n]) => [id, Math.min(n, cap)]));
+}
 
 /**
- * 베팅 단위. 모든 베팅이 이 배수여야 블랙잭 3:2 배당과 서렌더 절반 반환이
- * 정수로 떨어진다 — 지갑이 소수를 안고 영구 저장으로 가면 안 된다.
+ * 올인처럼 임의의 금액을 걸 때, **그 자리의 단위**에 맞게 내림한다.
+ *
+ * 단위는 자리마다 다르다(`casino/stakes.js` 의 `unit`). 모든 베팅이 그 배수여야
+ * 블랙잭 3:2 배당과 서렌더 절반 반환이 정수로 떨어진다 — 지갑이 소수를 안고
+ * 영구 저장으로 가면 안 된다.
  */
-export const CHIP_UNIT = 50;
-
-/** 올인처럼 임의의 금액을 걸 때, 단위에 맞게 내림한다. */
-export const roundToUnit = (amount) => Math.max(0, Math.floor(amount / CHIP_UNIT) * CHIP_UNIT);
+export const roundToUnit = (amount, unit) => Math.max(0, Math.floor(amount / unit) * unit);
 
 /**
  * 판을 시작할 때 잔액을 불러온다.
@@ -158,4 +160,4 @@ export function ledger(initial) {
   };
 }
 
-export default { START_CHIPS, TABLE_STACK, buyIn, CHIP_UNIT, roundToUnit, load, commit, ledger };
+export default { START_CHIPS, buyIn, roundToUnit, load, commit, ledger };

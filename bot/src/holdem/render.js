@@ -12,9 +12,9 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { handText, isJumboable, example } from '../casino/cards.js';
 import { describe } from '../casino/poker.js';
-import { SMALL_BLIND, BIG_BLIND, MAX_SEATS } from './rules.js';
+import { MAX_SEATS } from './rules.js';
 import {
-  TABLE_STACK, currentSeat, actionsFor, raisesFor, toCallFor, pot, standings,
+  currentSeat, actionsFor, raisesFor, toCallFor, pot, standings,
 } from './state.js';
 import { base, THEME_COLOR } from '../embeds.js';
 import { padEndW, padStartW, clipW } from '../text.js';
@@ -75,7 +75,7 @@ function seatTable(game) {
  * 홀덤은 요트·블랙잭보다 규칙이 많고, 무엇보다 **내 카드를 어떻게 보는지**를 모르면
  * 아무것도 못 한다. 그 한 줄이 이 안내의 핵심이다.
  */
-export const howto = () => base({
+export const howto = (game) => ((s) => base({
   title: '🃏 카지노 bard — 홀덤이 처음이신가요?',
   description: [
     '**각자 두 장**(나만 봅니다)을 받고, 가운데에 **다섯 장**을 모두가 함께 씁니다.',
@@ -105,14 +105,16 @@ export const howto = () => base({
     '**All-in** 가진 칩 전부 — 모자라도 그만큼만 걸고 끝까지 갈 수 있어요',
     '',
     '**■ 블라인드와 버튼**',
-    `매 판 **강제로 거는 돈**이 있습니다 — 스몰블라인드 **${SMALL_BLIND}**, 빅블라인드 **${BIG_BLIND}**.`,
+    `매 판 **강제로 거는 돈**이 있습니다 — 스몰블라인드 **${s.sb}**, 빅블라인드 **${s.bb}**.`,
     '판마다 한 칸씩 돌아서 아무도 손해 보지 않습니다.',
     '자리 표의 **`D`** 가 버튼(딜러 자리)이고, 그 다음 둘이 블라인드를 냅니다.',
     '',
-    `앉으면 **최대 ${TABLE_STACK}칩**(가진 게 그보다 적으면 있는 만큼). 손의 순서가 헷갈리면 **\`/홀덤 족보\`** 를 쳐 보세요.`,
+    `이 자리는 **${s.name}** 입니다. 앉으면 **최대 ${s.stack}칩**`
+      + ` — 가진 게 적으면 있는 만큼이지만, **${s.minBuyIn}칩**은 있어야 앉을 수 있어요.`,
+    '손의 순서가 헷갈리면 **`/홀덤 족보`** 를 쳐 보세요.',
   ].join('\n'),
   footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
-});
+}))(game.stakes);
 
 /**
  * `/홀덤 족보` — 손의 순서. 높은 것부터.
@@ -165,7 +167,8 @@ export function lobbyEmbed(game) {
       seats, '',
       `${game.seats.length}/${MAX_SEATS}자리 · 두 자리부터 시작할 수 있어요.`,
     ].join('\n'),
-    footer: `블라인드 ${SMALL_BLIND}/${BIG_BLIND} · 앉으면 최대 ${TABLE_STACK}칩`,
+    footer: `${game.stakes.name} · 블라인드 ${game.stakes.sb}/${game.stakes.bb}`
+      + ` · 앉으면 최대 ${game.stakes.stack}칩 (최소 ${game.stakes.minBuyIn})`,
   });
 }
 
@@ -233,7 +236,7 @@ export function boardEmbed(game) {
     title,
     description: lines.join('\n'),
     color: seat?.color ?? THEME_COLOR,
-    footer: `팟 ${pot(game)} · 블라인드 ${SMALL_BLIND}/${BIG_BLIND}${savedMark(game)}`
+    footer: `팟 ${pot(game)} · ${game.stakes.name} ${game.stakes.sb}/${game.stakes.bb}${savedMark(game)}`
       + ` · 버튼 ${game.seats[game.button]?.name ?? '-'}`,
   });
 }

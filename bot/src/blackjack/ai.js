@@ -18,7 +18,6 @@
  * 이 파일도 디스코드를 모른다. simulate-blackjack.mjs 로 검증한다.
  */
 import { handValue, rankValue } from '../casino/cards.js';
-import { BET_UNITS } from './rules.js';
 
 /**
  * 표의 기호.
@@ -164,9 +163,11 @@ export const chooseInsurance = (styleKey) => Boolean(STYLES[styleKey]?.insurance
  *
  * 미겔은 직전에 이겼으면 키우고 졌으면 더 키운다(본전 생각). 마티암은 늘 같은 액수.
  */
-export function chooseBet(styleKey, { chips, lastBet = 0, lastWon = null, rand = Math.random }) {
+export function chooseBet(styleKey, {
+  chips, betUnits, lastBet = 0, lastWon = null, rand = Math.random,
+}) {
   const style = STYLES[styleKey];
-  const affordable = BET_UNITS.filter((b) => b <= chips);
+  const affordable = betUnits.filter((b) => b <= chips);
   if (!affordable.length) return 0;
 
   if (!style.betSpread) {

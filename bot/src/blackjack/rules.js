@@ -15,16 +15,12 @@
  *   서렌더: 레이트 서렌더 — 첫 두 장이고 스플릿·더블 전에만. 절반 반환
  *   인슈어런스: 업카드가 A 일 때만, 베팅의 절반, 2:1
  *   딜러 피크: 업카드가 A 또는 10이면 홀카드를 확인한다
- *   모든 베팅은 50의 배수 — 3:2 와 절반 반환이 정수로 떨어져야 한다
+ *   모든 베팅은 그 자리 최소 베팅의 배수 — 3:2 와 절반 반환이 정수로 떨어져야 한다
  *
  * 피크를 하는 이유는 정산 때문이다. 안 하면 나중에 딜러 블랙잭이 드러났을 때 이미 건
  * Double·Split 을 되돌려야 하는데, 그 경로가 아주 고약하다.
  */
 import { handValue, isBlackjack, rankValue } from '../casino/cards.js';
-import { CHIP_UNIT } from '../casino/wallet.js';
-
-export const MIN_BET = CHIP_UNIT;
-export const BET_UNITS = [50, 100, 200, 500];
 export const MAX_HANDS_PER_SEAT = 4;
 
 /** 한 손. 자리가 아니라 손이 게임의 단위다 — 스플릿하면 한 사람이 여럿 갖는다. */
@@ -137,7 +133,7 @@ export const OUTCOME_LABEL = {
 };
 
 export default {
-  MIN_BET, BET_UNITS, MAX_HANDS_PER_SEAT, OUTCOME_LABEL,
+  MAX_HANDS_PER_SEAT, OUTCOME_LABEL,
   newHand, legalActions, canInsure, insuranceCost,
   dealerShouldHit, dealerPeeks, settleHand, settleInsurance,
 };

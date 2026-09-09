@@ -57,7 +57,9 @@ function styledAction(game) {
 }
 
 const ids = Array.from({ length: seatCount }, (_, i) => `u${i}`);
-const TOTAL = seatCount * st.TABLE_STACK;
+const STACK = st.create({ channelId: 'probe', guildId: 'g', starterId: 'x' }).stakes.stack;
+st.remove('probe');
+const TOTAL = seatCount * STACK;
 
 /** 새 판. 누군가 파산해 판이 끝나면 다시 연다 — 그래야 경로를 많이 훑는다. */
 function freshGame() {
@@ -66,7 +68,7 @@ function freshGame() {
   for (let i = 0; i < seatCount; i += 1) {
     g.seats.push(st.humanSeat({ id: ids[i], username: `P${i}` }, `P${i}`));
   }
-  const e = st.start(g, Object.fromEntries(ids.map((id) => [id, st.TABLE_STACK])));
+  const e = st.start(g, Object.fromEntries(ids.map((id) => [id, STACK])));
   if (e) { console.error('시작 실패:', e); process.exit(1); }
   return g;
 }

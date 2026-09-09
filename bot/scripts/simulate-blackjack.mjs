@@ -20,6 +20,10 @@ import {
   settleHand, settleInsurance, insuranceCost, MAX_HANDS_PER_SEAT,
 } from '../src/blackjack/rules.js';
 import { STYLES, chooseAction, chooseInsurance, chooseBet } from '../src/blackjack/ai.js';
+import { STAKES } from '../src/casino/stakes.js';
+
+/** 기본 등급(로우)으로 돈다. 등급마다 비율이 같아서 확률은 안 달라진다. */
+const TABLE = STAKES.low;
 
 const fastRand = (n) => Math.floor(Math.random() * n);
 
@@ -28,7 +32,7 @@ function playHand(styleKey, chips, lastWon) {
   const shoe = playHand.shoe;
   if (needsShuffle(shoe)) { playHand.shoe = shuffle(newShoe(6), fastRand); }
 
-  const bet = chooseBet(styleKey, { chips, lastWon });
+  const bet = chooseBet(styleKey, { chips, betUnits: TABLE.betUnits, lastWon });
   if (!bet) return null;                       // 걸 돈이 없다
 
   const seat = { chips: chips - bet };         // 걸 때 바로 깎는다

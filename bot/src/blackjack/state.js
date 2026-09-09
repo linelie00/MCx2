@@ -17,10 +17,11 @@ import { randomBytes } from 'node:crypto';
 import {
   newShoe, shuffle, draw, needsShuffle, handValue, isBlackjack,
 } from '../casino/cards.js';
-import { ledger, roundToUnit, CHIP_UNIT } from '../casino/wallet.js';
+import { ledger, roundToUnit } from '../casino/wallet.js';
+import { stakesOf, DEFAULT_STAKES } from '../casino/stakes.js';
 import {
   newHand, legalActions, dealerShouldHit, dealerPeeks,
-  settleHand, settleInsurance, insuranceCost, MAX_HANDS_PER_SEAT, MIN_BET,
+  settleHand, settleInsurance, insuranceCost, MAX_HANDS_PER_SEAT,
 } from './rules.js';
 import { OWNER_META, ownerFor } from '../owners.js';
 import { THEME_COLOR } from '../embeds.js';
@@ -75,8 +76,11 @@ export function npcSeat(character) {
 
 // ---------------------------------------------------------------- 판
 
-export function create({ channelId, homeChannelId, guildId, starterId }) {
+export function create({ channelId, homeChannelId, guildId, starterId, stakes = DEFAULT_STAKES }) {
+  // 판돈은 판을 열 때 정하고 **끝날 때까지 안 바뀐다.** 도중에 바뀌면 이미 건 돈의 뜻이 달라진다.
+  const table = stakesOf(stakes);
   const game = {
+    stakes: table,
     serial: serial(),
     rev: 0,
     channelId,
@@ -170,7 +174,9 @@ export function start(game, balances) {
   game.dealerCharacter = dealerCharacter(game);      // 판 도중에 바뀌지 않게 얼린다
   game.chips = ledger(balances);
   for (const s of game.seats) s.chips = game.chips.get(s.id);
-  if (!game.seats.some((s) => s.chips >= MIN_BET)) return `${MIN_BET}칩 이상 가진 사람이 한 명은 있어야 해요.`;
+  if (!game.seats.some((s) => s.chips >= game.stakes.minBet)) {
+    return `${game.stakes.minBet}칩 이상 가진 사람이 한 명은 있어야 해요.`;
+  }
   beginBetting(game);
   return null;
 }
@@ -189,7 +195,7 @@ export function beginBetting(game) {
     s.bet = 0;
     s.staged = 0;
     s.insurance = undefined;
-    if (s.chips < MIN_BET) s.out = true;             // 최소 베팅도 못 걸면 빠진다
+    if (s.chips < game.stakes.minBet) s.out = true;  // 최소 베팅도 못 걸면 빠진다
   }
   touch(game);
 }
@@ -218,8 +224,8 @@ export function clearBet(game, seat) {
 /** 올린 액수로 확정한다. 이때 칩을 바로 깎는다. */
 export function placeBet(game, seat, amount = seat.staged) {
   if (seat.bet) return '이미 베팅했어요.';
-  const bet = roundToUnit(amount);
-  if (bet < MIN_BET) return `${MIN_BET}칩 이상 걸어야 해요.`;
+  const bet = roundToUnit(amount, game.stakes.unit);
+  if (bet < game.stakes.minBet) return `${game.stakes.minBet}칩 이상 걸어야 해요.`;
   if (!game.chips.take(seat.id, bet)) return `칩이 모자라요. (${seat.chips}칩 남음)`;
   seat.chips = game.chips.get(seat.id);
   seat.bet = bet;
@@ -228,7 +234,7 @@ export function placeBet(game, seat, amount = seat.staged) {
   return null;
 }
 
-export const allIn = (seat) => roundToUnit(seat.chips);
+export const allIn = (game, seat) => roundToUnit(seat.chips, game.stakes.unit);
 
 // ---------------------------------------------------------------- 배분
 
@@ -501,7 +507,7 @@ export function expired(now = Date.now()) {
 }
 
 export {
-  MAX_HANDS_PER_SEAT, MIN_BET, CHIP_UNIT, handValue, isBlackjack, insuranceCost,
+  MAX_HANDS_PER_SEAT, handValue, isBlackjack, insuranceCost,
 };
 
 export default {

@@ -21,7 +21,12 @@
 import assert from 'node:assert/strict';
 import * as bj from '../src/blackjack/state.js';
 import * as hold from '../src/holdem/state.js';
-import { buyIn, TABLE_STACK, ledger } from '../src/casino/wallet.js';
+import { buyIn, ledger } from '../src/casino/wallet.js';
+import { STAKES } from '../src/casino/stakes.js';
+
+/** 기본 등급(로우)으로 검사한다. 등급마다 비율이 같아서 하나만 봐도 된다. */
+const LOW = STAKES.low;
+const TABLE_STACK = LOW.stack;
 
 const HANDS = Number(process.argv[2]) || 600;
 
@@ -58,7 +63,7 @@ function table(mod, channelId, seats, balances) {
   for (const s of seats) {
     mod.addSeat(game, s.npc ? mod.npcSeat(s.npc) : mod.humanSeat(user(s.n), `사람${s.n}`));
   }
-  const err = mod.start(game, buyIn(balances));
+  const err = mod.start(game, buyIn(balances, game.stakes.stack));
   assert.equal(err, null, `판이 안 열렸다: ${err}`);
   return game;
 }
@@ -66,8 +71,8 @@ function table(mod, channelId, seats, balances) {
 /** 블랙잭 한 핸드를 끝까지. 정산까지 마치고 돌아온다. */
 function blackjackHand(game) {
   for (const seat of bj.active(game)) {
-    const most = Math.min(bj.allIn(seat), 200);
-    bj.placeBet(game, seat, Math.max(bj.MIN_BET, most));
+    const most = Math.min(bj.allIn(game, seat), 200);
+    bj.placeBet(game, seat, Math.max(game.stakes.minBet, most));
   }
   if (!bj.allBetsIn(game)) return false;
 
@@ -226,12 +231,12 @@ check('rebase 뒤에도 net 은 판 전체를, deltas 는 0 을 준다', () => {
 
 console.log('\n한 판 상한');
 check('부자는 상한만큼만 들고 앉는다', () => {
-  assert.deepStrictEqual(buyIn({ u: 5000, v: 200 }), { u: TABLE_STACK, v: 200 });
+  assert.deepStrictEqual(buyIn({ u: 5000, v: 200 }, TABLE_STACK), { u: TABLE_STACK, v: 200 });
 });
 check('상한만큼 다 잃어도 남긴 돈은 그대로다', () => {
   const accounts = { u: 5000 };
   const server = makeServer(accounts);
-  const book = ledger(buyIn(accounts));
+  const book = ledger(buyIn(accounts, TABLE_STACK));
   book.take('u', TABLE_STACK);                       // 한 스택을 통째로 잃었다
   server.apply(book.deltas());
   book.rebase();

@@ -12,9 +12,8 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { handValue, handText, isBlackjack, example } from '../casino/cards.js';
 import {
-  BET_UNITS, OUTCOME_LABEL, insuranceCost, MIN_BET,
+  OUTCOME_LABEL, insuranceCost,
 } from './rules.js';
-import { TABLE_STACK } from '../casino/wallet.js';
 import {
   MAX_SEATS, active, currentHand, currentSeat, seatOfHand, actionsFor,
   dealerUp, standings, allIn,
@@ -90,7 +89,7 @@ function handLine(game, hand) {
  *
  * 액수는 rules.js 에서 가져온다 — 여기에 숫자를 다시 적으면 언젠가 어긋난다.
  */
-export const howto = () => base({
+export const howto = (game) => ((s) => base({
   title: '🃏 카지노 bard — 블랙잭이 처음이신가요?',
   description: [
     '**딜러보다 21에 가까우면 이깁니다.** 다만 21을 넘기면 그 자리에서 집니다(Bust).',
@@ -121,12 +120,13 @@ export const howto = () => base({
     '',
     '**■ 이 테이블의 규칙**',
     `카드는 6벌을 섞어 씁니다. 딜러는 **17 이상이면 무조건 섭니다** — A 가 섞인 17에서도요.`,
-    `칩은 **최대 ${TABLE_STACK}개**까지 들고 앉고(가진 게 적으면 있는 만큼),`
-    + ` 베팅은 ${BET_UNITS.join(' · ')} 또는 All-in.`,
-    `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있고, ${MIN_BET}칩도 못 걸면 자동으로 빠집니다.`,
+    `이 자리는 **${s.name}** 입니다. 칩은 **최대 ${s.stack}개**까지 들고 앉고`
+      + ` (가진 게 적으면 있는 만큼, **${s.minBuyIn}개**는 있어야 앉을 수 있어요),`
+      + ` 베팅은 ${s.betUnits.join(' · ')} 또는 All-in.`,
+    `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있고, ${s.minBet}칩도 못 걸면 자동으로 빠집니다.`,
   ].join('\n'),
   footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
-});
+}))(game.stakes);
 
 // ---------------------------------------------------------------- 대기실
 
@@ -141,7 +141,8 @@ export function lobbyEmbed(game) {
   return base({
     title: '블랙잭 — bard 에 자리 맡는 중',
     description: [seats, '', `${game.seats.length}/${MAX_SEATS}자리`].join('\n'),
-    footer: `딜러: ${dealer}`,
+    footer: `딜러: ${dealer} · ${game.stakes.name} · 최소 ${game.stakes.minBet}`
+      + ` · 앉으면 최대 ${game.stakes.stack}칩 (최소 ${game.stakes.minBuyIn})`,
   });
 }
 
@@ -214,7 +215,8 @@ export function boardEmbed(game) {
     title,
     description: lines.join('\n'),
     color: seat?.color ?? THEME_COLOR,
-    footer: `딜러: ${dealerName} · Blackjack 3:2 · Dealer stands on 17${savedMark(game)}`,
+    footer: `딜러: ${dealerName} · ${game.stakes.name} 최소 ${game.stakes.minBet}`
+      + ` · Blackjack 3:2 · S17${savedMark(game)}`,
   });
 }
 
@@ -223,7 +225,7 @@ export function boardRows(game) {
     // 여럿이 동시에 누르므로 아무것도 끄지 않는다. 거절은 명령 쪽에서 사람마다 한다.
     return [
       new ActionRowBuilder().addComponents(
-        ...BET_UNITS.map((n) => btn(game, 'bet', String(n), ButtonStyle.Secondary, n)),
+        ...game.stakes.betUnits.map((n) => btn(game, 'bet', String(n), ButtonStyle.Secondary, n)),
         btn(game, 'allin', 'All-in', ButtonStyle.Danger),
       ),
       new ActionRowBuilder().addComponents(

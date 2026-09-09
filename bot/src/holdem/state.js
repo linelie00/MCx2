@@ -13,9 +13,10 @@
  */
 import { randomBytes } from 'node:crypto';
 import { newShoe, shuffle, draw } from '../casino/cards.js';
-import { ledger, TABLE_STACK } from '../casino/wallet.js';
+import { ledger } from '../casino/wallet.js';
+import { stakesOf, DEFAULT_STAKES } from '../casino/stakes.js';
 import {
-  SMALL_BLIND, BIG_BLIND, MAX_SEATS, BOARD_AT,
+  MAX_SEATS, BOARD_AT,
   newSeat, live, actionable, nextActor, blindSeats, put, firstToAct,
   owed, minRaiseTo, legalActions, raiseOptions, roundClosed, endStreet, potTotal, award,
 } from './rules.js';
@@ -26,8 +27,6 @@ export { MAX_SEATS };
 export const IDLE_MS = 10 * 60 * 1000;
 
 /** 홀덤 자리에 앉을 때 받는 스택. 블라인드 20 기준 50 BB — 깊어야 폴드가 의미를 갖는다. */
-/** 한 판에 들고 앉는 최대. 지갑이 들고 있다 — 여기에 따로 두면 값이 갈라진다. */
-export { TABLE_STACK };
 
 const games = new Map();          // channelId → game
 const serial = () => randomBytes(3).toString('hex');
@@ -62,8 +61,11 @@ export function npcSeat(character) {
 
 // ---------------------------------------------------------------- 판
 
-export function create({ channelId, homeChannelId, guildId, starterId }) {
+export function create({ channelId, homeChannelId, guildId, starterId, stakes = DEFAULT_STAKES }) {
+  // 판돈은 판을 열 때 정하고 **끝날 때까지 안 바뀐다.** 도중에 바뀌면 이미 건 돈의 뜻이 달라진다.
+  const table = stakesOf(stakes);
   const game = {
+    stakes: table,
     serial: serial(),
     rev: 0,
     channelId,
@@ -78,7 +80,7 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     deck: [],
     board: [],           // 커뮤니티 카드
     toCall: 0,           // 이번 라운드에 맞춰야 할 총액(자리의 bet 기준)
-    minRaise: BIG_BLIND, // 다음 레이즈의 최소 증분
+    minRaise: table.bb,  // 다음 레이즈의 최소 증분
     handNo: 0,
     hist: [],           // 이번 핸드에 누가 뭘 했는지. 전부 공개 정보 — 대사가 읽는다
     results: null,       // 직전 정산. settled 에서 보여 준다
@@ -150,7 +152,7 @@ export function start(game, balances) {
   if (game.seats.length < 2) return '두 자리 이상이어야 시작할 수 있어요.';
   game.chips = ledger(balances);
   for (const s of game.seats) s.chips = game.chips.get(s.id);
-  if (game.seats.filter((s) => s.chips >= BIG_BLIND).length < 2) {
+  if (game.seats.filter((s) => s.chips >= game.stakes.bb).length < 2) {
     return '빅블라인드를 낼 수 있는 사람이 둘은 있어야 해요.';
   }
   beginHand(game);
@@ -169,7 +171,7 @@ const card = (game) => draw(game.deck);
  */
 export function beginHand(game) {
   for (const s of game.seats) {
-    s.out = s.chips < BIG_BLIND && s.chips <= 0 ? true : s.chips <= 0;
+    s.out = s.chips < game.stakes.bb && s.chips <= 0 ? true : s.chips <= 0;
     s.hole = [];
     s.committed = 0;
     s.bet = 0;
@@ -196,8 +198,8 @@ export function beginHand(game) {
 
   // 블라인드. 못 내면 있는 만큼 내고 올인이다.
   const { small, big } = blindSeats(game.seats, game.button);
-  put(game.seats[small], SMALL_BLIND);
-  put(game.seats[big], BIG_BLIND);
+  put(game.seats[small], game.stakes.sb);
+  put(game.seats[big], game.stakes.bb);
   game.seats[small].lastAction = 'SB';
   game.seats[big].lastAction = 'BB';
 
@@ -208,8 +210,8 @@ export function beginHand(game) {
   game.phase = 'preflop';
   note(game, game.seats[small]);
   note(game, game.seats[big]);
-  game.toCall = BIG_BLIND;
-  game.minRaise = BIG_BLIND;
+  game.toCall = game.stakes.bb;
+  game.minRaise = game.stakes.bb;
   game.turn = firstToAct(game.seats, game.button, 'preflop');
 
   // 블라인드가 이미 전원 올인이면 곧장 흘려보낸다.
@@ -317,7 +319,7 @@ function nextStreet(game) {
 
     endStreet(game.seats);
     game.toCall = 0;
-    game.minRaise = BIG_BLIND;
+    game.minRaise = game.stakes.bb;
     game.phase = street;
     while (game.board.length < BOARD_AT[street]) game.board.push(card(game));
 
@@ -398,7 +400,7 @@ export function expired(now = Date.now()) {
 }
 
 export default {
-  MAX_SEATS, IDLE_MS, TABLE_STACK,
+  MAX_SEATS, IDLE_MS,
   create, get, remove, forChannel, touch, seatOf, seatIndexOf, hasNpc,
   humanSeat, npcSeat, addSeat, start, beginHand, currentSeat, pot,
   actionsFor, raisesFor, toCallFor, act, advance, settle, nextHand, end,

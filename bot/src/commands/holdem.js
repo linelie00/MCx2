@@ -21,6 +21,7 @@ import { chooseAction } from '../holdem/ai.js';
 import { live } from '../holdem/rules.js';
 import { load, commit, buyIn } from '../casino/wallet.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
+import { STAKES_CHOICES, tooPoor } from '../casino/stakes.js';
 import {
   PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
   holeMessage, turnCall, resultEmbed,
@@ -358,7 +359,9 @@ setInterval(() => {
 const data = new SlashCommandBuilder()
   .setName('홀덤')
   .setDescription('카지노 bard 에서 텍사스 홀덤을 합니다.')
-  .addSubcommand((s) => s.setName('시작').setDescription('새 판을 엽니다'))
+    .addSubcommand((s) => s.setName('시작').setDescription('새 판을 엽니다')
+      .addStringOption((o) => o.setName('판돈').setDescription('기본은 로우 — 블라인드 10/20')
+        .addChoices(...STAKES_CHOICES)))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
   .addSubcommand((s) => s.setName('족보').setDescription('손의 순서를 알려줍니다'))
   .addSubcommand((s) => s.setName('그만').setDescription('진행 중인 판을 접습니다'));
@@ -406,10 +409,11 @@ async function execute(interaction) {
       homeChannelId: interaction.channelId,
       guildId: interaction.guildId,
       starterId: interaction.user.id,
+      stakes: interaction.options.getString('판돈'),
     });
     state.addSeat(game, state.humanSeat(interaction.user, interaction.member?.displayName));
 
-    await room.send({ embeds: [howto()] })
+    await room.send({ embeds: [howto(game)] })
       .catch((err) => console.warn('[홀덤] 규칙 안내 실패:', err.message));
     game.message = await room.send(payloadFor(game));
     return;
@@ -525,10 +529,9 @@ async function handleLobby(interaction, game, action, arg) {
       if (at) { await denyLate(interaction, seatedMessage(s.name, at)); return true; }
     }
 
-    let balances;
+    let account;
     try {
-      // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
-      balances = buyIn(await load(game.guildId, game.seats.map((s) => s.id)));
+      account = await load(game.guildId, game.seats.map((s) => s.id));
     } catch (err) {
       // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 칩이 복제된다 — 실제 잔액이
       // 200인 사람이 1000으로 놀고, 다음 커밋이 성공할 때 그 차액이 서버에 얹힌다.
@@ -536,7 +539,13 @@ async function handleLobby(interaction, game, action, arg) {
       return true;
     }
 
-    const err = state.start(game, balances);
+    // 이 등급에 앉을 만큼 없는 사람이 있으면 판을 안 연다. 잔액은 여기서 처음 알 수
+    // 있어서(참가 버튼에서 매번 HTTP 를 칠 수는 없다) 검사도 여기 있다.
+    const poor = game.seats.map((s) => tooPoor(game.stakes, account[s.id], s.name)).filter(Boolean);
+    if (poor.length) { await denyLate(interaction, poor.join('\n')); return true; }
+
+    // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
+    const err = state.start(game, buyIn(account, game.stakes.stack));
     if (err) { await denyLate(interaction, err); return true; }
 
     await draw(game);

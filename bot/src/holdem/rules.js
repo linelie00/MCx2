@@ -23,8 +23,6 @@
  */
 import { best5, winners } from '../casino/poker.js';
 
-export const SMALL_BLIND = 10;
-export const BIG_BLIND = 20;
 export const MAX_SEATS = 4;
 
 /** 베팅 라운드. 이 순서가 곧 phase 의 순서다. */
@@ -281,7 +279,7 @@ export function award(seats, board, button) {
 }
 
 export default {
-  SMALL_BLIND, BIG_BLIND, MAX_SEATS, STREETS, BOARD_AT,
+  MAX_SEATS, STREETS, BOARD_AT,
   newSeat, live, actionable, nextActor, blindSeats, put, firstToAct,
   owed, minRaiseTo, legalActions, raiseOptions, roundClosed, endStreet,
   buildPots, potTotal, award,

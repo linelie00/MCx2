@@ -88,6 +88,7 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     spoken: { migel: [], matiam: [] },
     aiHandNo: 0,
     aiLeft: 0,
+    raising: false,     // 레이즈 금액을 고르는 중인지 (화면 상태)
     driving: false,
     rekick: false,
     closed: false,

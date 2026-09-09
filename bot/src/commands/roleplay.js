@@ -7,7 +7,7 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { speak, resetSession, usage, GeminiError } from '../ai/gemini.js';
 import { NAME, OTHER } from '../ai/persona.js';
-import { sayAs } from '../discord/webhook.js';
+import { sayAsOrPlain } from '../discord/webhook.js';
 import { ownerFor } from '../owners.js';
 import { fail, base, trunc } from '../embeds.js';
 
@@ -106,12 +106,7 @@ export default {
       return;
     }
 
-    try {
-      await sayAs(interaction.channel, character, reply);
-    } catch (err) {
-      // 웹훅을 못 만들면(권한 부족 등) 그냥 봇 메시지로 보낸다. 대답을 버리지는 않는다.
-      console.warn('[캐입] 웹훅 실패, 일반 메시지로 대체:', err.message);
-      await interaction.followUp({ content: `**${NAME[character]}** ${trunc(reply, 1900)}` });
-    }
+    // 웹훅을 못 만들면(권한 부족 등) 일반 메시지로 물러선다. 대답을 버리지는 않는다.
+    await sayAsOrPlain(interaction.channel, character, reply, '캐입');
   },
 };

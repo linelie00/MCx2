@@ -62,4 +62,25 @@ export async function sayAs(channel, character, content) {
   });
 }
 
-export default { getWebhook, sayAs };
+/**
+ * 그 캐릭터로 한 줄 보내되, 웹훅이 막히면 일반 메시지로라도 보낸다.
+ *
+ * 웹훅 관리 권한이 없는 채널에서는 대사가 통째로 사라져 기능이 죽은 것처럼 보인다.
+ * 부르는 쪽마다 이 대비책을 따로 쓰고 있어서(캐입·요트) 여기로 모은다.
+ * 둘 다 실패해도 던지지 않는다 — 대사는 있으면 좋은 것이지 판을 막을 이유가 아니다.
+ */
+export async function sayAsOrPlain(channel, character, content, label = '봇') {
+  try {
+    return await sayAs(channel, character, content);
+  } catch (err) {
+    console.warn(`[${label}] 웹훅 실패, 일반 메시지로 대체:`, err.message);
+    return channel
+      .send({ content: `**${NAME[character] ?? character}** ${trunc(content, 1900)}` })
+      .catch((e) => {
+        console.warn(`[${label}] 대사 전송 실패:`, e.message);
+        return null;
+      });
+  }
+}
+
+export default { getWebhook, sayAs, sayAsOrPlain };

@@ -17,8 +17,7 @@ import {
 } from '../yacht/rules.js';
 import { chooseHold, chooseCategory, turnEvents } from '../yacht/ai.js';
 import { line as npcLine, turnLines as npcTurnLines } from '../ai/gameTalk.js';
-import { NAME } from '../ai/persona.js';
-import { sayAs } from '../discord/webhook.js';
+import { sayAsOrPlain } from '../discord/webhook.js';
 import * as state from '../yacht/state.js';
 import {
   PREFIX, faces, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
@@ -84,23 +83,9 @@ const bestOther = (game, me) => Math.max(
   ...game.seats.filter((s) => s !== me).map((s) => totals(s.sheet).total),
 );
 
-/**
- * 캐릭터로 한 줄 내보낸다.
- *
- * 웹훅이 막히면(봇에게 "웹훅 관리" 권한이 없는 채널 등) 일반 메시지로라도 보낸다.
- * /캐입 은 처음부터 이 대비책이 있었는데 요트에는 없어서, 권한이 없는 채널에서는
- * 대사가 통째로 사라져 기능이 죽은 것처럼 보였다.
- */
-async function say(game, character, text) {
-  try {
-    await sayAs(game.message.channel, character, text);
-  } catch (err) {
-    console.warn('[요트] 웹훅 실패, 일반 메시지로 대체:', err.message);
-    await game.message.channel
-      .send({ content: `**${NAME[character]}** ${text}` })
-      .catch((e) => console.warn('[요트] 대사 전송 실패:', e.message));
-  }
-}
+/** 캐릭터로 한 줄 내보낸다. 웹훅이 막힌 채널에서는 일반 메시지로 물러선다. */
+const say = (game, character, text) =>
+  sayAsOrPlain(game.message.channel, character, text, '요트');
 
 /**
  * 굴린 결과를 채팅에 한 줄 남긴다.

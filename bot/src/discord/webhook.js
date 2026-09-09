@@ -86,8 +86,11 @@ export async function sayAsOrPlain(channel, character, content, label = '봇') {
     return await sayAs(channel, character, content);
   } catch (err) {
     console.warn(`[${label}] 웹훅 실패, 일반 메시지로 대체:`, err.message);
+    // 여러 줄짜리 대사는 이름 다음에서 줄을 바꾼다. 한 줄로 붙이면 둘째 줄부터
+    // 누가 말하는지 안 보인다.
+    const gap = content.includes('\n') ? '\n' : ' ';
     return channel
-      .send({ content: `**${DISPLAY[character] ?? character}** ${trunc(content, 1900)}` })
+      .send({ content: `**${DISPLAY[character] ?? character}**${gap}${trunc(content, 1900)}` })
       .catch((e) => {
         console.warn(`[${label}] 대사 전송 실패:`, e.message);
         return null;

@@ -120,16 +120,53 @@ async function say(game, character, key, vars = {}, { always = false, p } = {}) 
   return true;
 }
 
-/** 딜러가 말한다. 미겔이 손님 자리에 앉아 있으면 npc 가 딜러다. */
-const dealerSays = (game, key, vars, opts) =>
-  say(game, game.dealerCharacter, `dealer.${game.dealerCharacter}.${key}`, vars, opts);
+/**
+ * 딜러가 말한다. 미겔이 손님 자리에 앉아 있으면 npc 가 딜러다.
+ *
+ * **둘은 말수가 다르다.** 미겔은 판을 끌고 가는 인물이라 배분·베팅·차례를 거의 매번
+ * 짚어 주는 편이 자연스럽고, npc 는 이름 그대로 진행만 하는 자리라 말수가 적은 것이
+ * 성격이다. 그래서 기본 확률을 딜러에 따라 다르게 준다.
+ */
+const DEALER_CHATTINESS = { migel: 0.72, npc: 0.3 };
+
+const dealerSays = (game, key, vars, opts = {}) =>
+  say(game, game.dealerCharacter, `dealer.${game.dealerCharacter}.${key}`, vars, {
+    p: DEALER_CHATTINESS[game.dealerCharacter],
+    ...opts,
+  });
 
 /** NPC 플레이어가 말한다. 사람 자리는 말하지 않는다. */
-const playerSays = (game, seat, key, vars, opts) => (
+const playerSays = (game, seat, key, vars, opts = {}) => (
   seat.kind === 'npc'
-    ? say(game, seat.character, `player.${seat.character}.${key}`, vars, opts)
+    ? say(game, seat.character, `player.${seat.character}.${key}`, vars, { p: 0.62, ...opts })
     : Promise.resolve(false)
 );
+
+/**
+ * 옆자리 반응 — 미겔과 마티암이 서로의 수를 보고 한마디 한다.
+ *
+ * 자기 수에 대한 대사(`player.*`)와 달리 **말하는 사람이 아닌 자리**가 화자다.
+ * 그래서 둘이 같이 앉아 있을 때만 나온다. 딜러는 여기 끼지 않는다 — 딜러는
+ * `result.*` 로 이미 이름을 부르며 반응하므로 겹치면 같은 말을 두 번 하는 꼴이 된다.
+ *
+ * 늘 나오면 한 수마다 두 줄씩 붙어 판이 잡담에 묻히므로 볼 만한 수에만, 그것도
+ * 열에 넷 정도만 낸다.
+ */
+async function banter(game, actor, event, { p = 0.4 } = {}) {
+  const watchers = game.seats.filter((s) => s.kind === 'npc' && s !== actor && !s.out);
+  if (!watchers.length) return false;
+  const watcher = watchers[Math.floor(Math.random() * watchers.length)];
+  return say(game, watcher.character, `banter.${watcher.character}.${event}`,
+    { name: actor.name }, { p });
+}
+
+/** 마티암이 딜러 미겔에게 거는 말. 미겔이 딜러일 때만. */
+async function banterAtDealer(game, event) {
+  if (game.dealerCharacter !== 'migel') return false;
+  const matiam = game.seats.find((s) => s.character === 'matiam' && !s.out);
+  if (!matiam) return false;
+  return say(game, 'matiam', `banter.matiam.${event}`, {}, { p: 0.45 });
+}
 
 /** 판을 열며 하는 인사. 딜러가 누구든 한 번은 반드시 한다. */
 async function openTable(game) {
@@ -184,6 +221,14 @@ async function playNpcHand(game) {
     } else {
       await draw(game);
     }
+
+    // 볼 만한 수가 나왔으면 옆자리가 한마디 한다.
+    const busted = handValue(hand.cards).bust;
+    const notable = (busted && 'bust')
+      || (isBlackjack(hand.cards) && 'blackjack')
+      || (rare && action)
+      || null;
+    if (notable && await banter(game, seat, notable)) await repost(game);
 
     if (res.moved) return;
   }
@@ -348,8 +393,13 @@ async function settleAndShow(game) {
 
   const dealerBust = handValue(game.dealer).bust;
   const dealerBj = isBlackjack(game.dealer);
-  if (dealerBust) await dealerSays(game, 'bust', {}, { always: true });
-  else if (dealerBj) await dealerSays(game, 'blackjack', {}, { always: true });
+  if (dealerBust) {
+    await dealerSays(game, 'bust', {}, { always: true });
+    await banterAtDealer(game, 'dealerBust');
+  } else if (dealerBj) {
+    await dealerSays(game, 'blackjack', {}, { always: true });
+    await banterAtDealer(game, 'dealerBlackjack');
+  }
 
   let budget = RESULT_BUDGET;
   for (const r of game.results) {
@@ -360,7 +410,13 @@ async function settleAndShow(game) {
     if (await dealerSays(game, `result.${RESULT_KEY[r.outcome]}`, vars, { always: big })) {
       budget -= 1;
     }
-    if (await playerSays(game, r.seat, REACT_KEY[r.outcome], vars, { always: big, p: 0.5 })) {
+    if (await playerSays(game, r.seat, REACT_KEY[r.outcome], vars, { always: big })) {
+      budget -= 1;
+    }
+    // 사람이 터지거나 블랙잭이 뜨면 NPC 가 한마디 한다. NPC 끼리는 두던 자리에서
+    // 이미 주고받았으므로 여기서 또 하지 않는다.
+    if (r.seat.kind === 'human' && big && budget > 0
+        && await banter(game, r.seat, r.outcome)) {
       budget -= 1;
     }
   }

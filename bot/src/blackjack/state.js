@@ -391,9 +391,14 @@ export function act(game, action) {
 
 // ---------------------------------------------------------------- 딜러와 정산
 
+/** 홀카드를 깐다. 뽑는 것과 분리해 둔다 — 아무도 안 남았으면 까기만 하고 끝이다. */
+export function revealHole(game) {
+  game.holeUp = true;
+  touch(game);
+}
+
 /** 딜러가 한 장 뽑는다. 더 뽑을 게 없으면 false. */
 export function dealerDraw(game) {
-  game.holeUp = true;
   if (!dealerShouldHit(game.dealer)) return false;
   game.dealer.push(card(game));
   touch(game);
@@ -483,6 +488,6 @@ export default {
   beginBetting, active, allBetsIn, stageBet, clearBet, placeBet, allIn,
   deal, dealerUp, needsInsurance, beginInsurance, answerInsurance, allInsuranceIn,
   peek, beginPlaying, currentHand, seatOfHand, currentSeat, handsOfSeat,
-  actionsFor, advanceHand, act, dealerDraw, anyoneAlive, settle, nextHand, end,
+  actionsFor, advanceHand, act, revealHole, dealerDraw, anyoneAlive, settle, nextHand, end,
   standings, expired,
 };

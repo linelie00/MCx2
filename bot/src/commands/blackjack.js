@@ -11,9 +11,9 @@
  *      아니라 구조다 — 정산에는 async 저장과 여러 줄의 알림이 붙어 3초 시한을 넘긴다.
  *   2. **베팅·인슈어런스 단계에서는 버튼을 끄지 않는다.** 여럿이 동시에 누르는 단계라
  *      "너는 이미 답했다" 를 버튼 상태로 표현할 수 없다. 사람마다 deny() 로 거절한다.
- *   3. **카드가 바뀌면 카드만 든 메시지를 따로 보낸다.** 디스코드는 메시지 전체가
- *      이모지일 때만 크게 그리고, 임베드 안에서는 아예 안 그린다. 그 뒤에 판을 다시
- *      띄워 버튼이 늘 맨 아래 있게 한다.
+ *   3. **카드가 바뀌면 두 줄짜리 알림을 보내고 판을 다시 띄운다.** 첫 줄은 누가 무엇을
+ *      했고 무슨 카드가 나왔는지, 둘째 줄은 그래서 지금 패가 어떤지. 판만 고치면
+ *      순식간에 지나가고, 판은 알림에 밀려 위로 올라가므로 매번 아래에 새로 띄운다.
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import * as state from '../blackjack/state.js';
@@ -21,11 +21,17 @@ import { chooseAction, chooseInsurance, chooseBet } from '../blackjack/ai.js';
 import { load, commit } from '../casino/wallet.js';
 import { MIN_BET } from '../blackjack/rules.js';
 import {
-  PREFIX, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed, cardsOnly,
+  PREFIX, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 } from '../blackjack/render.js';
+import { cardText, handText, handValue, isBlackjack } from '../casino/cards.js';
 import { base, fail } from '../embeds.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
+
+/** 채팅에 남길 때 쓰는 이름. 판의 버튼과 같은 영어 표기를 쓴다. */
+const ACTION_LABEL = {
+  hit: 'Hit', stand: 'Stand', double: 'Double', split: 'Split', surrender: 'Surrender',
+};
 
 /** 자기만 보이는 거절. 판을 건드리지 않는다. */
 const deny = (interaction, text) =>
@@ -69,12 +75,22 @@ async function repost(game) {
 }
 
 /**
- * 카드를 크게 보여주고 판을 다시 띄운다.
- * 이모지만 든 메시지여야 크게 나오므로 이름 같은 걸 붙이지 않는다.
+ * 무슨 일이 있었는지 채팅에 남기고 판을 다시 띄운다.
+ *
+ *   첫 줄  누가 무엇을 했고 무슨 카드가 나왔는지
+ *   둘째 줄 그래서 지금 그 사람의 패가 어떤지
+ *
+ * 처음엔 카드만 든 메시지를 보냈다. 디스코드가 **이모지만 있는 메시지**를 크게 그리기
+ * 때문인데, 정작 누구 패인지 알 수가 없어 헷갈렸다. 글자가 섞이면 이모지는 작아지지만,
+ * 카드 그림을 작아도 읽히게 그려 뒀으므로 맥락을 얻는 편이 낫다.
  */
-async function showCards(game, cards) {
-  const text = cardsOnly(cards);
-  await game.message.channel.send({ content: text })
+async function showMove(game, { name, action, card, cards }) {
+  const head = `**${name}** — ${action}${card ? ` ${cardText(card)}` : ''}`;
+  const { total, bust } = handValue(cards);
+  const tag = bust ? '　_Bust_' : (isBlackjack(cards) ? '　_Blackjack_' : '');
+  const body = `${handText(cards)}　**${total}**${tag}`;
+
+  await game.message.channel.send({ content: `${head}\n${body}` })
     .catch((err) => console.warn('[블랙잭] 카드 알림 실패:', err.message));
   await repost(game);
 }
@@ -103,9 +119,17 @@ async function playNpcHand(game) {
     await sleep(900);
     if (game.phase === 'done') return;
 
-    // 카드가 늘었으면 크게 보여준다. 스플릿은 손이 둘이 되므로 판만 다시 그린다.
-    if (hand.cards.length > before) await showCards(game, hand.cards);
-    else await draw(game);
+    if (hand.cards.length > before) {
+      await showMove(game, {
+        name: seat.name,
+        action: ACTION_LABEL[action] ?? action,
+        card: hand.cards[hand.cards.length - 1],
+        cards: hand.cards,
+      });
+    } else {
+      // 스플릿·스탠드·서렌더는 새 카드가 없다. 판만 다시 그린다.
+      await draw(game);
+    }
 
     if (res.moved) return;
   }
@@ -136,7 +160,9 @@ async function runDriver(game) {
         await draw(game);
         for (const hand of game.hands) {
           await sleep(700);
-          await showCards(game, hand.cards);
+          await showMove(game, {
+            name: state.seatOfHand(game, hand).name, action: '배분', cards: hand.cards,
+          });
         }
 
         if (state.needsInsurance(game)) {
@@ -176,14 +202,20 @@ async function runDriver(game) {
       // --- 딜러
       if (game.phase === 'dealer') {
         await sleep(800);
-        state.dealerDraw(game);                  // 홀카드를 깐다
-        await showCards(game, game.dealer);
+        state.revealHole(game);
+        await showMove(game, { name: '딜러', action: '홀 카드 공개', cards: game.dealer });
 
+        // 아무도 안 남았으면(전원 버스트·서렌더) 딜러는 뽑을 이유가 없다.
         if (state.anyoneAlive(game)) {
           while (state.dealerDraw(game)) {
             await sleep(900);
             if (game.phase === 'done') return;
-            await showCards(game, game.dealer);
+            await showMove(game, {
+              name: '딜러',
+              action: 'Hit',
+              card: game.dealer[game.dealer.length - 1],
+              cards: game.dealer,
+            });
           }
         }
         await settleAndShow(game);
@@ -334,7 +366,7 @@ async function component(interaction) {
 
   // 알림은 판을 그린 뒤에. 상태 변경 자리에서 보내면 응답이 그만큼 늦어진다.
   const queued = game.pendingChat.splice(0);
-  for (const cards of queued) await showCards(game, cards);
+  for (const move of queued) await showMove(game, move);
 
   kick(game);
 }
@@ -437,8 +469,15 @@ async function handlePlaying(interaction, game, action, arg) {
   const hand = state.currentHand(game);
   const before = hand.cards.length;
   state.act(game, arg);
-  // 카드가 늘었으면 판을 그린 뒤에 크게 보여준다.
-  if (hand.cards.length > before) game.pendingChat.push([...hand.cards]);
+  // 카드가 늘었으면 판을 그린 뒤에 알린다. 여기서 보내면 응답이 그만큼 늦어진다.
+  if (hand.cards.length > before) {
+    game.pendingChat.push({
+      name: seat.name,
+      action: ACTION_LABEL[arg] ?? arg,
+      card: hand.cards[hand.cards.length - 1],
+      cards: [...hand.cards],
+    });
+  }
   return false;
 }
 

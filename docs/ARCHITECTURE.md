@@ -1,7 +1,7 @@
 # ARCHITECTURE
 
 미하티(MIHEARTI) 프로젝트의 현재 구조와 규약을 정리한 문서입니다.
-리팩터링 진행에 따라 갱신합니다. (최종 갱신: 2026-09-08)
+리팩터링 진행에 따라 갱신합니다. (최종 갱신: 2026-09-09)
 
 > 이 문서는 **client/src(프론트엔드) 구조와 규약**을 다룹니다.
 > 갤러리·스토리·방명록 등 기능 흐름과 **백엔드(Express API)**, **디스코드 봇(`bot/`)** 은
@@ -32,6 +32,13 @@ client/src/
 │   │   └── galleryLayout.js      카드 비율 정책(MAX_CARD_RATIO)
 │   ├── guestbook/
 │   │   └── Guestbook.jsx         방명록(작성/목록 + 스팸방지)
+│   ├── movie/                    영화 기록 UI
+│   │   ├── NeonSign.jsx          상단 네온사인 제목
+│   │   ├── PosterCarousel.jsx    최근 본 영화 자동 회전 캐러셀
+│   │   ├── MovieCalendar.jsx     월간 캘린더(날짜당 한 편)
+│   │   ├── TicketModal.jsx       티켓형 상세 모달(3D 틸트)
+│   │   ├── AddMovieDialog.jsx    영화 추가/수정 (오너)
+│   │   └── StarRating.jsx        0~5 별점(0.5 단위)
 │   ├── playlist/                 플레이리스트 UI
 │   │   ├── GlobalPlayer.jsx      레이아웃 상주 플레이어(full/mini 선택)
 │   │   ├── MusicPlayer.jsx       플레이어 본체(YouTube IFrame, 시크/셔플/반복)
@@ -39,6 +46,7 @@ client/src/
 │   │   ├── TrackRow.jsx          곡 한 줄(썸네일·재생·메모/삭제/정렬)
 │   │   ├── PlaylistDialog.jsx    재생목록 생성/편집
 │   │   ├── AddTrackDialog.jsx    곡 추가(이름 검색 / 링크)
+│   │   ├── TrackEditDialog.jsx   곡 편집(메모 + LP 이미지 업로드/크롭)
 │   │   ├── useYouTubeIframeApi.js  IFrame API 1회 로드 훅
 │   │   └── playlistUtils.js      길이 포맷
 │   ├── story/
@@ -53,11 +61,13 @@ client/src/
 │   ├── galleryApi.js             /api/gallery/* (상대→절대 url 변환)
 │   ├── guestbookApi.js           /api/guestbook/*
 │   ├── playlistApi.js            /api/playlist/* (재생목록/곡/검색)
+│   ├── movieApi.js               /api/movie/* (목록/등록/평점/삭제)
 │   └── ownerAuth.js              오너 패스코드(localStorage) + 검증
 ├── Data/
 │   ├── Characters.js    캐릭터 데이터 (색상/이미지는 constants 참조)
 │   ├── world.js         World 페이지 콘텐츠 (순서 있는 본문 블록 배열)
-│   ├── stories.js       스토리 본문 (scripts/TSV에서 생성)
+│   ├── movies.js        영화 오너 메타 + API 응답 헬퍼
+│   ├── stories.js       스토리 본문 (scripts/build-stories.mjs 가 TSV에서 생성)
 │   ├── storyImages.js   스토리 삽화 매핑
 │   └── constants/       중앙 상수
 │       ├── colors.js        캐릭터/테마 색상
@@ -70,27 +80,55 @@ client/src/
 │   ├── CharacterHub.js, CharacterPanel.js
 │   ├── Story.js         스토리 책 뷰어 (구현)
 │   ├── Gallery.js       갤러리 (/image, 구현)
-│   └── Playlist.js      플레이리스트 (/playlist, 구현)
+│   ├── Playlist.js      플레이리스트 (/playlist, 구현)
+│   └── Movie.js         영화 기록 (/movie, 구현)
 ├── Styles/
 │   ├── theme.css        CSS 변수(색상/폰트/spacing), 기본 리셋
 │   ├── global.css       전역 요소 스타일, .content 래퍼
 │   ├── App.css, Home.css, World.css, Character.css, Components.css
-│   └── Story.css, StoryBook.css, Gallery.css, Guestbook.css, Playlist.css
-├── App.js               라우터(+ OwnerProvider) + CSS 로딩 진입점
-└── index.js
+│   └── Story.css, StoryBook.css, Gallery.css, Guestbook.css, Playlist.css, Movie.css
+├── App.js               프로바이더 + 라우터 + CSS 로딩 진입점 (아래 "라우팅" 참조)
+├── index.js             ReactDOM 진입점 (index.css 를 여기서 로드)
+├── index.css            CRA 기본 스타일
+├── reportWebVitals.js   CRA 기본
+└── setupTests.js        CRA 기본
 ```
 
-> 갤러리/방명록/플레이리스트의 실데이터는 프론트가 아니라 **서버(Express)** 가 보관합니다.
+> 갤러리/방명록/플레이리스트/영화의 실데이터는 프론트가 아니라 **서버(Express)** 가 보관합니다.
 > 갤러리·태그·미디어는 `gallery.json` + `uploads/`, 방명록은 `guestbook.json`,
-> 플레이리스트는 `playlists.json`(유튜브 메타 캐싱).
-> 정적 콘텐츠(캐릭터/월드/스토리)만 `Data/*.js`로 관리합니다. (상세: FEATURES.md)
+> 플레이리스트는 `playlists.json`(유튜브 메타 캐싱), 영화는 `movies.json` + 포스터(`uploads/`).
+> 정적 콘텐츠(캐릭터/월드/스토리)만 `Data/*.js`로 관리합니다.
+> (`Data/movies.js` 는 예외적으로 둘이 섞여 있습니다 — 목록은 API 로 받고, 오너 메타 같은
+> 고정값만 여기 둡니다.) (상세: FEATURES.md)
 
-## CSS 로딩 계층 (App.js 기준)
+## 라우팅 (App.js)
+
+```
+OwnerProvider → PlaybackProvider → Router
+```
+
+`PlaybackProvider` 가 라우터 **바깥**에 있어야 페이지를 옮겨도 음악이 끊기지 않습니다.
+
+| path | 페이지 | 로딩 |
+|---|---|---|
+| `/` | Home (하단 방명록) | 즉시 |
+| `/world` | World | 즉시 |
+| `/character` · `/character/:name` | CharacterHub · CharacterPanel(중첩) | 즉시 |
+| `/story` | Story | `lazy` |
+| `/image` | Gallery | `lazy` |
+| `/playlist` | Playlist | `lazy` |
+| `/movie` | Movie | `lazy` |
+
+무거운 네 페이지는 `React.lazy` 로 떼어 초기 번들에서 뺍니다. 스토리가 특히 큽니다 —
+`Data/stories.js` 본문만 350KB 라, 첫 화면을 보는 사람이 그걸 같이 내려받을 이유가 없습니다.
+
+## CSS 로딩 계층
 
 순서가 cascade 우선순위를 결정하므로 **이 순서를 유지**합니다.
 
 ```
-theme.css   → CSS 변수, 리셋 (가장 먼저)
+index.css   → CRA 기본 (index.js 가 로드. cascade 상 가장 먼저다)
+theme.css   → CSS 변수, 리셋
 global.css  → 전역 요소/유틸
 Font.css    → @font-face
 App.css     → 기존 전역 스타일
@@ -110,6 +148,9 @@ App.css     → 기존 전역 스타일
 
 - **colors.js** — 캐릭터 고유색은 `primary` 하나로 단일화.
   `characterColors.migel.primary`, `themeColors.*`.
+  재생목록·영화의 강조색은 별도 팔레트(`playlistAccents` 8색, `playlistAccentHex`)를 쓴다.
+  캐릭터 색 둘만으로는 목록이 늘어날 때 구분이 안 되기 때문이고, 하위호환으로
+  `migel`/`matiam` id 도 그 표에 남아 있다.
 - **images.js** — CRA(webpack)에서는 `src/Assets` 이미지를 문자열 경로로 못 쓰므로
   반드시 `import`해서 번들 URL을 만든다. 이 파일이 래스터 이미지(webp)의 단일 출처.
   단, 인라인으로 쓰는 SVG(ReactComponent)는 각 컴포넌트에서 직접 import.
@@ -120,7 +161,7 @@ App.css     → 기존 전역 스타일
 
 - 프론트는 Netlify(CDN)에 정적 배포되므로 이미지는 **레포에 두고 번들에 태우는 것이 가장 빠르다.**
   Railway(백엔드)는 단일 리전 컨테이너라 정적 이미지 원본으로 쓰면 오히려 느려진다.
-  서버가 서빙하는 건 사용자가 올린 갤러리 미디어(`/uploads`)뿐이다.
+  서버가 서빙하는 건 사용자가 올린 것뿐이다 — 갤러리 미디어와 영화 포스터(`/uploads`).
 - 그래서 성능은 저장 위치가 아니라 **파일 용량**으로 결정된다. 새 이미지를 추가할 땐
   `client/scripts/optimize-images.mjs` 의 TARGETS 에 등록하고 실행해 webp 를 만든 뒤,
   코드/CSS 는 **webp 만 참조**한다. 원본(png/jpg)은 재변환용으로 남겨 두되 import 하지 않는다.
@@ -152,7 +193,8 @@ App.css     → 기존 전역 스타일
 - **woff 폴백은 두지 않는다.** browserslist 프로덕션 대상은 전부 woff2 를 지원해서
   내려받지도 않으면서 배포 용량만 차지했다.
 - **실제로 쓰는 웨이트만 선언한다.** Pretendard 400/600/700/800, NexonWarhaven 400/700,
-  Hahmlet 400/700. 선언만 해 둔 웨이트는 내려받지는 않지만 산출물을 무겁게 한다.
+  Hahmlet 400/700, 그리고 장식용 라틴 Quentin·OldLondon(웨이트 없음).
+  선언만 해 둔 웨이트는 내려받지는 않지만 산출물을 무겁게 한다.
 - **서브셋은 Pretendard 에만 적용한다.** 방명록·갤러리처럼 사용자가 입력한 글자가
   렌더링되는 폰트(NexonWarhaven / Hahmlet)는 글리프를 하나도 버리지 않는다.
   Pretendard 로 그려지는 한글은 레포 안 정적 텍스트뿐이라 안전하고, 이미 woff2 여서

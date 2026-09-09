@@ -117,6 +117,16 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
 }
 
 export const get = (channelId) => games.get(channelId) || null;
+
+/**
+ * 아직 살아 있는 판들. 다른 게임이 "이 사람이 어디 앉아 있나" 를 볼 때 쓴다
+ * (casino/tables.js). 끝난 판은 자리가 남아 있어도 칩을 걸 수 없으니 뺀다.
+ *
+ * 홀덤에는 자리를 거르는 live(seats) 가 따로 있어서 이름을 달리 둔다.
+ */
+export function* openGames() {
+  for (const game of games.values()) if (game.phase !== 'done') yield game;
+}
 export const remove = (channelId) => games.delete(channelId);
 
 /** 스레드 안에서 눌렀든 원래 채널에서 명령을 쳤든 같은 판을 찾아 준다. */

@@ -19,6 +19,7 @@ import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import * as state from '../blackjack/state.js';
 import { chooseAction, chooseInsurance, chooseBet } from '../blackjack/ai.js';
 import { load, commit, buyIn } from '../casino/wallet.js';
+import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { MIN_BET } from '../blackjack/rules.js';
 import {
   PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
@@ -726,6 +727,11 @@ async function component(interaction) {
 
 async function handleLobby(interaction, game, action, arg) {
   if (action === 'join') {
+    // 칩이 영구 저장이라 **한 계정은 한 판에만** 앉는다. 두 판에 앉으면 같은 칩을
+    // 겹쳐 걸게 되고, 판마다 자기 장부를 들고 시작하니 서로를 볼 수가 없다.
+    const at = seatedAt(interaction.user.id, { except: game.channelId });
+    if (at) { await deny(interaction, seatedMessage('그쪽', at)); return true; }
+
     const err = state.addSeat(
       game,
       state.humanSeat(interaction.user, interaction.member?.displayName),
@@ -735,7 +741,12 @@ async function handleLobby(interaction, game, action, arg) {
   }
 
   if (action === 'npc') {
-    const err = state.addSeat(game, state.npcSeat(arg));
+    // NPC 가 더 잘 걸린다 — hasNpc 는 한 판 안에서만 보므로 두 채널이 각각 부를 수 있다.
+    const seat = state.npcSeat(arg);
+    const at = seatedAt(seat.id, { except: game.channelId });
+    if (at) { await deny(interaction, seatedMessage(seat.name, at)); return true; }
+
+    const err = state.addSeat(game, seat);
     if (err) { await deny(interaction, err); return true; }
     return false;
   }
@@ -750,6 +761,12 @@ async function handleLobby(interaction, game, action, arg) {
     // 그러면 클릭이 통째로 날아간다(10062). 상수를 돌려주던 동안에는 안 보이던 함정이다.
     // 여기서부터는 이 가지가 draw·kick 까지 직접 책임진다(true 를 주면 뒤가 안 돈다).
     await interaction.deferUpdate();
+
+    // 참가와 시작 **사이에** 다른 판이 열릴 수 있다. 여기서 한 번 더 본다.
+    for (const s of game.seats) {
+      const at = seatedAt(s.id, { except: game.channelId });
+      if (at) { await denyLate(interaction, seatedMessage(s.name, at)); return true; }
+    }
 
     let balances;
     try {

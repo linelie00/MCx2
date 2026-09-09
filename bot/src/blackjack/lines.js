@@ -212,7 +212,7 @@ function table(game, speaker) {
  * 방금 터진 패 이야기를 했다. 끝난 자리에서는 끝난 것만 보여 준다.
  */
 function closing(game, speaker) {
-  const deltas = game.chips?.deltas() ?? {};
+  const deltas = game.chips?.net() ?? {};
   const rows = game.seats.map((s) => {
     const d = deltas[s.id] ?? 0;
     const me = s.character === speaker ? ' ← 나' : '';

@@ -17,7 +17,29 @@
  * 한 번 — 둘 다 인터랙션 응답 경로 **밖**(NPC 드라이버 안)에서 부른다.
  */
 
+/** 처음 보는 사람의 잔액. 등록 절차가 없다 — 저장소에 없으면 이 값으로 친다. */
 export const START_CHIPS = 1000;
+
+/**
+ * 한 판에 들고 앉을 수 있는 최대. 나머지는 계정에 남는다.
+ *
+ * 잔액 전부를 들고 앉게 두면 블랙잭 All-in **버튼 하나가 평생 모은 돈을 건다.**
+ * 홀덤은 제로섬이라 한 핸드에 남의 저금이 통째로 넘어가고, 매일 1000으로 채워지는
+ * 미겔은 부자 앞에서 늘 숏스택인데 holdem/ai.js 는 50BB 기준으로 맞춰 놨다.
+ *
+ * **맡겨 두는 방식(고정 바이인 + 판 끝에 반환)이 아니다.** 판이 정상 종료되지 않는
+ * 길이 셋이나 있어서(방치 정리·봇 재시작·재배포) 맡긴 칩이 사라진다. 대신 그냥
+ * **덜 들고 앉는다** — 나머지는 계정에서 아예 나가지 않으므로, 20000 가진 사람이
+ * 1000을 다 잃으면 -1000 이 얹혀 19000 이 된다. 지금의 증감 모델 그대로다.
+ *
+ * 대가는 판 안에서 재바이인이 없다는 것. 그게 카지노 테이블이다.
+ */
+export const TABLE_STACK = 1000;
+
+/** 불러온 잔액을 판에 들고 앉을 만큼으로 줄인다. */
+export const buyIn = (balances, cap = TABLE_STACK) => Object.fromEntries(
+  Object.entries(balances).map(([id, n]) => [id, Math.min(n, cap)]),
+);
 
 /**
  * 베팅 단위. 모든 베팅이 이 배수여야 블랙잭 3:2 배당과 서렌더 절반 반환이
@@ -55,10 +77,25 @@ export async function commit(guildId, deltas) {
  * 칩은 **걸 때 바로 깎는다.** 정산 때만 깎으면 판 도중의 잔액이 거짓이 되어
  * Double·Split 을 낼 수 있는지 판단이 틀린다(100칩으로 세 번 쪼개진다).
  * 그래서 take 는 걸 때, give 는 정산 때만 부른다.
+ *
+ * **기준점이 둘이다.** 견주는 곳이 둘인데 묻는 것이 다르기 때문이다.
+ *
+ *   origin  판을 시작한 시점. 안 움직인다. **화면이 쓴다** — 결산은 "이 판에서
+ *           얼마를 벌었나" 이므로 판 내내 누적이어야 한다.
+ *   base    마지막으로 서버에 보낸 시점. **commit 이 쓴다** — 정산은 핸드마다
+ *           오는데 누적값을 매번 보내면 앞 핸드 몫이 겹쳐 얹힌다.
+ *
+ * 하나로 두면 반드시 한쪽이 틀린다. 실제로 그렇게 돼 있었고, 그대로 저장을 붙이면
+ * 핸드마다 칩이 복제되거나(base 로 안 쓸 때) 결산이 전부 +0 으로 뜬다(origin 으로 안 쓸 때).
  */
 export function ledger(initial) {
   const chips = { ...initial };
-  const start = { ...initial };
+  const origin = { ...initial };
+  let base = { ...initial };
+
+  const diff = (from) => Object.fromEntries(
+    Object.keys(chips).map((id) => [id, chips[id] - (from[id] ?? 0)]),
+  );
 
   return {
     get: (id) => chips[id] ?? 0,
@@ -76,15 +113,22 @@ export function ledger(initial) {
       chips[id] = (chips[id] ?? 0) + amount;
     },
 
-    /** 판을 시작할 때와 견준 증감. commit 에 그대로 넘긴다. */
-    deltas() {
-      return Object.fromEntries(
-        Object.keys(chips).map((id) => [id, chips[id] - (start[id] ?? 0)]),
-      );
-    },
+    /** 마지막 커밋 이후의 증감. **commit 만 쓴다.** */
+    deltas: () => diff(base),
+
+    /** 판을 시작할 때와 견준 증감. **표시만 쓴다**(결산·순위·대사 메모). */
+    net: () => diff(origin),
+
+    /**
+     * 커밋에 성공했다. 기준점을 지금으로 옮긴다.
+     *
+     * **실패하면 부르지 않는다.** 그러면 밀린 몫이 base 에 남아 있다가 다음 커밋이
+     * 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
+     */
+    rebase() { base = { ...chips }; },
 
     snapshot: () => ({ ...chips }),
   };
 }
 
-export default { START_CHIPS, CHIP_UNIT, roundToUnit, load, commit, ledger };
+export default { START_CHIPS, TABLE_STACK, buyIn, CHIP_UNIT, roundToUnit, load, commit, ledger };

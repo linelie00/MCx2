@@ -159,6 +159,7 @@ export function start(game, balances) {
   game.dealerCharacter = dealerCharacter(game);      // 판 도중에 바뀌지 않게 얼린다
   game.chips = ledger(balances);
   for (const s of game.seats) s.chips = game.chips.get(s.id);
+  if (!game.seats.some((s) => s.chips >= MIN_BET)) return `${MIN_BET}칩 이상 가진 사람이 한 명은 있어야 해요.`;
   beginBetting(game);
   return null;
 }
@@ -470,7 +471,7 @@ export function end(game, reason) {
 
 /** 시작할 때와 견준 증감. 결과 화면과 wallet.commit 이 쓴다. */
 export const standings = (game) => game.seats
-  .map((seat) => ({ seat, chips: seat.chips, delta: game.chips?.deltas()[seat.id] ?? 0 }))
+  .map((seat) => ({ seat, chips: seat.chips, delta: game.chips?.net()[seat.id] ?? 0 }))
   .sort((a, b) => b.chips - a.chips);
 
 export function expired(now = Date.now()) {

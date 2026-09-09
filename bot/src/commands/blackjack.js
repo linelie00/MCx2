@@ -18,7 +18,7 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import * as state from '../blackjack/state.js';
 import { chooseAction, chooseInsurance, chooseBet } from '../blackjack/ai.js';
-import { load, commit } from '../casino/wallet.js';
+import { load, commit, buyIn } from '../casino/wallet.js';
 import { MIN_BET } from '../blackjack/rules.js';
 import {
   PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
@@ -736,7 +736,8 @@ async function handleLobby(interaction, game, action, arg) {
       return true;
     }
     // 잔액 불러오기는 async 다. 상태를 바꾸기 전에 끝내 둔다.
-    const balances = await load(game.guildId, game.seats.map((s) => s.id));
+    // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
+    const balances = buyIn(await load(game.guildId, game.seats.map((s) => s.id)));
     const err = state.start(game, balances);
     if (err) { await deny(interaction, err); return true; }
     return false;

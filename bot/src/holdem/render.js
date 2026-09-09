@@ -14,7 +14,7 @@ import { handText, isJumboable, example } from '../casino/cards.js';
 import { describe } from '../casino/poker.js';
 import { SMALL_BLIND, BIG_BLIND, MAX_SEATS } from './rules.js';
 import {
-  BUY_IN, currentSeat, actionsFor, raisesFor, toCallFor, pot, standings,
+  TABLE_STACK, currentSeat, actionsFor, raisesFor, toCallFor, pot, standings,
 } from './state.js';
 import { base, THEME_COLOR } from '../embeds.js';
 import { padEndW, padStartW, clipW } from '../text.js';
@@ -106,7 +106,7 @@ export const howto = () => base({
     '판마다 한 칸씩 돌아서 아무도 손해 보지 않습니다.',
     '자리 표의 **`D`** 가 버튼(딜러 자리)이고, 그 다음 둘이 블라인드를 냅니다.',
     '',
-    `앉으면 **${BUY_IN}칩**. 손의 순서가 헷갈리면 **\`/홀덤 족보\`** 를 쳐 보세요.`,
+    `앉으면 **최대 ${TABLE_STACK}칩**(가진 게 그보다 적으면 있는 만큼). 손의 순서가 헷갈리면 **\`/홀덤 족보\`** 를 쳐 보세요.`,
   ].join('\n'),
   footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
 });
@@ -162,7 +162,7 @@ export function lobbyEmbed(game) {
       seats, '',
       `${game.seats.length}/${MAX_SEATS}자리 · 두 자리부터 시작할 수 있어요.`,
     ].join('\n'),
-    footer: `블라인드 ${SMALL_BLIND}/${BIG_BLIND} · 앉으면 ${BUY_IN}칩`,
+    footer: `블라인드 ${SMALL_BLIND}/${BIG_BLIND} · 앉으면 최대 ${TABLE_STACK}칩`,
   });
 }
 

@@ -14,7 +14,7 @@ import { handValue, handText, isBlackjack, example } from '../casino/cards.js';
 import {
   BET_UNITS, OUTCOME_LABEL, insuranceCost, MIN_BET,
 } from './rules.js';
-import { START_CHIPS } from '../casino/wallet.js';
+import { TABLE_STACK } from '../casino/wallet.js';
 import {
   MAX_SEATS, active, currentHand, currentSeat, seatOfHand, actionsFor,
   dealerUp, standings, allIn,
@@ -118,7 +118,8 @@ export const howto = () => base({
     '',
     '**■ 이 테이블의 규칙**',
     `카드는 6벌을 섞어 씁니다. 딜러는 **17 이상이면 무조건 섭니다** — A 가 섞인 17에서도요.`,
-    `칩은 각자 **${START_CHIPS}개**로 시작하고 베팅은 ${BET_UNITS.join(' · ')} 또는 All-in.`,
+    `칩은 **최대 ${TABLE_STACK}개**까지 들고 앉고(가진 게 적으면 있는 만큼),`
+    + ` 베팅은 ${BET_UNITS.join(' · ')} 또는 All-in.`,
     `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있고, ${MIN_BET}칩도 못 걸면 자동으로 빠집니다.`,
   ].join('\n'),
   footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',

@@ -13,7 +13,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { newShoe, shuffle, draw } from '../casino/cards.js';
-import { ledger } from '../casino/wallet.js';
+import { ledger, TABLE_STACK } from '../casino/wallet.js';
 import {
   SMALL_BLIND, BIG_BLIND, MAX_SEATS, BOARD_AT,
   newSeat, live, actionable, nextActor, blindSeats, put, firstToAct,
@@ -26,7 +26,8 @@ export { MAX_SEATS };
 export const IDLE_MS = 10 * 60 * 1000;
 
 /** 홀덤 자리에 앉을 때 받는 스택. 블라인드 20 기준 50 BB — 깊어야 폴드가 의미를 갖는다. */
-export const BUY_IN = 1000;
+/** 한 판에 들고 앉는 최대. 지갑이 들고 있다 — 여기에 따로 두면 값이 갈라진다. */
+export { TABLE_STACK };
 
 const games = new Map();          // channelId → game
 const serial = () => randomBytes(3).toString('hex');
@@ -367,7 +368,7 @@ export function end(game, reason) {
 
 /** 시작할 때와 견준 증감. 결과 화면과 wallet.commit 이 쓴다. */
 export const standings = (game) => game.seats
-  .map((seat) => ({ seat, chips: seat.chips, delta: game.chips?.deltas()[seat.id] ?? 0 }))
+  .map((seat) => ({ seat, chips: seat.chips, delta: game.chips?.net()[seat.id] ?? 0 }))
   .sort((a, b) => b.chips - a.chips);
 
 export function expired(now = Date.now()) {
@@ -386,7 +387,7 @@ export function expired(now = Date.now()) {
 }
 
 export default {
-  MAX_SEATS, IDLE_MS, BUY_IN,
+  MAX_SEATS, IDLE_MS, TABLE_STACK,
   create, get, remove, forChannel, touch, seatOf, seatIndexOf, hasNpc,
   humanSeat, npcSeat, addSeat, start, beginHand, currentSeat, pot,
   actionsFor, raisesFor, toCallFor, act, advance, settle, nextHand, end,

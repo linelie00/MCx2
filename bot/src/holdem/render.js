@@ -12,9 +12,7 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { handText } from '../casino/cards.js';
 import { describe } from '../casino/poker.js';
-import {
-  SMALL_BLIND, BIG_BLIND, MAX_SEATS, live, actionable,
-} from './rules.js';
+import { SMALL_BLIND, BIG_BLIND, MAX_SEATS } from './rules.js';
 import {
   BUY_IN, currentSeat, actionsFor, raisesFor, toCallFor, pot, standings,
 } from './state.js';
@@ -35,34 +33,35 @@ const holeBtn = (game) => btn(game, 'hole', '내 패', ButtonStyle.Primary)
 
 // ---------------------------------------------------------------- 자리 표
 
-const NAME_W = 10;
-const COL_W = 8;
+const NAME_W = 9;
+const COL_W = 7;
+const ACT_W = 12;
 
 /**
- * 칩·베팅·직전 행동을 코드블록 표로. **카드는 여기 안 넣는다** —
- * 코드블록 안에서는 이모지가 글자 크기로 쪼그라든다(요트에서 겪은 그 문제다).
+ * 칩·베팅·**방금 한 행동**을 코드블록 표로.
+ *
+ * 방금 한 행동을 안 보여 주면 NPC 가 무엇을 했는지 알 길이 없다. 사람은 자기가 누른
+ * 것을 알지만 남의 수는 판에만 남기 때문이다. 칩 변화로 유추하게 두면 폴드와 체크를
+ * 구분할 수 없다.
+ *
+ * **카드는 여기 안 넣는다** — 코드블록 안에서는 이모지가 글자 크기로 쪼그라든다
+ * (요트에서 겪은 그 문제다). 그리고 애초에 남의 홀 카드는 어디에도 안 그린다.
  */
 function seatTable(game) {
-  const mark = (s, i) => {
-    if (s.out) return '  ';
-    if (game.turn === i) return '▸ ';
-    return '  ';
-  };
   const rows = game.seats.map((s, i) => {
-    const tag = [
-      i === game.button ? 'D' : '',
-      s.folded ? 'fold' : '',
-      s.allIn ? 'all-in' : '',
-    ].filter(Boolean).join(' ');
-    return mark(s, i)
+    const here = game.turn === i ? '▸' : ' ';
+    const dealer = i === game.button ? 'D' : ' ';
+    const act = s.out ? '자리 비움' : (s.lastAction ?? '');
+    return `${here}${dealer} `
       + padEndW(clipW(s.name, NAME_W - 1), NAME_W)
       + padStartW(String(s.chips), COL_W)
       + padStartW(s.bet ? String(s.bet) : '·', COL_W)
-      + (tag ? `  ${tag}` : '');
+      + `  ${padEndW(clipW(act, ACT_W), ACT_W)}`;
   });
 
-  const head = '  ' + padEndW('', NAME_W) + padStartW('칩', COL_W) + padStartW('이번', COL_W);
-  return ['```', head, '-'.repeat(NAME_W + COL_W * 2 + 2), ...rows, '```'].join('\n');
+  const head = '   ' + padEndW('', NAME_W) + padStartW('칩', COL_W) + padStartW('이번', COL_W)
+    + '  방금';
+  return ['```', head, '-'.repeat(NAME_W + COL_W * 2 + ACT_W + 5), ...rows, '```'].join('\n');
 }
 
 // ---------------------------------------------------------------- 안내
@@ -195,6 +194,15 @@ export function boardRows(game) {
   if (!seat) {
     return [new ActionRowBuilder().addComponents(
       btn(game, 'wait', '진행 중…').setDisabled(true),
+      holeBtn(game),
+    )];
+  }
+
+  // NPC 차례에는 누를 것이 없다. 그래도 [내 패] 는 켜 둔다 — 남이 두는 동안에도
+  // 자기 카드는 볼 수 있어야 한다.
+  if (seat.kind === 'npc') {
+    return [new ActionRowBuilder().addComponents(
+      btn(game, 'wait', `${seat.name}이(가) 두는 중…`).setDisabled(true),
       holeBtn(game),
     )];
   }

@@ -156,9 +156,16 @@ export const ranking = () => base({
 
 // ---------------------------------------------------------------- 대기실
 
+/** 자리 이름 뒤에 붙는 꼬리표. 모브는 어떤 놈인지 한 줄 소개도 같이 보여 준다. */
+const seatTag = (s) => {
+  if (s.kind === 'npc') return ' (NPC)';
+  if (s.kind === 'mob') return ` — _${s.note}_`;
+  return '';
+};
+
 export function lobbyEmbed(game) {
   const seats = game.seats.length
-    ? game.seats.map((s) => `· ${s.name}${s.kind === 'npc' ? ' (NPC)' : ''}`).join('\n')
+    ? game.seats.map((s) => `· ${s.name}${seatTag(s)}`).join('\n')
     : '_아직 아무도 없어요._';
 
   return base({
@@ -258,9 +265,9 @@ export function boardRows(game) {
     )];
   }
 
-  // NPC 차례에는 누를 것이 없다. 그래도 [내 패] 는 켜 둔다 — 남이 두는 동안에도
-  // 자기 카드는 볼 수 있어야 한다.
-  if (seat.kind === 'npc') {
+  // 사람이 아닌 차례에는 누를 것이 없다. 그래도 [내 패] 는 켜 둔다 — 남이 두는
+  // 동안에도 자기 카드는 볼 수 있어야 한다.
+  if (seat.kind !== 'human') {
     return [new ActionRowBuilder().addComponents(
       btn(game, 'wait', `${seat.name}이(가) 두는 중…`).setDisabled(true),
       holeBtn(game),

@@ -22,6 +22,7 @@ import { live } from '../holdem/rules.js';
 import { load, commit, buyIn } from '../casino/wallet.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor } from '../casino/stakes.js';
+import { drawMobs } from '../holdem/mobs.js';
 import {
   PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
   holeMessage, turnCall, resultEmbed,
@@ -164,6 +165,33 @@ async function say(game, character, key, vars = {}, { always = false, p, live: l
   return true;
 }
 
+/** 모브가 둔 수를 한국어로. 「20 레이즈」처럼 액수가 먼저다. */
+const MOVE_TEXT = {
+  fold: () => '폴드',
+  check: () => '체크',
+  call: (n) => `${n} 콜`,
+  raise: (n) => `${n} 레이즈`,
+  allin: (n) => `${n} 올인`,
+};
+
+/**
+ * 모브는 **수만 말한다.** 성격을 지어내지 않는다.
+ *
+ * 엘리트 에너미 서른다섯에게 각자 말투를 줄 수도 없고, Gemini 를 부르면 한 판에 대사가
+ * 수십 번 나가 한도를 혼자 다 쓴다. 대신 판이 조용하지 않을 만큼만 — 큰 수와 폴드는
+ * 늘, 체크·콜은 가끔. 어차피 자리 표의 "방금" 칸에 다 남는다.
+ */
+async function mobSays(game, seat, action, amount, always) {
+  if (!always && !sometimes(0.3)) return;
+  if (!game.message?.channel) return;
+  const text = MOVE_TEXT[action]?.(amount);
+  if (!text) return;
+
+  game.boardBottom = false;                 // 판이 대사에 밀렸다
+  await game.message.channel.send({ content: `**${seat.name}** ${text}` });
+  await sleep(400);
+}
+
 const seatSays = (game, seat, key, vars, opts = {}) => (
   seat.kind === 'npc'
     ? say(game, seat.character, `player.${seat.character}.${key}`, vars, { p: 0.55, live: 0.3, ...opts })
@@ -248,7 +276,7 @@ async function runDriver(game) {
       //
       // 이미 맨 아래에 있으면 제자리에서 고치기만 한다. 안 그러면 스트리트가 바뀔 때
       // showBoard 가 띄운 판 바로 밑에 또 하나가 붙어 판이 겹친다.
-      if (seat.kind !== 'npc') {
+      if (seat.kind === 'human') {
         const mark = `${game.handNo}:${game.phase}:${game.turn}`;
         if (game.boardBottom || game.turnCalled === mark) { await draw(game); return; }
         game.turnCalled = mark;
@@ -259,7 +287,7 @@ async function runDriver(game) {
       await sleep(900);
       if (game.phase === 'done') return;
 
-      const move = chooseAction(seat.character, {
+      const move = chooseAction(seat.style ?? seat.character, {
         hole: seat.hole,
         board: game.board,
         opponents: Math.max(1, live(game.seats).length - 1),
@@ -280,14 +308,17 @@ async function runDriver(game) {
       const big = move.action === 'allin' || move.action === 'raise';
       const speaks = big || move.action === 'fold';
       const amount = move.action === 'allin' ? seat.bet + seat.chips : move.to;
-      await seatSays(game, seat, move.action, { amount },
-        { always: speaks, live: speaks ? 0.6 : 0.25 });
+      if (seat.kind === 'mob') await mobSays(game, seat, move.action, amount, speaks);
+      else {
+        await seatSays(game, seat, move.action, { amount },
+          { always: speaks, live: speaks ? 0.6 : 0.25 });
+      }
 
       state.act(game, move.action, move.to);
       await draw(game);
 
-      // 큰 수에는 옆자리가 한마디 한다.
-      if (big || move.action === 'fold') {
+      // 큰 수에는 옆자리가 한마디 한다. 모브는 잡담을 안 한다 — 수만 말한다.
+      if (seat.kind === 'npc' && (big || move.action === 'fold')) {
         const key = move.action === 'fold' ? 'fold' : (move.action === 'allin' ? 'allin' : 'raise');
         if (await banter(game, seat, key, { amount }, big ? 0.5 : 0.22)) await repost(game);
       }
@@ -361,7 +392,9 @@ const data = new SlashCommandBuilder()
   .setDescription('카지노 bard 에서 텍사스 홀덤을 합니다.')
     .addSubcommand((s) => s.setName('시작').setDescription('새 판을 엽니다')
       .addStringOption((o) => o.setName('판돈').setDescription('기본은 로우 — 블라인드 10/20')
-        .addChoices(...STAKES_CHOICES)))
+        .addChoices(...STAKES_CHOICES))
+      .addIntegerOption((o) => o.setName('모브').setDescription('엘리트 에너미를 몇 자리 앉힐지')
+        .setMinValue(1).setMaxValue(state.MAX_SEATS - 1)))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
   .addSubcommand((s) => s.setName('족보').setDescription('손의 순서를 알려줍니다'))
   .addSubcommand((s) => s.setName('그만').setDescription('진행 중인 판을 접습니다'));
@@ -412,6 +445,12 @@ async function execute(interaction) {
       stakes: interaction.options.getString('판돈'),
     });
     state.addSeat(game, state.humanSeat(interaction.user, interaction.member?.displayName));
+
+    // 모브는 **판을 만들 때 한 번에** 앉힌다. 인원만 정하면 알아서 골라 오는 것이
+    // 이 옵션의 전부라, 대기실에서 하나씩 부를 이유가 없다.
+    drawMobs(interaction.options.getInteger('모브') ?? 0).forEach((mob, i) => {
+      state.addSeat(game, state.mobSeat(mob, i, game.stakes));
+    });
 
     await room.send({ embeds: [howto(game)] })
       .catch((err) => console.warn('[홀덤] 규칙 안내 실패:', err.message));
@@ -529,9 +568,13 @@ async function handleLobby(interaction, game, action, arg) {
       if (at) { await denyLate(interaction, seatedMessage(s.name, at)); return true; }
     }
 
+    // 모브는 지갑이 없다. 서버에 물어보지도 않고, 앉을 때 정한 만큼 들고 온다.
+    const mobs = game.seats.filter((s) => s.kind === 'mob');
+    const walled = game.seats.filter((s) => s.kind !== 'mob');
+
     let account;
     try {
-      account = await load(game.guildId, game.seats.map((s) => s.id));
+      account = await load(game.guildId, walled.map((s) => s.id));
     } catch (err) {
       // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 칩이 복제된다 — 실제 잔액이
       // 200인 사람이 1000으로 놀고, 다음 커밋이 성공할 때 그 차액이 서버에 얹힌다.
@@ -541,11 +584,14 @@ async function handleLobby(interaction, game, action, arg) {
 
     // 이 등급에 앉을 만큼 없는 사람이 있으면 판을 안 연다. 잔액은 여기서 처음 알 수
     // 있어서(참가 버튼에서 매번 HTTP 를 칠 수는 없다) 검사도 여기 있다.
-    const poor = game.seats.map((s) => tooPoor(game.stakes, account[s.id], s.name)).filter(Boolean);
+    const poor = walled.map((s) => tooPoor(game.stakes, account[s.id], s.name)).filter(Boolean);
     if (poor.length) { await denyLate(interaction, poor.join('\n')); return true; }
 
-    // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
-    const err = state.start(game, buyIn(account, game.stakes.stack));
+    // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다. 모브 몫은 그 위에 얹는다.
+    const err = state.start(game, {
+      ...buyIn(account, game.stakes.stack),
+      ...Object.fromEntries(mobs.map((s) => [s.id, s.buyIn])),
+    });
     if (err) { await denyLate(interaction, err); return true; }
 
     await draw(game);

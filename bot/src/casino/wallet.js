@@ -28,6 +28,14 @@ import { openAccounts, postAccountDeltas } from '../api.js';
 export const START_CHIPS = 1000;
 
 /**
+ * 저장되는 계정인지. `mob:` 으로 시작하는 자리는 **지갑이 없다.**
+ *
+ * 모브(엘리트 에너미)는 판마다 새로 생기고 판이 끝나면 사라진다. 서버에 보내면
+ * 계정 파일이 한 번 쓰고 버릴 id 로 영영 불어난다.
+ */
+export const isPersistent = (id) => typeof id === 'string' && !id.startsWith('mob:');
+
+/**
  * 불러온 잔액을 **한 판에 들고 앉을 만큼**으로 줄인다. `cap` 은 그 자리의 등급이
  * 정한다(`casino/stakes.js` 의 `stack`).
  *
@@ -85,11 +93,13 @@ export async function load(guildId, userIds) {
  * 장부에서만 움직였으므로 그 핸드가 없던 일이 될 뿐이고, `ledger.rebase` 를 안 하니
  * 밀린 몫은 다음 커밋이 성공할 때 함께 반영된다.
  *
- * 0인 증감은 빼고 보낸다. 앉기만 하고 아무 일 없던 계정에까지 updatedAt 을 찍을
- * 이유가 없다.
+ * 0인 증감과 **지갑 없는 자리(모브)** 는 빼고 보낸다. 앉기만 하고 아무 일 없던
+ * 계정에 updatedAt 을 찍을 이유가 없고, 모브는 애초에 서버가 몰라야 한다.
  */
 export async function commit(guildId, deltas) {
-  const moved = Object.fromEntries(Object.entries(deltas).filter(([, n]) => n !== 0));
+  const moved = Object.fromEntries(
+    Object.entries(deltas).filter(([id, n]) => n !== 0 && isPersistent(id)),
+  );
   if (!Object.keys(moved).length) return true;
   try {
     await postAccountDeltas(moved);
@@ -160,4 +170,4 @@ export function ledger(initial) {
   };
 }
 
-export default { START_CHIPS, buyIn, roundToUnit, load, commit, ledger };
+export default { START_CHIPS, isPersistent, buyIn, roundToUnit, load, commit, ledger };

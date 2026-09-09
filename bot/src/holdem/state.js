@@ -47,6 +47,27 @@ export function humanSeat(user, displayName) {
 }
 
 /** NPC 자리. id 접두사 `npc:` 는 칩 영구 저장이 NPC 를 걸러 내는 표식이다. */
+/**
+ * 모브 자리. 엘리트 에너미 하나가 손님으로 앉는다.
+ *
+ * **지갑이 없다.** id 의 `mob:` 접두사가 그 표식이고, wallet 이 이걸 보고 서버에
+ * 안 보낸다. 대신 앉을 때 최소 입장과 한 스택 사이에서 아무렇게나 들고 온다 —
+ * 매번 다른 스택이라 판의 모양도 매번 달라진다.
+ */
+export function mobSeat(mob, index, stakes, rand = Math.random) {
+  const span = stakes.stack - stakes.minBuyIn;
+  const seat = newSeat({
+    kind: 'mob',
+    id: `mob:${index}`,
+    name: mob.name,
+    color: THEME_COLOR,
+  });
+  seat.style = { loose: mob.loose, bluff: mob.bluff, raise: mob.raise };
+  seat.note = mob.note;
+  seat.buyIn = stakes.minBuyIn + Math.floor(rand() * (span + 1));
+  return seat;
+}
+
 export function npcSeat(character) {
   const meta = OWNER_META[character];
   if (!meta) throw new Error(`모르는 캐릭터: ${character}`);

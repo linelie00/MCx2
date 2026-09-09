@@ -33,7 +33,11 @@ export function seatedAt(id, { except = null } = {}) {
   for (const { name, mod } of GAMES) {
     for (const game of mod.openGames()) {
       if (game.channelId === except) continue;
-      if (game.seats.some((s) => s.id === id)) return { game: name, channelId: game.channelId };
+      // 모브는 판마다 새로 생기므로 판을 건너 겹칠 일이 없다. id 도 mob:0 처럼
+      // 판 안에서만 유일해서, 안 거르면 다른 판의 mob:0 과 헷갈린다.
+      if (game.seats.some((s) => s.kind !== 'mob' && s.id === id)) {
+        return { game: name, channelId: game.channelId };
+      }
     }
   }
   return null;

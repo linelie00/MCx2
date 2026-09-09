@@ -129,10 +129,11 @@ export function equity(hole, board, opponents, { samples = 400, rand = Math.rand
  * (칩이 모자라 레이즈가 불가능하다든지) 물러설 곳을 여기서 정하지 않으면 버그가 산다.
  * 블랙잭에서 겪은 그 자리다.
  */
-export function chooseAction(styleKey, {
+export function chooseAction(who, {
   hole, board, opponents, toCall, pot, legal, raises, samples, rand = Math.random,
 }) {
-  const style = STYLES[styleKey] ?? STYLES.matiam;
+  // 미겔·마티암은 키로, 모브는 성향 객체를 그대로 넘긴다(mobs.js).
+  const style = typeof who === 'string' ? (STYLES[who] ?? STYLES.matiam) : who;
   const can = (a) => legal.has(a);
 
   const strength = board.length === 0

@@ -16,6 +16,11 @@
 # 라이브 영화 데이터 (movies.seed.json 이 기본값, 실데이터는 추적 안 함)
 /src/data/movies.json
 
+# 라이브 카지노 계정 데이터 (accounts.seed.json 이 기본값, 실데이터는 추적 안 함)
+# .tmp 는 쓰다가 죽었을 때 남는 조각이다 — 커밋될 일이 없다.
+/src/data/accounts.json
+/src/data/accounts.json.tmp
+
 # env
 .env
 .env.local

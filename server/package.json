@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "import": "node scripts/import-folder.js"
+    "import": "node scripts/import-folder.js",
+    "check-accounts": "node scripts/check-accounts.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -24,6 +24,10 @@ import {
   PREFIX, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 } from '../blackjack/render.js';
 import { cardText, handText, handValue, isBlackjack } from '../casino/cards.js';
+import {
+  line, sometimes, betKey, RESULT_KEY, REACT_KEY,
+} from '../blackjack/lines.js';
+import { sayAsOrPlain } from '../discord/webhook.js';
 import { base, fail } from '../embeds.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
@@ -95,6 +99,49 @@ async function showMove(game, { name, action, card, cards }) {
   await repost(game);
 }
 
+// ---------------------------------------------------------------- 대사
+//
+// **대사는 전부 드라이버 안에서만 나간다.** 웹훅은 느리고 레이트리밋이 있어서
+// 인터랙션 응답 경로에 두면 3초 시한을 갉아먹는다. 사람이 누른 것에 대한 반응도
+// 마찬가지다 — 버튼을 누르면 kick() 이 드라이버를 깨우므로 거기서 말하면 된다.
+
+/**
+ * 그 캐릭터로 한 줄 말한다. 말했으면 true.
+ *
+ * 판이 위로 밀리므로 부른 쪽이 곧 showMove 나 repost 로 다시 띄워야 한다.
+ * 여기서 매번 repost 하면 대사 한 줄마다 판이 하나씩 늘어난다.
+ */
+async function say(game, character, key, vars = {}, { always = false, p } = {}) {
+  if (!always && !sometimes(p)) return false;
+  const text = line(key, vars);
+  if (!text || !game.message?.channel) return false;
+  await sayAsOrPlain(game.message.channel, character, text, '블랙잭');
+  await sleep(700);
+  return true;
+}
+
+/** 딜러가 말한다. 미겔이 손님 자리에 앉아 있으면 npc 가 딜러다. */
+const dealerSays = (game, key, vars, opts) =>
+  say(game, game.dealerCharacter, `dealer.${game.dealerCharacter}.${key}`, vars, opts);
+
+/** NPC 플레이어가 말한다. 사람 자리는 말하지 않는다. */
+const playerSays = (game, seat, key, vars, opts) => (
+  seat.kind === 'npc'
+    ? say(game, seat.character, `player.${seat.character}.${key}`, vars, opts)
+    : Promise.resolve(false)
+);
+
+/** 판을 열며 하는 인사. 딜러가 누구든 한 번은 반드시 한다. */
+async function openTable(game) {
+  game.opened = true;
+  await dealerSays(game, 'welcome', {}, { always: true });
+  // 미겔이 손님 자리에 앉았으면 "오늘은 내가 플레이어다" 를 본인이 덧붙인다.
+  for (const seat of game.seats) {
+    if (seat.kind === 'npc') await playerSays(game, seat, 'welcome', {}, { always: true });
+  }
+  await repost(game);
+}
+
 // ---------------------------------------------------------------- 드라이버
 //
 // NPC 차례와 딜러 진행, 정산이 전부 여기서 돈다. 인터랙션 응답 경로 밖이라
@@ -114,6 +161,11 @@ async function playNpcHand(game) {
       cards: hand.cards, dealerUp: state.dealerUp(game), legal,
     });
 
+    // 고른 수를 먼저 말하고 둔다. 결과를 보고 말하면 "선택할 때의 반응" 이 안 된다.
+    // 흔한 hit/stand 는 가끔만, 드물고 판이 갈리는 수(더블·스플릿·서렌더)는 늘 말한다.
+    const rare = action === 'double' || action === 'split' || action === 'surrender';
+    const spoke = await playerSays(game, seat, action, {}, { always: rare });
+
     const before = hand.cards.length;
     const res = state.act(game, action);
     await sleep(900);
@@ -126,8 +178,10 @@ async function playNpcHand(game) {
         card: hand.cards[hand.cards.length - 1],
         cards: hand.cards,
       });
+    } else if (spoke) {
+      // 스플릿·스탠드·서렌더는 새 카드가 없다. 대사가 나갔으면 판이 위로 밀렸으니 다시 띄운다.
+      await repost(game);
     } else {
-      // 스플릿·스탠드·서렌더는 새 카드가 없다. 판만 다시 그린다.
       await draw(game);
     }
 
@@ -141,6 +195,7 @@ async function runDriver(game) {
   try {
     for (;;) {
       if (game.phase === 'done') return;
+      if (!game.opened) await openTable(game);
 
       // --- 베팅: NPC 는 알아서 건다
       if (game.phase === 'betting') {
@@ -154,8 +209,10 @@ async function runDriver(game) {
           bet = true;
         }
         if (bet) await draw(game);
+        if (await reactToBets(game)) await repost(game);
         if (!state.allBetsIn(game)) return;      // 사람을 기다린다
 
+        await dealerSays(game, 'deal');
         state.deal(game);
         await draw(game);
         for (const hand of game.hands) {
@@ -167,11 +224,14 @@ async function runDriver(game) {
 
         if (state.needsInsurance(game)) {
           state.beginInsurance(game);
+          await dealerSays(game, 'insuranceOffer', {}, { always: true });
           for (const seat of state.active(game)) {
             if (seat.kind !== 'npc') continue;
-            state.answerInsurance(game, seat, chooseInsurance(seat.character));
+            const takes = chooseInsurance(seat.character);
+            state.answerInsurance(game, seat, takes);
+            await playerSays(game, seat, takes ? 'insurance' : 'insuranceDecline', {}, { p: 0.6 });
           }
-          await draw(game);
+          await repost(game);
           if (!state.allInsuranceIn(game)) return;   // 사람을 기다린다
         }
 
@@ -194,7 +254,11 @@ async function runDriver(game) {
       if (game.phase === 'playing') {
         const seat = state.currentSeat(game);
         if (!seat) { await draw(game); continue; }
-        if (seat.kind !== 'npc') return;
+        if (seat.kind !== 'npc') {
+          // 사람 차례만 알린다. NPC 는 곧 자기 수를 말하므로 두 번 말하는 꼴이 된다.
+          if (await announceTurn(game, seat)) await repost(game);
+          return;
+        }
         await playNpcHand(game);
         continue;
       }
@@ -202,12 +266,16 @@ async function runDriver(game) {
       // --- 딜러
       if (game.phase === 'dealer') {
         await sleep(800);
+        await dealerSays(game, 'reveal');
         state.revealHole(game);
         await showMove(game, { name: '딜러', action: '홀 카드 공개', cards: game.dealer });
 
         // 아무도 안 남았으면(전원 버스트·서렌더) 딜러는 뽑을 이유가 없다.
         if (state.anyoneAlive(game)) {
+          // 뽑는다는 말은 처음 한 번만. 카드마다 말하면 딜러가 혼자 떠드는 판이 된다.
+          let first = true;
           while (state.dealerDraw(game)) {
+            if (first) { first = false; await dealerSays(game, 'draw'); }
             await sleep(900);
             if (game.phase === 'done') return;
             await showMove(game, {
@@ -226,19 +294,91 @@ async function runDriver(game) {
     }
   } finally {
     game.driving = false;
+    // 도는 동안 들어온 클릭이 있었으면 지금 처리한다. 아래 kick() 참고.
+    if (game.rekick) { game.rekick = false; kick(game); }
   }
 }
 
-/** 정산하고 결과를 보여준다. 칩 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다. */
+/**
+ * 아직 반응 안 한 베팅에 딜러가 한마디 한다. 말했으면 true.
+ *
+ * 사람이 건 것과 NPC 가 건 것을 한자리에서 처리한다 — 사람이 버튼을 누르면 kick() 이
+ * 드라이버를 깨우므로 결국 여기를 지난다. 이미 반응한 자리는 `핸드:자리` 로 기억한다
+ * (베팅액은 다음 핸드에 0으로 돌아가므로 그것만으로는 구별이 안 된다).
+ */
+async function reactToBets(game) {
+  let spoke = false;
+  for (const seat of state.active(game)) {
+    const mark = `${game.handNo}:${seat.id}`;
+    if (!seat.bet || game.said.has(mark)) continue;
+    game.said.add(mark);
+
+    // 걸 때 이미 깎였으므로, 최소 베팅도 못 남겼으면 사실상 전부 건 것이다.
+    const allIn = seat.chips < MIN_BET;
+    const key = game.dealerCharacter === 'npc'
+      ? (allIn ? 'bet.allin' : 'bet')
+      : `bet.${allIn ? 'allin' : betKey(seat)}`;
+    const vars = { name: seat.name, amount: `${seat.bet}칩` };
+    spoke = await dealerSays(game, key, vars, { always: allIn }) || spoke;
+  }
+  return spoke;
+}
+
+/** 사람 차례를 알린다. 한 손에 한 번만 — 사람이 버튼을 누를 때마다 드라이버가 돈다. */
+async function announceTurn(game, seat) {
+  const mark = `turn:${game.handNo}:${game.turn}`;
+  if (game.said.has(mark)) return false;
+  game.said.add(mark);
+  return dealerSays(game, 'turn', { name: seat.name });
+}
+
+/**
+ * 정산하고 결과를 보여준다. 칩 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다.
+ *
+ * 대사가 제일 몰리는 자리다. 네 자리가 각자 손을 둘씩 가지면 결과만 여덟 줄이고 거기
+ * 플레이어 반응까지 붙는다. 그래서 **꼭 말해야 하는 것**(딜러 버스트·블랙잭, 플레이어
+ * 블랙잭·버스트·서렌더)만 무조건 내보내고 나머지는 예산 안에서만 말한다.
+ */
+const RESULT_BUDGET = 4;
+
 async function settleAndShow(game) {
   state.settle(game);
   await draw(game);
   await commit(game.guildId, game.chips.deltas());
+
+  const dealerBust = handValue(game.dealer).bust;
+  const dealerBj = isBlackjack(game.dealer);
+  if (dealerBust) await dealerSays(game, 'bust', {}, { always: true });
+  else if (dealerBj) await dealerSays(game, 'blackjack', {}, { always: true });
+
+  let budget = RESULT_BUDGET;
+  for (const r of game.results) {
+    const big = r.outcome === 'blackjack' || r.outcome === 'bust' || r.outcome === 'surrender';
+    if (!big && budget <= 0) continue;
+
+    const vars = { name: r.seat.name, amount: `${Math.abs(r.net)}칩` };
+    if (await dealerSays(game, `result.${RESULT_KEY[r.outcome]}`, vars, { always: big })) {
+      budget -= 1;
+    }
+    if (await playerSays(game, r.seat, REACT_KEY[r.outcome], vars, { always: big, p: 0.5 })) {
+      budget -= 1;
+    }
+  }
+
+  await repost(game);
 }
 
-/** 드라이버를 띄운다. 기다리지 않는다 — 부르는 쪽은 이미 응답을 마쳤다. */
+/**
+ * 드라이버를 띄운다. 기다리지 않는다 — 부르는 쪽은 이미 응답을 마쳤다.
+ *
+ * **이미 돌고 있으면 예약만 하고 물러난다.** 그냥 물러나면 판이 멈춘다. 드라이버는
+ * 사람 차례에서 "네 차례입니다" 를 말하고(웹훅 + 간격으로 1초 넘게 걸린다) 물러나는데,
+ * 하필 그 사이에 사람이 버튼을 누르면 그 클릭의 kick 이 버려지고, 드라이버는 곧
+ * 끝나 버려서 아무도 다음 차례로 넘겨 주지 않는다.
+ */
 function kick(game) {
   if (game.phase === 'done' || game.phase === 'lobby') return;
+  if (game.driving) { game.rekick = true; return; }
   runDriver(game).catch((err) => console.error('[블랙잭] 드라이버 오류:', err));
 }
 

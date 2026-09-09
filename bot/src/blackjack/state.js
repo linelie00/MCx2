@@ -97,8 +97,13 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     chips: null,         // 동기 장부(wallet.ledger)
     pendingChat: [],     // 판을 그린 뒤 내보낼 알림. 인터랙션 응답을 늦추지 않으려고 미룬다
     lastAt: Date.now(),
-    opened: false,
+    opened: false,       // 환영 인사를 했는지
+    // 이미 말한 자리. `핸드:자리` 꼴로 넣는다 — 사람이 버튼을 누를 때마다 드라이버가
+    // 다시 도는데, 그때마다 같은 베팅·같은 차례를 또 말하면 안 된다. 판이 사라질 때
+    // 같이 사라지므로 따로 비우지 않는다.
+    said: new Set(),
     driving: false,
+    rekick: false,       // 드라이버가 도는 동안 들어온 클릭이 있었는지
     endedReason: null,
   };
   games.set(channelId, game);

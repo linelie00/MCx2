@@ -1,5 +1,5 @@
 /**
- * make-dice-emoji — 디스코드 서버에 올릴 주사위 이모지 그림을 만든다
+ * make-dice-emoji — 주사위 이모지를 그려서 **앱 이모지로 올린다**
  *
  * 키캡 숫자(1️⃣~6️⃣)로도 게임은 돌아가지만, 남긴 주사위를 **색으로** 구분하려면
  * 커스텀 이모지가 필요하다. 이모지는 이미지라 굵게·색 같은 마크다운이 안 먹기 때문이다.
@@ -7,17 +7,24 @@
  *   dice1 ~ dice6    보통 주사위 (양피지색)
  *   dice1k ~ dice6k  남긴 주사위 (초록) — "이건 쥐고 간다" 는 뜻
  *
- * 이 이름 그대로 서버 이모지에 올리면 봇이 부팅할 때 알아서 찾아 쓴다(index.js).
+ * 처음에는 서버 이모지에 손으로 올렸는데, 그러면 무료 50칸 중 12칸을 태운다. 카드를
+ * 앱 이모지로 옮기면서 주사위도 같이 옮긴다 — 앱당 2000개라 슬롯 걱정이 없고, 어느
+ * 서버에서나 쓸 수 있다. 부팅할 때 앱 쪽을 먼저 보므로(index.js) 서버에 남아 있는
+ * 옛 주사위는 그냥 무시된다. 지우고 슬롯을 돌려받아도 되고 그냥 둬도 된다.
  *
  * 의존성을 하나도 안 쓴다. PNG 는 zlib(노드 내장)로 직접 만든다 — 이모지 12장 만들자고
- * 이미지 라이브러리를 들이는 건 과하고, 이 스크립트는 한 번 돌리고 말 물건이다.
+ * 이미지 라이브러리를 들이는 건 과하다.
  *
  * 사용법:
- *   node bot/scripts/make-dice-emoji.mjs [출력폴더]
+ *   node bot/scripts/make-dice-emoji.mjs             그려서 앱 이모지로 올린다
+ *   node bot/scripts/make-dice-emoji.mjs --dry <폴더>  올리지 않고 파일로만 뽑는다
+ *   node bot/scripts/make-dice-emoji.mjs --force      이미 있는 것도 지우고 다시 올린다
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
+import 'dotenv/config';
+import { toPng } from './lib/png.mjs';
+import { upload } from './lib/appEmoji.mjs';
 
 const SIZE = 128;        // 디스코드 이모지 표시 크기
 const SS = 4;            // 계단 현상을 없애려고 4배로 그린 뒤 줄인다
@@ -99,70 +106,37 @@ function downsample(src) {
   return out;
 }
 
-// ---------------------------------------------------------------- PNG 쓰기
-
-const CRC = (() => {
-  const t = new Int32Array(256);
-  for (let n = 0; n < 256; n += 1) {
-    let c = n;
-    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c;
-  }
-  return t;
-})();
-
-const crc32 = (buf) => {
-  let c = 0xffffffff;
-  for (const b of buf) c = CRC[(c ^ b) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-};
-
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([len, body, crc]);
-}
-
-function toPng(rgba, size) {
-  // 스캔라인마다 필터 바이트 0(필터 안 씀)을 앞에 붙인다. PNG 규격이 요구한다.
-  const raw = Buffer.alloc((size * 4 + 1) * size);
-  for (let y = 0; y < size; y += 1) {
-    raw[y * (size * 4 + 1)] = 0;
-    rgba.copy(raw, y * (size * 4 + 1) + 1, y * size * 4, (y + 1) * size * 4);
-  }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8;      // 채널당 8비트
-  ihdr[9] = 6;      // RGBA
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', zlib.deflateSync(raw, { level: 9 })),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
 // ---------------------------------------------------------------- 실행
 
-const outDir = process.argv[2] || path.join(process.cwd(), 'dice-emoji');
-fs.mkdirSync(outDir, { recursive: true });
-
-let total = 0;
-for (const [suffix, theme] of Object.entries(THEMES)) {
-  for (let face = 1; face <= 6; face += 1) {
-    const png = toPng(downsample(drawDie(face, theme)), SIZE);
-    const name = `dice${face}${suffix}.png`;
-    fs.writeFileSync(path.join(outDir, name), png);
-    total += png.length;
-    console.log(`  ${name.padEnd(12)} ${(png.length / 1024).toFixed(1)}KB`);
+/** dice1~6 과 dice1k~6k, 열두 장. */
+function everyDie() {
+  const out = [];
+  for (const [suffix, theme] of Object.entries(THEMES)) {
+    for (let face = 1; face <= 6; face += 1) {
+      out.push({
+        name: `dice${face}${suffix}`,
+        png: toPng(downsample(drawDie(face, theme)), SIZE),
+      });
+    }
   }
+  return out;
 }
 
-console.log(`\n${outDir} 에 12장을 만들었습니다 (합계 ${(total / 1024).toFixed(0)}KB).`);
-console.log('디스코드 서버 설정 > 이모지에 파일명 그대로 올리면 봇이 알아서 찾아 씁니다.');
+const args = process.argv.slice(2);
+const dry = args.includes('--dry');
+const force = args.includes('--force');
+const dice = everyDie();
+const bytes = dice.reduce((a, d) => a + d.png.length, 0);
+
+console.log(`주사위 ${dice.length}장을 그렸습니다 (합계 ${(bytes / 1024).toFixed(0)}KB).`);
 console.log('  dice1~dice6   보통 주사위');
-console.log('  dice1k~dice6k 남긴 주사위 (초록)');
+console.log('  dice1k~dice6k 남긴 주사위 (초록)\n');
+
+if (dry) {
+  const outDir = args[args.indexOf('--dry') + 1] || path.join(process.cwd(), 'dice-emoji');
+  fs.mkdirSync(outDir, { recursive: true });
+  for (const d of dice) fs.writeFileSync(path.join(outDir, `${d.name}.png`), d.png);
+  console.log(`${outDir} 에 저장했습니다. (올리지 않았습니다)`);
+} else {
+  await upload(dice, { force, what: '주사위' });
+}

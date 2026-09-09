@@ -270,7 +270,9 @@ export const toCallFor = (game, seat) => owed(seat, game.toCall);
  * 보였던 공개 정보라 대사에 넘겨도 새는 것이 없다.
  */
 const note = (game, seat) => game.hist.push(
-  { street: game.phase, name: seat.name, act: seat.lastAction },
+  // id 도 같이 남긴다. 대사는 이름만 쓰지만 NPC 판단은 **누구의 행동인지** 정확히
+  // 골라야 해서(ai 의 readRange), 표시 이름이 겹치는 사람 둘이 있으면 섞인다.
+  { street: game.phase, id: seat.id, name: seat.name, act: seat.lastAction },
 );
 
 export function act(game, action, to = 0) {

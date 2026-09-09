@@ -15,7 +15,7 @@
  */
 import * as st from '../src/holdem/state.js';
 import { potTotal, live } from '../src/holdem/rules.js';
-import { chooseAction, STYLES } from '../src/holdem/ai.js';
+import { chooseAction, STYLES, readRange } from '../src/holdem/ai.js';
 
 const hands = Number(process.argv[2] || 20000);
 const seatCount = Math.min(Math.max(Number(process.argv[3] || 4), 2), st.MAX_SEATS);
@@ -47,7 +47,10 @@ function styledAction(game) {
   return chooseAction(styleOf(i), {
     hole: seat.hole,
     board: game.board,
-    opponents: Math.max(1, live(game.seats).length - 1),
+    // 실전과 같은 경로를 탄다 — 상대가 이번 핸드에 어떻게 나왔는지를 넘긴다.
+    opponents: live(game.seats).filter((s2) => s2 !== seat).map((s2) => readRange(
+      game.hist.filter((h) => h.id === s2.id).map((h) => h.act),
+    )),
     toCall: st.toCallFor(game, seat),
     pot: st.pot(game),
     legal,

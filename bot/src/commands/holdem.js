@@ -17,7 +17,7 @@
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import * as state from '../holdem/state.js';
-import { chooseAction } from '../holdem/ai.js';
+import { chooseAction, readRange } from '../holdem/ai.js';
 import { live } from '../holdem/rules.js';
 import { load, commit, buyIn } from '../casino/wallet.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
@@ -181,6 +181,23 @@ async function say(game, character, key, vars = {}, { always = false, p, live: l
   return true;
 }
 
+/**
+ * 아직 살아 있는 상대들이 **이번 핸드에 어떻게 나왔는지**.
+ *
+ * 계속 올린 상대에게 7♠2♦ 를 쥐여 주고 승률을 재면 자기 손을 실제보다 좋게 본다.
+ * 그래서 각자에게 시작패 문턱을 하나씩 매겨 넘긴다(holdem/ai.js 의 readRange).
+ *
+ * 흐름 기록(game.hist)은 원래 대사가 읽으려고 만든 것인데, 여기가 두 번째 쓰임이다.
+ * 전부 화면에 보였던 공개 정보라 봇만 아는 것이 없다.
+ */
+function opponentReads(game, me) {
+  const others = live(game.seats).filter((s) => s !== me);
+  if (!others.length) return 1;                 // 남은 상대가 없어도 0 은 안 넘긴다
+  return others.map((s) => readRange(
+    (game.hist ?? []).filter((h) => h.id === s.id).map((h) => h.act),
+  ));
+}
+
 /** 모브가 둔 수를 한국어로. 「20 레이즈」처럼 액수가 먼저다. */
 const MOVE_TEXT = {
   fold: () => '폴드',
@@ -306,7 +323,7 @@ async function runDriver(game) {
       const move = chooseAction(seat.style ?? seat.character, {
         hole: seat.hole,
         board: game.board,
-        opponents: Math.max(1, live(game.seats).length - 1),
+        opponents: opponentReads(game, seat),
         toCall: state.toCallFor(game, seat),
         pot: state.pot(game),
         legal: state.actionsFor(game),

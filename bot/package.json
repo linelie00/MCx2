@@ -12,7 +12,8 @@
     "register": "node register-commands.js",
     "build-content": "node scripts/build-content.mjs",
     "check-keys": "node check-keys.js",
-    "check-wallet": "node scripts/check-wallet.mjs"
+    "check-wallet": "node scripts/check-wallet.mjs",
+    "check-reads": "node scripts/check-reads.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

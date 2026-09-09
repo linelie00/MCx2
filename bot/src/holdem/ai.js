@@ -5,12 +5,17 @@
  * 보드에 따라 같은 손의 값이 달라지기 때문이다. 그래서 둘로 나눈다.
  *
  *   프리플랍  두 장만 보고 점수를 낸다(Chen 공식). 보드가 없으니 시뮬레이션할 게 없다.
+ *             다만 상대가 이미 세게 나온 판에서는 프리플랍에도 몬테카를로를 돌린다.
  *   그 뒤     **몬테카를로 승률.** 남은 카드를 무작위로 돌려 이길 확률을 센다.
  *             요트의 NPC 판단과 같은 방식이고, 거기서처럼 rand 를 주입해
  *             시뮬레이션에서는 빠른 RNG 를 쓴다.
  *
  * 판단은 늘 **승률 대 팟 오즈**다. 콜에 필요한 돈이 팟의 4분의 1이면 승률이 25%는
  * 넘어야 콜이 이득이다. 성향은 그 위에 얹는다 — 규칙을 바꾸는 게 아니라 문턱을 민다.
+ *
+ * **상대 손을 읽지는 않는다.** 대신 이번 핸드에 상대가 얼마나 세게 나왔는지로 그 사람
+ * 시작패의 문턱을 정하고(`readRange`), 몬테카를로에서 그 문턱을 넘는 패만 배분한다.
+ * 핸드를 넘겨 기억하지는 않는다 — 상대별 학습도, 성향 추정도 없다.
  */
 import { SUITS, RANKS } from '../casino/cards.js';
 import { best5, compare, rankOf } from '../casino/poker.js';
@@ -38,8 +43,18 @@ export const STYLES = {
  * 몬테카를로로 프리플랍까지 돌리면 느리기만 하고 결과는 이것과 거의 같다.
  */
 export function preflopScore(hole) {
-  const [a, b] = hole.map(rankOf).sort((x, y) => y - x);
-  const suited = hole[0].suit === hole[1].suit;
+  return pairScore(rankOf(hole[0]), rankOf(hole[1]), hole[0].suit === hole[1].suit);
+}
+
+/**
+ * 같은 계산인데 **끗 값만 받는다.**
+ *
+ * 몬테카를로가 상대 패를 걸러 낼 때 표본마다 여러 번 부르는 자리라(`equity` 의 재추첨),
+ * 배열을 만들고 정렬하는 비용이 그대로 곱해진다. 여기서는 그걸 안 한다.
+ */
+function pairScore(r1, r2, suited) {
+  const a = Math.max(r1, r2);
+  const b = Math.min(r1, r2);
 
   const base = (r) => {
     if (r === 14) return 10;
@@ -72,14 +87,33 @@ export function preflopScore(hole) {
 const key = (c) => c.rank + c.suit;
 
 /**
+ * 문턱을 못 맞췄을 때 그 상대의 두 장을 다시 뽑는 횟수.
+ *
+ * 제일 좁은 문턱(0.30)이 상위 25% 라 평균 네 번이면 걸린다. 열두 번까지 봐주고 그래도
+ * 안 되면 나온 대로 쓴다 — 3% 쯤 범위 밖 패가 섞이는데 그 정도 오차는 성향 보정에
+ * 묻힌다. 상한이 없으면 덱이 마른 판에서 영영 돌 수 있다.
+ */
+const RANGE_RETRIES = 12;
+
+/**
  * 이 손이 이길 확률. 찹은 나눠서 센다(둘이 갈라 가지면 0.5).
  *
- * 상대 손은 **완전히 무작위**로 둔다. 상대가 접고 남았다는 정보를 반영하면 더 정확하지만,
- * 그러려면 상대 성향을 모델링해야 하고 그건 이 규모에 과하다. 무작위로 두면 승률이
- * 조금 높게 나오는데, 문턱을 성향으로 미는 김에 같이 흡수된다.
+ * `opponents` 는 **수**(전부 무작위) 또는 **문턱 배열**이다. 배열이면 그 자리의 두 장을
+ * 시작패 점수가 문턱을 넘을 때까지 다시 뽑는다 — 이번 핸드에 계속 올린 상대에게
+ * 7♠2♦ 를 쥐여 주고 승률을 재면 자기 손을 실제보다 좋게 본다. 문턱 0 은 예전과 같다.
+ *
+ * **거르는 것은 시작 두 장의 세기뿐이다.** 7♠2♦ 로 플랍에서 트리플을 만들어 밀어붙이는
+ * 상대는 여전히 못 읽고, "저 사람은 처음부터 좋은 패였겠지" 로 근사한다. 평균적으로는
+ * 맞는 근사지만 핸드 리딩은 아니다.
+ *
+ * 그래서 **효과가 손마다 다르다.** 큰 카드에 밀리는 어중간한 손(A K 4 보드의 9♠9♦)은
+ * 승률이 43% → 21% 로 크게 떨어지지만, 이미 만들어진 센 손은 거의 안 움직인다.
+ * 읽기가 값을 하는 자리가 원래 애매한 스팟이라 그 모양이 맞다(scripts/check-reads.mjs).
  */
 export function equity(hole, board, opponents, { samples = 400, rand = Math.random } = {}) {
-  if (opponents <= 0) return 1;
+  const mins = Array.isArray(opponents) ? opponents : new Array(opponents).fill(0);
+  const n = mins.length;
+  if (n <= 0) return 1;
 
   const dead = new Set([...hole, ...board].map(key));
   const deck = [];
@@ -90,7 +124,8 @@ export function equity(hole, board, opponents, { samples = 400, rand = Math.rand
     }
   }
 
-  const need = opponents * 2 + (5 - board.length);
+  const need = n * 2 + (5 - board.length);
+  const narrowed = mins.some((m) => m > 0) && deck.length > need;
   let score = 0;
 
   for (let s = 0; s < samples; s += 1) {
@@ -99,13 +134,34 @@ export function equity(hole, board, opponents, { samples = 400, rand = Math.rand
       const j = i + Math.floor(rand() * (deck.length - i));
       const t = deck[i]; deck[i] = deck[j]; deck[j] = t;
     }
+
+    // 좁은 범위를 요구하는 자리는 **안 쓰는 뒤쪽 카드와 바꿔** 다시 뽑는다.
+    // 뒤쪽은 이 표본에서 아무도 안 쓰는 카드라 겹칠 일이 없다.
+    if (narrowed) {
+      for (let o = 0; o < n; o += 1) {
+        const min = mins[o];
+        if (!min) continue;
+        const i1 = o * 2;
+        const i2 = i1 + 1;
+        for (let t = 0; t < RANGE_RETRIES; t += 1) {
+          const a = deck[i1];
+          const b = deck[i2];
+          if (pairScore(rankOf(a), rankOf(b), a.suit === b.suit) >= min) break;
+          for (const i of [i1, i2]) {
+            const j = need + Math.floor(rand() * (deck.length - need));
+            const tmp = deck[i]; deck[i] = deck[j]; deck[j] = tmp;
+          }
+        }
+      }
+    }
+
     const drawn = deck.slice(0, need);
-    const full = [...board, ...drawn.slice(opponents * 2)];
+    const full = [...board, ...drawn.slice(n * 2)];
     const mine = best5([...hole, ...full]);
 
     let better = 0;
     let same = 0;
-    for (let o = 0; o < opponents; o += 1) {
+    for (let o = 0; o < n; o += 1) {
       const theirs = best5([drawn[o * 2], drawn[o * 2 + 1], ...full]);
       const c = compare(mine, theirs);
       if (c < 0) { better += 1; break; }
@@ -114,6 +170,32 @@ export function equity(hole, board, opponents, { samples = 400, rand = Math.rand
     if (better === 0) score += 1 / (same + 1);
   }
   return score / samples;
+}
+
+/**
+ * 이번 핸드에 상대가 한 일 → 그 사람 패에 요구할 시작패 점수.
+ *
+ * 점수가 정수 21단계라 **문턱을 잘게 못 나눈다.** 0.30 에서 0.25 로 한 칸만 내려도
+ * 통과 비율이 25% → 43% 로 뛴다. 그래서 거칠게 넷으로만 나눈다.
+ */
+export const RANGE = {
+  quiet: 0,        // 블라인드만 내고 체크 — 아무 패나
+  called: 0.20,    // 콜만 했다        — 상위 52%
+  raised: 0.25,    // 한 번 올렸다      — 상위 43%
+  pushed: 0.30,    // 두 번 이상 올렸다 — 상위 25%
+};
+
+/** 그 자리가 이번 핸드에 한 행동들(`Raise 40` 꼴)로 문턱 하나를 정한다. */
+export function readRange(actions) {
+  let raises = 0;
+  let called = false;
+  for (const act of actions) {
+    if (/^(Raise|All-in)/.test(act)) raises += 1;
+    else if (/^Call/.test(act)) called = true;
+  }
+  if (raises >= 2) return RANGE.pushed;
+  if (raises === 1) return RANGE.raised;
+  return called ? RANGE.called : RANGE.quiet;
 }
 
 // ---------------------------------------------------------------- 판단
@@ -136,9 +218,17 @@ export function chooseAction(who, {
   const style = typeof who === 'string' ? (STYLES[who] ?? STYLES.matiam) : who;
   const can = (a) => legal.has(a);
 
-  const strength = board.length === 0
+  // 프리플랍은 보통 Chen 공식으로 끝낸다 — 보드가 없으니 시뮬레이션할 게 없고 돌려
+  // 봐야 결과가 거의 같다. **다만 상대가 이미 세게 나온 판은 다르다.** 그때는 상대
+  // 범위를 좁혀 돌려야 그 정보가 값에 들어가므로 프리플랍에도 몬테카를로를 쓴다.
+  // (표본을 줄여 잡는다. 프리플랍은 다섯 장을 다 깔아야 해서 한 표본이 제일 비싸다.)
+  const narrowed = Array.isArray(opponents) && opponents.some((m) => m > 0);
+  const strength = board.length === 0 && !narrowed
     ? preflopScore(hole)
-    : equity(hole, board, opponents, { samples, rand });
+    : equity(hole, board, opponents, {
+      samples: samples ?? (board.length === 0 ? 250 : 400),
+      rand,
+    });
 
   // 팟 오즈 — 콜에 드는 돈이 콜한 뒤 팟에서 차지하는 비율.
   const odds = toCall > 0 ? toCall / (pot + toCall) : 0;
@@ -171,4 +261,4 @@ export function chooseAction(who, {
   return can('check') ? out('check') : out('call');
 }
 
-export default { STYLES, preflopScore, equity, chooseAction };
+export default { STYLES, RANGE, preflopScore, equity, readRange, chooseAction };

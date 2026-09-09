@@ -10,7 +10,7 @@
  * 자기 카드는 `[내 패]` 버튼이 나만 보이는 메시지로 보여 준다(commands/holdem.js).
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import { handText } from '../casino/cards.js';
+import { handText, isJumboable } from '../casino/cards.js';
 import { describe } from '../casino/poker.js';
 import { SMALL_BLIND, BIG_BLIND, MAX_SEATS } from './rules.js';
 import {
@@ -232,16 +232,30 @@ export function boardRows(game) {
   return [row];
 }
 
-/** `[내 패]` 로 그 사람에게만 보내는 것. */
-export function holeEmbed(game, seat) {
-  const lines = [`　${handText(seat.hole)}`];
+/**
+ * `[내 패]` 로 그 사람에게만 보내는 것.
+ *
+ * **이모지만 있는 메시지여야 디스코드가 카드를 크게 그린다.** 글자가 하나라도 섞이거나
+ * 임베드 안에 들어가면 무조건 글자 크기로 쪼그라든다. 그래서 이모지가 올라가 있으면
+ * 임베드를 버리고 카드만 보낸다 — 칩·팟은 어차피 판에 있고, 본인이 누른 것이라
+ * 무슨 메시지인지 설명할 필요도 없다.
+ *
+ * 이모지가 없을 때(부팅 때 못 찾았을 때)는 어차피 글자라 커질 수가 없으므로 임베드로 간다.
+ */
+export function holeMessage(game, seat) {
+  const cards = handText(seat.hole);
+  if (isJumboable(cards)) return { content: cards };
+
+  const lines = [`　${cards}`];
   if (game.board.length) lines.push('', '**보드**', `　${handText(game.board)}`);
-  return base({
-    title: `${seat.name}의 패`,
-    description: lines.join('\n'),
-    color: seat.color,
-    footer: `칩 ${seat.chips} · 이번 라운드 ${seat.bet} · 팟 ${pot(game)}`,
-  });
+  return {
+    embeds: [base({
+      title: `${seat.name}의 패`,
+      description: lines.join('\n'),
+      color: seat.color,
+      footer: `칩 ${seat.chips} · 이번 라운드 ${seat.bet} · 팟 ${pot(game)}`,
+    })],
+  };
 }
 
 // ---------------------------------------------------------------- 끝
@@ -258,6 +272,20 @@ export function resultEmbed(game) {
   });
 }
 
+/**
+ * 차례인 사람을 부르는 한 줄. 판 메시지의 content 로 같이 나간다.
+ *
+ * 따로 메시지를 보내면 판이 또 밀리므로 **판에 얹는다.** 새 메시지로 나갈 때만 알림이
+ * 울리므로(제자리 수정은 안 울린다), 부르는 효과는 repost 하는 자리에서만 생긴다.
+ */
+export function turnCall(game) {
+  if (!['preflop', 'flop', 'turn', 'river'].includes(game.phase)) return null;
+  const seat = currentSeat(game);
+  if (!seat || seat.kind !== 'human' || !seat.userId) return null;
+  const need = toCallFor(game, seat);
+  return `<@${seat.userId}> 차례예요 — ${need > 0 ? `${need} 맞추거나 접거나` : '체크할 수 있어요'}`;
+}
+
 export default {
-  PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, holeEmbed, resultEmbed,
+  PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, holeMessage, turnCall, resultEmbed,
 };

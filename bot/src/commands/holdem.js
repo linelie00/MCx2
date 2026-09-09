@@ -21,9 +21,9 @@ import { chooseAction } from '../holdem/ai.js';
 import { live } from '../holdem/rules.js';
 import { load, commit } from '../casino/wallet.js';
 import {
-  PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, holeEmbed, resultEmbed,
+  PREFIX, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, holeMessage, turnCall, resultEmbed,
 } from '../holdem/render.js';
-import { handText } from '../casino/cards.js';
+import { handText, isJumboable } from '../casino/cards.js';
 import { line, sometimes, memo, handName } from '../holdem/lines.js';
 import * as casinoTalk from '../ai/casinoTalk.js';
 import { sayAsOrPlain } from '../discord/webhook.js';
@@ -45,9 +45,16 @@ function payloadFor(game) {
       components: [],
     };
   }
-  return game.phase === 'lobby'
-    ? { embeds: [lobbyEmbed(game)], components: lobbyRows(game) }
-    : { embeds: [boardEmbed(game)], components: boardRows(game) };
+  if (game.phase === 'lobby') {
+    return { embeds: [lobbyEmbed(game)], components: lobbyRows(game) };
+  }
+  // 차례인 사람을 판 위에 같이 부른다. 따로 보내면 판이 또 밀린다.
+  const call = turnCall(game);
+  return {
+    ...(call ? { content: call } : { content: '' }),
+    embeds: [boardEmbed(game)],
+    components: boardRows(game),
+  };
 }
 
 async function draw(game) {
@@ -69,14 +76,26 @@ async function repost(game) {
   if (!fresh) { await draw(game); return; }
 
   game.message = fresh;
+  game.boardBottom = true;
   await old.edit({ components: [] }).catch(() => {});
 }
 
-/** 커뮤니티 카드가 깔렸을 때만 채팅에 남긴다. 액션마다 남기면 판이 묻힌다. */
+/**
+ * 커뮤니티 카드가 깔렸을 때만 채팅에 남긴다. 액션마다 남기면 판이 묻힌다.
+ *
+ * **이모지만 보내면 디스코드가 크게 그린다.** 그래서 "플랍" 같은 이름표를 붙이지
+ * 않는다 — 글자가 하나라도 섞이면 카드가 글자 크기로 쪼그라든다. 어느 스트리트인지는
+ * 바로 아래 판의 제목에 있으므로 여기서 또 적을 이유가 없다.
+ *
+ * (블랙잭에서는 반대로 골랐다. 거기서는 카드가 누구 것인지 알 수 없어서 이름을 붙이는
+ * 대신 작아지는 쪽을 택했는데, 홀덤의 보드는 모두가 함께 쓰는 것이라 헷갈릴 일이 없다.)
+ */
 async function showBoard(game, label) {
   if (!game.message?.channel) return;
-  await game.message.channel
-    .send({ content: `**${label}**\n${handText(game.board)}` })
+  const cards = handText(game.board);
+  const content = isJumboable(cards) ? cards : `**${label}**\n${cards}`;
+  game.boardBottom = false;
+  await game.message.channel.send({ content })
     .catch((err) => console.warn('[홀덤] 보드 알림 실패:', err.message));
   await repost(game);
 }
@@ -120,6 +139,7 @@ async function say(game, character, key, vars = {}, { always = false, p, live: l
   if (!text) text = line(key, vars);
   if (!text) return false;
 
+  game.boardBottom = false;                 // 판이 대사에 밀렸다
   await sayAsOrPlain(game.message.channel, character, text, '홀덤');
   await sleep(700);
   return true;
@@ -181,7 +201,20 @@ async function runDriver(game) {
 
       const seat = state.currentSeat(game);
       if (!seat) { await draw(game); return; }
-      if (seat.kind !== 'npc') { await draw(game); return; }   // 사람 차례 — 물러난다
+
+      // 사람 차례면 물러난다. 그 전에 **판이 밀려났으면 아래에 다시 띄우고 이름을 부른다** —
+      // 대사와 카드에 밀려 판이 위로 올라가면 자기 차례인 줄 모르고 기다리게 된다.
+      // 알림은 새 메시지로 나갈 때만 울리므로 부르는 효과도 여기서만 생긴다.
+      //
+      // 이미 맨 아래에 있으면 제자리에서 고치기만 한다. 안 그러면 스트리트가 바뀔 때
+      // showBoard 가 띄운 판 바로 밑에 또 하나가 붙어 판이 겹친다.
+      if (seat.kind !== 'npc') {
+        const mark = `${game.handNo}:${game.phase}:${game.turn}`;
+        if (game.boardBottom || game.turnCalled === mark) { await draw(game); return; }
+        game.turnCalled = mark;
+        await repost(game);
+        return;
+      }
 
       await sleep(900);
       if (game.phase === 'done') return;
@@ -360,10 +393,7 @@ async function component(interaction) {
     const seat = state.seatOf(game, interaction.user.id);
     if (!seat) { await deny(interaction, '이 판에 앉아 있지 않아요.'); return; }
     if (!seat.hole.length) { await deny(interaction, '아직 카드를 안 받았어요.'); return; }
-    await interaction.reply({
-      embeds: [holeEmbed(game, seat)],
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply({ ...holeMessage(game, seat), flags: MessageFlags.Ephemeral });
     return;
   }
 

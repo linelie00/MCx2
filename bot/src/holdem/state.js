@@ -89,6 +89,8 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     aiHandNo: 0,
     aiLeft: 0,
     raising: false,     // 레이즈 금액을 고르는 중인지 (화면 상태)
+    turnCalled: null,   // 이 차례를 이미 불렀는지 (핸드:스트리트:자리)
+    boardBottom: false, // 판이 지금 맨 아래에 있는지 — 겹쳐 띄우지 않으려고
     driving: false,
     rekick: false,
     closed: false,

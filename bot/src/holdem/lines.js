@@ -4,9 +4,11 @@
  * 블랙잭의 lines.js 와 같은 구조다. Gemini 로 먼저 지어 보고 안 되면 여기서 고른다.
  *
  * **다만 메모를 만드는 방식이 다르다.** 블랙잭의 `table()` 은 모든 자리의 카드를 그대로
- * 적어 모델에 넘긴다 — 판이 전부 공개라 그래도 됐다. 홀덤에서 그대로 하면 **NPC 가
- * 남의 홀 카드를 말한다.** 그래서 메모는 **화자별로** 만든다: 보드와 모두의 칩·베팅은
- * 그대로 적되, 홀 카드는 **말하는 사람 것만** 적는다.
+ * 적어 모델에 넘긴다 — 판이 전부 공개라 그래도 됐다. 홀덤에서 그대로 하면 NPC 가
+ * 남의 홀 카드를 말한다.
+ *
+ * 그래서 **쇼다운 전에는 어느 카드도 메모에 안 넣는다 — 말하는 사람 자기 것까지.**
+ * 자기 것은 줘도 된다고 봤다가 미겔이 자기 패를 흘리는 걸 보고 바꿨다(table 참고).
  *
  * 판을 그리는 쪽(render.js)과 여기, 그리고 쇼다운 — 홀 카드가 샐 수 있는 자리가 셋이고
  * 여기가 제일 놓치기 쉽다. 화면에는 안 보이는데 모델에게만 새기 때문이다.
@@ -15,7 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pickRandom } from '../pickOfDay.js';
-import { describe } from '../casino/poker.js';
+import { describe, best5 } from '../casino/poker.js';
 
 const FILE = path.join(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', 'holdem-lines.json',
@@ -92,13 +94,27 @@ const BANTER = {
   fold: (v) => `옆자리 ${v.name}이(가) 접었다. 지금 내 차례가 아니고 나는 아무 수도 두지 않는다.`,
 };
 
+/** 카드를 밝히지 않고 손이 얼마나 센지만. 성격을 실을 만큼은 되고 스포는 안 된다. */
+const FEEL = {
+  straightFlush: '아주 좋다', quads: '아주 좋다', fullHouse: '아주 좋다',
+  flush: '아주 좋다', straight: '아주 좋다',
+  trips: '좋다', twoPair: '좋다',
+  pair: '그저 그렇다', high: '별로다',
+};
+
 /**
- * 지금 판이 어떻게 생겼는지. **말하는 사람의 홀 카드만** 적는다.
+ * 지금 판이 어떻게 생겼는지.
  *
- * 남의 두 장은 여기 절대 들어가면 안 된다. 화면에는 안 보이는데 모델에게만 새는 길이라
- * 눈으로는 못 잡는다.
+ * 남의 두 장은 여기 절대 안 들어간다. 화면에는 안 보이는데 모델에게만 새는 길이다.
+ *
+ * **쇼다운 전에는 말하는 사람 자기 카드도 안 준다.** 처음에는 자기 것은 줘도 된다고
+ * 봤는데, 미겔이 "손에 쥔 10의 쌍을 톡톡 두드리며" 하고 자기 패를 흘렸다. 프롬프트에
+ * "밝히지 마라" 를 적어 두는 것만으로는 안 막힌다 — **모르는 것은 흘릴 수가 없으므로**
+ * 아예 안 준다. 대신 얼마나 센지만 한마디로 준다. 그 정도면 신나거나 시무룩한 티는
+ * 낼 수 있고, 어떤 카드인지는 여전히 아무도 모른다.
  */
 function table(game, speaker) {
+  const open = game.phase === 'showdown' || game.phase === 'settled';
   const rows = [`판: ${STREET[game.phase] ?? game.phase} · 팟 ${game.seats.reduce((a, s) => a + s.committed, 0)}`];
   if (game.board.length) rows.push(`보드: ${plainHand(game.board)}`);
 
@@ -110,10 +126,20 @@ function table(game, speaker) {
       s.allIn ? '올인' : null,
       s.bet ? `이번 ${s.bet}` : null,
     ].filter(Boolean).join(' · ');
-    rows.push(`${s.name}: 칩 ${s.chips}${tag ? ` · ${tag}` : ''}`
-      + (me ? ` · 내 패 ${plainHand(s.hole)} ← 나` : ''));
+
+    let mine = '';
+    if (me && s.hole.length) {
+      mine = open
+        ? ` · 내 패 ${plainHand(s.hole)} ← 나`
+        : ` · 내 손 느낌: ${FEEL[best5([...s.hole, ...game.board]).category]} ← 나`;
+    }
+    rows.push(`${s.name}: 칩 ${s.chips}${tag ? ` · ${tag}` : ''}${mine}`);
   }
-  rows.push('※ 남의 두 장은 아무도 모른다. 아는 것처럼 말하지 않는다.');
+
+  rows.push(open
+    ? '※ 카드를 깐 뒤다. 이제는 말해도 된다.'
+    : '※ **아직 아무도 카드를 안 깠다.** 내가 무슨 카드를 들고 있는지 말하거나 암시하지'
+      + ' 않는다. 손에 쥔 것을 묘사하지도 않는다. 셀 때 신난 티, 나쁠 때 시무룩한 티만 낸다.');
   return ['## 판', ...rows].join('\n');
 }
 

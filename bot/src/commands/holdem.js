@@ -44,6 +44,7 @@ import {
 import * as casinoTalk from '../ai/casinoTalk.js';
 import { sayAsOrPlain } from '../discord/webhook.js';
 import { base, fail, THEME_COLOR } from '../embeds.js';
+import { ack, quiet } from '../discord/ack.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
@@ -81,14 +82,14 @@ const chatterOdds = (game) => Math.min(0.34, 1.2 / game.seats.length);
 
 /** 자기만 보이는 거절. 판을 건드리지 않는다. */
 const deny = (interaction, text) =>
-  interaction.reply({ embeds: [fail(text)], flags: MessageFlags.Ephemeral });
+  quiet(interaction.reply({ embeds: [fail(text)], flags: MessageFlags.Ephemeral }));
 
 /**
  * ack 를 이미 보낸 뒤의 거절. `deny` 는 reply 라서 그 자리에서는 못 쓴다 —
  * 한 인터랙션에 응답은 한 번뿐이다.
  */
 const denyLate = (interaction, text) =>
-  interaction.followUp({ embeds: [fail(text)], flags: MessageFlags.Ephemeral });
+  quiet(interaction.followUp({ embeds: [fail(text)], flags: MessageFlags.Ephemeral }));
 
 // ---------------------------------------------------------------- 그리기
 
@@ -905,6 +906,10 @@ async function execute(interaction) {
   if (sub === '판') {
     if (!liveGame) { await deny(interaction, '진행 중인 판이 없어요.'); return; }
     await repost(liveGame);
+    // **멈춘 판을 되살리는 손잡이이기도 하다.** 클릭이 3초 시한을 넘겨 사라지면
+    // (10062) 그 자리에서 드라이버가 안 돌아 NPC 차례에서 판이 굳는다. 다시 띄우면서
+    // 한 번 걷어차 준다 — 이미 돌고 있으면 `kick` 이 알아서 돌아간다.
+    kick(liveGame);
     await interaction.reply({
       embeds: [base({ description: `판을 다시 띄웠어요. <#${liveGame.channelId}>` })],
       flags: MessageFlags.Ephemeral,
@@ -954,7 +959,7 @@ async function component(interaction) {
   }
 
   if (Number(rev) !== game.rev) {
-    await interaction.deferUpdate();
+    await ack(interaction, '홀덤');
     await draw(game);
     return;
   }
@@ -964,7 +969,7 @@ async function component(interaction) {
   const refused = await handler(interaction, game, action, arg);
   if (refused) return;
 
-  await interaction.deferUpdate();
+  await ack(interaction, '홀덤');
   await draw(game);
   kick(game);
 }
@@ -1010,7 +1015,7 @@ async function handleLobby(interaction, game, action, arg) {
     // **먼저 응답을 잡는다.** load 는 HTTP 라 콜드 스타트 한 번이면 3초를 넘기고,
     // 그러면 클릭이 통째로 날아간다(10062). 상수를 돌려주던 동안에는 안 보이던 함정이다.
     // 여기서부터는 이 가지가 draw·kick 까지 직접 책임진다(true 를 주면 뒤가 안 돈다).
-    await interaction.deferUpdate();
+    await ack(interaction, '홀덤');
 
     // 참가와 시작 **사이에** 다른 판이 열릴 수 있다. 여기서 한 번 더 본다.
     for (const s of game.seats) {

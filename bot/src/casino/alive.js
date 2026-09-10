@@ -20,6 +20,15 @@ import { MAX_HP } from './items.js';
 /** 살아 있는지 캐시해 두는 시간. */
 const TTL = 30_000;
 
+/**
+ * 캐시가 비었을 때 서버를 기다려 주는 시간. **넘으면 살아 있는 것으로 보고 지나간다.**
+ *
+ * 3초 시한 중 여기에 쓸 수 있는 몫이다. 사이트가 잠들었다 깨는 동안(Railway 는 실제로
+ * 몇 초씩 걸린다) 클릭을 통째로 잃느니, 이 검사를 한 번 건너뛰는 편이 낫다 —
+ * 애초에 편의지 불변식이 아니다(머리말).
+ */
+const WAIT_MS = 800;
+
 const seen = new Map();          // id → { at, dead }
 
 /** 그 계정이 쓰러졌는지. 계정을 이미 읽었으면 이걸 그냥 쓴다. */
@@ -39,15 +48,26 @@ export function remember(id, account) {
 async function deadNow(id) {
   const hit = seen.get(id);
   if (hit && Date.now() - hit.at < TTL) return hit.dead;
+
+  // 계정을 못 읽었다고 멀쩡한 사람을 막지는 않는다. 사이트가 죽으면 판이 안 열리는
+  // 것으로 이미 충분히 막힌다(wallet.load 가 던진다).
+  const look = getAccounts([id])
+    .then(({ accounts }) => {
+      const dead = isDead(accounts?.[id]);
+      seen.set(id, { at: Date.now(), dead });
+      return dead;
+    })
+    .catch(() => false);
+
+  // **오래 기다리지 않는다.** 이 검사는 인터랙션 3초 시한 안에 있고, 여기서 시한을
+  // 다 쓰면 사람이 누른 것이 통째로 사라진다(10062) — 실제로 홀덤 판이 그렇게 멈췄다.
+  // 늦게 온 답도 버리지 않고 캐시에 넣으므로 다음 클릭이 제대로 걸린다.
+  let timer;
+  const giveUp = new Promise((r) => { timer = setTimeout(() => r(false), WAIT_MS); });
   try {
-    const { accounts } = await getAccounts([id]);
-    const dead = isDead(accounts?.[id]);
-    seen.set(id, { at: Date.now(), dead });
-    return dead;
-  } catch {
-    // 계정을 못 읽었다고 멀쩡한 사람을 막지는 않는다. 사이트가 죽으면 판이 안 열리는
-    // 것으로 이미 충분히 막힌다(wallet.load 가 던진다).
-    return false;
+    return await Promise.race([look, giveUp]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -23,6 +23,7 @@ import {
   PREFIX, faces, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 } from '../yacht/render.js';
 import { base, fail, THEME_COLOR } from '../embeds.js';
+import { ack } from '../discord/ack.js';
 import { apply } from '../casino/wallet.js';
 import { NPC_ID } from '../casino/accounts.js';
 
@@ -455,7 +456,7 @@ async function component(interaction) {
 
   // 지나간 클릭(대개 더블클릭). 오류가 아니라 현재 상태를 다시 보여주는 게 맞다.
   if (Number(rev) !== game.rev) {
-    await interaction.deferUpdate();
+    await ack(interaction, '요트');
     await draw(game);
     return;
   }
@@ -468,7 +469,7 @@ async function component(interaction) {
     if (refusal) return;
   }
 
-  await interaction.deferUpdate();
+  await ack(interaction, '요트');
   await draw(game);
 
   // **사람이 마지막 칸을 채운 판은 kickNpc 가 바로 돌아가서 드라이버에 안 닿는다.**

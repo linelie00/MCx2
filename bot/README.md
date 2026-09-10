@@ -168,6 +168,7 @@ DAS, 레이트 서렌더, 딜러 피크, 베팅은 50의 배수.
 ```bash
 cd bot && npm run check-load     # 모든 명령이 실제로 링크되는지 (부팅 전에 한 번)
 cd bot && npm run check-wallet    # 장부 ↔ 서버가 어긋나지 않는지
+cd bot && npm run check-ack       # 시한을 넘긴 클릭이 판을 멈추지 않는지
 cd bot && npm run check-dungeon   # 던전·토너먼트가 무엇을 저장하는지
 cd bot && npm run check-items     # 아이템 명부와 /아이템 화면
 ```

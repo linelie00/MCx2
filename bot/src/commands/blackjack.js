@@ -34,6 +34,7 @@ import {
 import * as casinoTalk from '../ai/casinoTalk.js';
 import { sayAsOrPlain } from '../discord/webhook.js';
 import { base, fail } from '../embeds.js';
+import { ack } from '../discord/ack.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
@@ -772,7 +773,7 @@ async function component(interaction) {
   }
 
   if (Number(rev) !== game.rev) {
-    await interaction.deferUpdate();
+    await ack(interaction, '블랙잭');
     await draw(game);
     return;
   }
@@ -790,7 +791,7 @@ async function component(interaction) {
   const refused = await handler(interaction, game, action, arg);
   if (refused) return;
 
-  await interaction.deferUpdate();
+  await ack(interaction, '블랙잭');
   await draw(game);
 
   // 알림은 판을 그린 뒤에. 상태 변경 자리에서 보내면 응답이 그만큼 늦어진다.
@@ -835,7 +836,7 @@ async function handleLobby(interaction, game, action, arg) {
     // **먼저 응답을 잡는다.** load 는 HTTP 라 콜드 스타트 한 번이면 3초를 넘기고,
     // 그러면 클릭이 통째로 날아간다(10062). 상수를 돌려주던 동안에는 안 보이던 함정이다.
     // 여기서부터는 이 가지가 draw·kick 까지 직접 책임진다(true 를 주면 뒤가 안 돈다).
-    await interaction.deferUpdate();
+    await ack(interaction, '블랙잭');
 
     // 참가와 시작 **사이에** 다른 판이 열릴 수 있다. 여기서 한 번 더 본다.
     for (const s of game.seats) {

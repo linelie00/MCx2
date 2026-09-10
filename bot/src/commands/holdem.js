@@ -26,7 +26,7 @@ import { ITEM_BY_KEY } from '../casino/items.js';
 import { forget, deadEmbed } from '../casino/alive.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor, DUNGEON } from '../casino/stakes.js';
-import { drawMobs } from '../holdem/mobs.js';
+import { drawMobs, drawEnemy, hpOf } from '../holdem/mobs.js';
 import {
   PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
   holeMessage, turnCall, resultEmbed, unitLabel,
@@ -61,8 +61,7 @@ const TOURNEY_MS = 90 * 60 * 1000;
 /** 던전에 들어갈 수 있는 최소 체력. 20으로 들어가 봐야 한 핸드에 끝난다. */
 const DUNGEON_FLOOR = 30;
 
-/** 모브 체력. 자주 마주친 놈일수록 두껍다. */
-const mobHp = (mob) => Math.max(60, Math.min(120, 60 + (mob.seen ?? 1) * 10));
+
 
 /**
  * NPC·모브가 수를 두기 전에 쉬는 시간.
@@ -688,7 +687,8 @@ async function openDungeon(interaction) {
 
   const who = interaction.member?.displayName
     || interaction.user.globalName || interaction.user.username;
-  const mob = drawMobs(1)[0];
+  // 다섯에 한 번은 엘리트. 나머지는 일반 에너미라 훨씬 수월하다.
+  const mob = drawEnemy();
 
   await interaction.editReply({
     embeds: [base({ description: `던전으로 내려갑니다 — ${who}` })],
@@ -719,7 +719,7 @@ async function openDungeon(interaction) {
 
   state.addSeat(game, state.humanSeat(interaction.user, interaction.member?.displayName));
   const enemy = state.mobSeat(mob, 0, DUNGEON);
-  enemy.buyIn = mobHp(mob);
+  enemy.buyIn = hpOf(mob);
   state.addSeat(game, enemy);
 
   await room.send({ embeds: [dungeonHowto(game, mob, hp)] })
@@ -748,12 +748,12 @@ async function openDungeon(interaction) {
 
 /** 던전 안내. 규칙이 현금 판과 달라서 따로 쓴다. */
 const dungeonHowto = (game, mob, hp) => base({
-  title: `⚔️ ${mob.name}`,
+  title: `${mob.elite ? '⚔️ 엘리트 · ' : '⚔️ '}${mob.name}`,
   description: [
     `_${mob.note}_`,
     '',
     '**여기서 거는 것은 골드가 아니라 체력입니다.**',
-    `앉은 체력이 곧 스택이에요 — 그쪽 **${hp}**, ${mob.name} **${mobHp(mob)}**.`,
+    `앉은 체력이 곧 스택이에요 — 그쪽 **${hp}**, ${mob.name} **${hpOf(mob)}**.`,
     '한쪽이 0 이 되면 끝나고, **0 이 된 쪽은 쓰러집니다.**',
     '',
     '핸드가 끝날 때마다 **[다음 핸드]** 로 이어가거나 **[도망]** 으로 물러날 수 있어요.',
@@ -764,8 +764,9 @@ const dungeonHowto = (game, mob, hp) => base({
     '',
     `이기면 잡화를 **${LOOT_LEAST}~${LOOT_MOST}개** 주워 옵니다.`,
   ].join('\n'),
-  color: THEME_COLOR,
-  footer: `블라인드 ${game.stakes.sb}/${game.stakes.bb} · 10분 동안 아무도 안 누르면 저절로 닫혀요`,
+  color: mob.elite ? 0xc9a227 : THEME_COLOR,
+  footer: `${mob.elite ? '엘리트 에너미' : '일반 에너미'}`
+    + ` · 블라인드 ${game.stakes.sb}/${game.stakes.bb} · 10분 동안 아무도 안 누르면 저절로 닫혀요`,
 });
 
 // ---------------------------------------------------------------- 명령

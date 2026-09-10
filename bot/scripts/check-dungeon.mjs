@@ -21,6 +21,7 @@ import { ledger } from '../src/casino/wallet.js';
 import { DUNGEON, STAKES, atLevel } from '../src/casino/stakes.js';
 import { MAX_HP } from '../src/casino/items.js';
 import { POOL, roll, LEAST, MOST } from '../src/casino/loot.js';
+import { MOBS, NORMALS, drawEnemy, hpOf, ELITE_CHANCE } from '../src/holdem/mobs.js';
 
 const ROUNDS = Number(process.argv[2]) || 120;
 
@@ -185,6 +186,43 @@ check('서버가 자른 뒤에도 장부가 안 어긋난다', () => {
     assert.equal(server.bal.hp[me], seat.gold);
     assert.ok(seat.gold >= 0 && seat.gold <= MAX_HP, `체력이 범위를 벗어났다: ${seat.gold}`);
   }
+});
+
+console.log('\n에너미');
+check('일반이 엘리트보다 약하다', () => {
+  const eliteHp = MOBS.map((m) => hpOf({ ...m, elite: true }));
+  const normalHp = NORMALS.map((m) => hpOf({ ...m, elite: false }));
+  assert.ok(Math.max(...normalHp) < Math.min(...eliteHp),
+    `일반 최대 ${Math.max(...normalHp)} vs 엘리트 최소 ${Math.min(...eliteHp)}`);
+  // 넓게 볼수록 승산 없는 콜을 한다(ai.js 의 edge). 그게 약함의 실체다.
+  const eliteLoose = MOBS.reduce((a2, m) => a2 + m.loose, 0) / MOBS.length;
+  const normalLoose = NORMALS.reduce((a2, m) => a2 + m.loose, 0) / NORMALS.length;
+  assert.ok(normalLoose > eliteLoose + 0.1, `일반 ${normalLoose.toFixed(2)} vs 엘리트 ${eliteLoose.toFixed(2)}`);
+});
+check('모양이 성하다', () => {
+  for (const m of NORMALS) {
+    assert.ok(m.name && m.note, `${m.name}: 이름이나 소개가 빈다`);
+    assert.ok(Number.isInteger(m.seen) && m.seen > 0, `${m.name}: 처치 수가 이상하다`);
+    for (const k of ['loose', 'bluff', 'raise']) {
+      assert.ok(Number.isFinite(m[k]), `${m.name}.${k} 가 숫자가 아니다`);
+    }
+    assert.ok(m.bluff >= 0 && m.bluff <= 0.35, `${m.name}.bluff ${m.bluff}`);
+    assert.ok(m.raise >= 0.2 && m.raise <= 0.8, `${m.name}.raise ${m.raise}`);
+  }
+  assert.equal(new Set(NORMALS.map((m) => m.name)).size, NORMALS.length, '이름이 겹친다');
+});
+check('다섯에 한 번쯤 엘리트가 나온다', () => {
+  let elite = 0;
+  for (let i = 0; i < 40_000; i += 1) if (drawEnemy().elite) elite += 1;
+  const rate = elite / 40_000;
+  assert.ok(Math.abs(rate - ELITE_CHANCE) < 0.02, `${(rate * 100).toFixed(1)}% 가 나왔다`);
+});
+check('두 통을 따로 뽑는다', () => {
+  // 한 통에 넣고 뽑으면 수가 많은 쪽(일반 40종)이 등급 확률을 삼킨다.
+  const names = new Set();
+  for (let i = 0; i < 5000; i += 1) names.add(drawEnemy().name);
+  assert.ok(MOBS.some((m) => names.has(m.name)), '엘리트가 한 번도 안 나왔다');
+  assert.ok(NORMALS.some((m) => names.has(m.name)), '일반이 한 번도 안 나왔다');
 });
 
 console.log('\n떨구는 것');

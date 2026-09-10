@@ -210,9 +210,10 @@ function showdownLines(game) {
   if (!shown.length) return [];
   return [
     '**쇼다운**',
-    ...shown.map(({ seatIndex, hand }) => {
+    // 이름과 패는 **정산 때 떠 둔 것**을 쓴다. 자리는 그 뒤에 주인이 바뀔 수 있다.
+    ...shown.map(({ seatIndex, hand, name, hole }) => {
       const s = game.seats[seatIndex];
-      return `　**${s.name}** ${handText(s.hole)}　_${describe(hand)}_`;
+      return `　**${name ?? s?.name}** ${handText(hole ?? s?.hole ?? [])}　_${describe(hand)}_`;
     }),
     '',
   ];
@@ -234,7 +235,7 @@ export function boardEmbed(game) {
       .filter((r) => r.put > 0 || r.won > 0)
       .map((r) => {
         const sign = r.net > 0 ? `+${r.net}` : String(r.net);
-        return `**${r.seat.name}** \`${sign}\``;
+        return `**${r.name ?? r.seat.name}** \`${sign}\``;
       }), '');
   }
 

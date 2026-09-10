@@ -123,6 +123,7 @@ export function create({
     knocked: [],         // 탈락한 순서(먼저 나간 사람이 앞). 토너먼트 등수가 이걸 쓴다
     owner: null,         // 던전 주인. 자리를 갈아 끼우면 seatOf 로는 못 알아본다
     reserves: [],        // 던전에 데려온 지원군 id. 장부에 실려 있고 자리에는 없다
+    stored: null,        // 던전: **서버에 실제로 들어 있는 체력**. 장부는 최대치를 넘길 수 있다
     gold: null,         // 동기 장부(wallet.ledger)
     pendingChat: [],
     startedAt: Date.now(),   // 토너먼트 벽시계 상한이 본다
@@ -224,6 +225,10 @@ export function start(game, balances) {
   // 던전은 같은 장부에 **체력**을 담아 돈다. 무엇을 세는지 장부가 알고 있어야
   // 서버로 잘못 나가는 것을 막을 수 있다(payout.js).
   game.gold = ledger(balances, game.mode === 'dungeon' ? 'hp' : 'gold');
+  // 던전은 **장부가 서버보다 클 수 있다** — 적에게서 뺏은 체력이 최대치를 넘겨도 판
+  // 안에서는 그대로 걸 수 있다. 서버에 무엇이 들어 있는지 따로 들고 있어야 매 핸드
+  // 보낼 몫을 잴 수 있다(holdem/payout.js).
+  if (game.mode === 'dungeon') game.stored = { ...balances };
   for (const s of game.seats) s.gold = game.gold.get(s.id);
   if (game.seats.filter((s) => s.gold >= game.stakes.bb).length < 2) {
     return '빅블라인드를 낼 수 있는 사람이 둘은 있어야 해요.';
@@ -447,11 +452,19 @@ export function settle(game) {
     s.gold = game.gold.get(s.id);
   }
 
+  // **화면에 쓸 것은 여기서 떠 둔다.** 정산 결과는 다음 핸드를 누를 때까지 화면에
+  // 남아 있는데, 그 사이에 던전에서 자리를 갈아 끼울 수 있다(swapFighter). 자리
+  // 객체를 그대로 들고 있으면 **앞 사람이 잃은 몫이 지원군 이름으로 다시 그려진다** —
+  // 지나간 핸드는 그때 싸운 사람을 가리켜야 한다.
   game.results = {
     pots,
-    shown,
+    shown: shown.map((x) => ({
+      ...x,
+      name: game.seats[x.seatIndex]?.name,
+      hole: [...(game.seats[x.seatIndex]?.hole ?? [])],
+    })),
     rows: game.seats.map((s, i) => ({
-      seat: s, net: gain[i] - s.committed, won: gain[i], put: s.committed,
+      seat: s, name: s.name, net: gain[i] - s.committed, won: gain[i], put: s.committed,
     })),
   };
   game.phase = 'settled';

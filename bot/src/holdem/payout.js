@@ -20,6 +20,19 @@
  * 있다). 끝에만 쓰면 지고 있을 때 재배포 한 번으로 그 판이 없던 일이 된다.
  */
 import { apply } from '../casino/wallet.js';
+import { MAX_HP } from '../casino/items.js';
+
+/**
+ * 넘긴 체력을 골드로 바꾸는 값. **체력 1 = 5골드.**
+ *
+ * 넘긴 체력은 적에게서 뺏은 것이고 적은 지갑이 없다 — 즉 여기서 **골드가 새로 생긴다.**
+ * 그래서 값을 짜게 잡았다. 100 에서 시작해 체력 60 짜리를 통째로 뺏어도 300골드로,
+ * 던전이 떨구는 골드(20~500)와 비슷한 자리에 머문다.
+ */
+export const OVER_RATE = 5;
+
+/** 최대치를 넘긴 몫. **판 안에만 있는 숫자다** — 서버는 이걸 모른다. */
+export const overOf = (game, id) => Math.max(0, game.gold.get(id) - MAX_HP);
 
 /** 장부가 세고 있는 것이 맞는지. 아니면 크게 터뜨린다. */
 function expect(game, unit) {
@@ -51,24 +64,77 @@ export async function hand(game, stats = {}) {
 /**
  * 던전 한 핸드. 체력만 쓴다.
  *
- * **응답으로 장부를 맞춘다.** 서버가 체력을 0~최대치로 자르므로, 봇이 −30 을 보냈는데
- * 서버가 20에서 0으로 잘랐다면 장부는 −10 을 더 믿는다. 그대로 `rebase()` 하면 그
- * −10 이 굳어 눈덩이가 된다.
+ * **서버는 체력을 최대치에서 자른다.** 그래서 장부의 증감을 그대로 보내면 넘긴 몫이
+ * 잘려 나가고, 응답으로 장부를 맞추는 순간 **판 안의 스택까지 100 으로 끌려 내려온다** —
+ * 애써 뺏은 체력이 핸드마다 사라진다.
+ *
+ * 그래서 **보내는 것은 최대치까지만**이고, 넘긴 몫은 판 안에만 둔다. 그 몫은 그대로
+ * 다시 걸 수 있고, 나갈 때(끝·도망·교체) `cashOverflow` 가 골드로 바꿔 준다.
+ *
+ * 보낼 몫은 **서버에 들어 있는 값과 견줘서** 잰다(`game.stored`). 그래야 목표가 늘
+ * 0~최대치 안이라 서버가 자를 일이 아예 없다 — 자르지 않으면 어긋날 일도 없다.
  */
 async function dungeonHand(game) {
   expect(game, 'hp');
 
-  const saved = await apply({ hp: game.gold.deltas() });
+  const stored = (game.stored ??= {});
+  const want = game.gold.snapshot();
+  const hp = {};
+  for (const [id, n] of Object.entries(want)) {
+    if (id.startsWith('mob:')) continue;
+    // 처음 보는 id 는 지금 값을 기준으로 삼는다. 기준 없이 보내면 남의 체력을 밀어낸다.
+    if (stored[id] === undefined) { stored[id] = Math.min(n, MAX_HP); continue; }
+    const d = Math.min(n, MAX_HP) - stored[id];
+    if (d) hp[id] = d;
+  }
+  if (!Object.keys(hp).length) return { ok: true, accounts: {} };
+
+  const saved = await apply({ hp });
   if (!saved.ok) return saved;
 
+  for (const id of Object.keys(want)) {
+    const got = saved.accounts[id]?.hp;
+    if (got === undefined) continue;
+    stored[id] = got;
+    // 넘긴 몫은 서버가 모르니 응답 위에 그대로 얹는다.
+    game.gold.reconcile(id, got + Math.max(0, want[id] - MAX_HP));
+  }
   for (const seat of game.seats) {
-    const hp = saved.accounts[seat.id]?.hp;
-    if (hp === undefined) continue;
-    game.gold.reconcile(seat.id, hp);
-    seat.gold = hp;
+    if (seat.kind === 'mob') continue;
+    seat.gold = game.gold.get(seat.id);
   }
   game.gold.rebase();
   return saved;
+}
+
+/**
+ * 넘긴 체력을 골드로 바꾼다. **끝·도망·교체 — 판에서 나가는 순간에만.**
+ *
+ * 서버의 체력은 이미 최대치에 멈춰 있으므로 체력 쓰기는 없다. 골드만 넣고 장부를
+ * 최대치로 내린다. `{ ok, gold: { id: 골드 }, rate }`.
+ */
+export async function cashOverflow(game, ids) {
+  expect(game, 'hp');
+
+  const list = ids ?? Object.keys(game.gold.snapshot());
+  const gold = {};
+  for (const id of list) {
+    if (id.startsWith('mob:')) continue;
+    const over = overOf(game, id);
+    if (over > 0) gold[id] = over * OVER_RATE;
+  }
+  if (!Object.keys(gold).length) return { ok: true, gold: {}, rate: OVER_RATE };
+
+  const saved = await apply({ deltas: gold });
+  if (!saved.ok) return { ok: false, gold, rate: OVER_RATE };
+
+  for (const id of Object.keys(gold)) {
+    game.gold.reconcile(id, MAX_HP);
+    const seat = game.seats.find((s) => s.id === id);
+    if (seat) seat.gold = MAX_HP;
+  }
+  game.gold.rebase();
+  return { ok: true, gold, rate: OVER_RATE, accounts: saved.accounts };
 }
 
 /**
@@ -105,4 +171,4 @@ export const dungeonWon = (id, drops) => apply({
 /** 던전에서 졌다. 체력은 이미 저장돼 있으므로 전적만. */
 export const dungeonLost = (id) => apply({ bump: { [id]: { dungeonLost: 1 } } });
 
-export default { hand, finishTourney, dungeonWon, dungeonLost };
+export default { hand, finishTourney, dungeonWon, dungeonLost, cashOverflow, overOf, OVER_RATE };

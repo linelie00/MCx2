@@ -9,15 +9,17 @@
  *
  *   1. 던전이 **골드를 한 푼이라도 건드리는 것** — 장부에 체력이 들었으므로 그대로
  *      나가면 체력 100 이 골드 100 으로 저장된다
- *   2. 체력 총합이 안 맞는 것 (사람 + 모브). 다만 **천장을 넘긴 몫은 버려진다** —
- *      싸워서 최대치 위로 회복할 수는 없다는 뜻이고 그게 의도다
- *   3. 서버가 체력을 자른 뒤 장부가 어긋난 채로 리베이스되는 것 (눈덩이가 된다)
+ *   2. 체력 총합이 안 맞는 것 (사람 + 모브). **넘긴 몫도 센다** — 최대치를 넘겨 뺏은
+ *      체력은 판 안에 그대로 남아 다시 걸 수 있고, 나갈 때 골드가 된다
+ *   3. 서버에 최대치를 넘겨 보내는 것 (잘리고, 그 자리에서 넘긴 몫이 사라진다)
  *   4. 토너먼트가 한 명이 남기 전에 멈추거나 영영 안 끝나는 것
  *   5. 토너먼트 상금 총합이 안 맞는 것 (골드가 생기거나 사라진다)
  */
 import assert from 'node:assert/strict';
 import * as hold from '../src/holdem/state.js';
 import { ledger } from '../src/casino/wallet.js';
+import { overOf, OVER_RATE } from '../src/holdem/payout.js';
+import { boardEmbed } from '../src/holdem/render.js';
 import { DUNGEON, STAKES, atLevel } from '../src/casino/stakes.js';
 import { MAX_HP } from '../src/casino/items.js';
 import { POOL, TIER, roll, listText } from '../src/casino/loot.js';
@@ -108,16 +110,23 @@ function runDungeon(channelId, startHp, mobHp) {
     if (!playHand(game)) break;
     hands += 1;
 
-    // payout.dungeonHand 이 하는 일 그대로 — 체력만 보내고, 응답으로 장부를 맞춘 뒤 리베이스.
-    const sent = game.gold.deltas();
-    for (const id of Object.keys(sent)) {
-      if (id.startsWith('mob:')) delete sent[id];
+    // payout.dungeonHand 이 하는 일 그대로 — **서버에는 최대치까지만** 보내고,
+    // 넘긴 몫은 판 안에 남겨 둔다. 보낼 몫은 서버에 들어 있는 값과 견줘서 잰다.
+    const want = game.gold.snapshot();
+    const hp = {};
+    for (const [id, n] of Object.entries(want)) {
+      if (id.startsWith('mob:')) continue;
+      const d = Math.min(n, MAX_HP) - game.stored[id];
+      if (d) hp[id] = d;
     }
-    server.apply({ hp: sent });
+    server.apply({ hp });
+    for (const id of Object.keys(hp)) {
+      game.stored[id] = server.bal.hp[id];
+      game.gold.reconcile(id, server.bal.hp[id] + Math.max(0, want[id] - MAX_HP));
+    }
     for (const seat of game.seats) {
-      if (seat.id.startsWith('mob:')) continue;
-      game.gold.reconcile(seat.id, server.bal.hp[seat.id]);
-      seat.gold = server.bal.hp[seat.id];
+      if (seat.kind === 'mob') continue;
+      seat.gold = game.gold.get(seat.id);
     }
     game.gold.rebase();
 
@@ -137,36 +146,82 @@ check('골드를 한 푼도 안 건드린다', () => {
   }
 });
 
-check('천장에 안 닿으면 체력 총합이 보존된다', () => {
-  // 둘을 합쳐도 최대치를 안 넘는 판. 여기서는 한 톨도 새면 안 된다.
-  for (let i = 0; i < ROUNDS; i += 1) {
-    const { game } = runDungeon(`ds-${i}`, 60, 40);
-    const total = game.seats.reduce((a, s) => a + s.gold, 0);
-    assert.equal(total, 100, `체력 총합이 ${total} 이 됐다`);
+check('체력 총합이 언제나 보존된다', () => {
+  // 천장에 닿든 안 닿든 한 톨도 새면 안 된다. **넘긴 몫은 판 안에 남기 때문이다** —
+  // 예전에는 여기서 초과분이 사라져서, 최대치 위로는 아무리 뺏어도 소용이 없었다.
+  for (const [start, mobHp] of [[60, 40], [100, 80], [MAX_HP, MAX_HP]]) {
+    for (let i = 0; i < ROUNDS; i += 1) {
+      const { game } = runDungeon(`ds-${start}-${mobHp}-${i}`, start, mobHp);
+      const total = game.seats.reduce((a, s) => a + s.gold, 0);
+      assert.equal(total, start + mobHp, `${start}+${mobHp} 인데 총합이 ${total} 이 됐다`);
+    }
   }
 });
 
-check('천장을 넘긴 몫만 버려진다', () => {
-  // 이겨서 최대치를 넘어가면 그 초과분은 사라진다 — 싸워서 최대치 위로 회복할 수는
-  // 없다는 뜻이고, 그게 의도다. 대신 **줄어드는 것은 딱 그만큼**이어야 한다.
+check('넘긴 몫은 판 안에만 있다', () => {
+  // 서버는 최대치를 절대 안 넘는다. 자리 값은 넘을 수 있고, 그 차이가 나갈 때
+  // 골드로 바뀌는 몫이다(payout.cashOverflow).
+  let sawOver = false;
   for (let i = 0; i < ROUNDS; i += 1) {
-    const { game, me } = runDungeon(`dm-${i}`, 100, 80);
+    const { server, game, me } = runDungeon(`dm-${i}`, 100, 80);
     const seat = game.seats.find((s) => s.id === me);
-    const total = game.seats.reduce((a, s) => a + s.gold, 0);
-    assert.ok(seat.gold <= MAX_HP, `체력이 ${seat.gold} 이다`);
-    assert.ok(total <= 180, `총합이 ${total} 로 늘었다`);
-    assert.ok(total >= 80, `총합이 ${total} 로 너무 줄었다`);
+    assert.ok(server.bal.hp[me] <= MAX_HP, `서버 체력이 ${server.bal.hp[me]} 이다`);
+    assert.equal(server.bal.hp[me], Math.min(seat.gold, MAX_HP), '서버와 자리가 어긋난다');
+    if (seat.gold > MAX_HP) sawOver = true;
   }
+  assert.ok(sawOver, `${ROUNDS}판을 돌렸는데 최대치를 넘긴 판이 하나도 없다`);
 });
 
 check('서버 체력과 자리 값이 같다', () => {
   for (let i = 0; i < ROUNDS; i += 1) {
     const { server, game, me } = runDungeon(`dh-${i}`, 100, 80);
     const seat = game.seats.find((s) => s.id === me);
-    assert.equal(server.bal.hp[me], seat.gold, '서버와 자리가 어긋난다');
+    assert.equal(server.bal.hp[me], Math.min(seat.gold, MAX_HP), '서버와 자리가 어긋난다');
     assert.deepStrictEqual(game.gold.deltas(), { [me]: 0, [game.seats[1].id]: 0 },
       '리베이스 뒤에 밀린 몫이 남았다');
   }
+});
+
+check('넘긴 몫이 골드로 바뀐다', () => {
+  // 나갈 때 정산하는 값. 체력 1 = OVER_RATE 골드이고, 바꾼 뒤 자리는 최대치가 된다.
+  const game = { gold: ledger({ a: 118, b: 90 }, 'hp'), seats: [{ id: 'a', gold: 118 }] };
+  assert.equal(overOf(game, 'a'), 18);
+  assert.equal(overOf(game, 'b'), 0);
+  assert.ok(Number.isInteger(OVER_RATE) && OVER_RATE > 0, `환산값이 ${OVER_RATE} 이다`);
+});
+
+check('자리를 갈아 끼워도 지나간 정산은 그대로다', () => {
+  // 정산 화면은 다음 핸드를 누를 때까지 남아 있고, 그 사이에 지원군을 부를 수 있다.
+  // 자리 객체를 그대로 들고 있으면 **앞 사람이 잃은 몫이 지원군 이름으로 다시
+  // 그려진다** — 실제로 디스코드에서 그렇게 보였다.
+  const ME = user(1).id;
+  const ALLY = 'npc:matiam';
+  const game = hold.create({
+    channelId: 'dsw', homeChannelId: 'dsw', guildId: 'g', starterId: ME, mode: 'dungeon',
+  });
+  game.stakes = DUNGEON;
+  game.base = DUNGEON;
+  game.owner = ME;
+  hold.addSeat(game, hold.humanSeat(user(1), '사람1'));
+  const mob = hold.mobSeat({ name: '적', seen: 1, loose: 0, bluff: 0.1, raise: 0.5, note: '' }, 0, DUNGEON);
+  mob.buyIn = 80;
+  hold.addSeat(game, mob);
+  assert.equal(hold.start(game, { [ME]: 100, [mob.id]: 80, [ALLY]: 70 }), null);
+  assert.ok(playHand(game), '한 핸드도 못 돌았다');
+
+  const before = game.results.rows.map((r) => r.name);
+  const shownBefore = game.results.shown.map((x) => x.name);
+  const fighter = game.seats.find((s) => s.kind !== 'mob');
+  hold.swapFighter(game, fighter, { ...hold.npcSeat('matiam'), kind: 'npc' });
+  const ally = game.seats[0].name;
+
+  assert.deepStrictEqual(game.results.rows.map((r) => r.name), before, '정산 줄의 이름이 바뀌었다');
+  assert.deepStrictEqual(game.results.shown.map((x) => x.name), shownBefore, '쇼다운 줄의 이름이 바뀌었다');
+  assert.notEqual(ally, before[0], '자리가 안 갈렸다');
+  assert.ok(!JSON.stringify(boardEmbed(game)).includes(`**${ally}** \``),
+    '지나간 정산에 지원군 이름이 끼어들었다');
+  assert.equal(game.seats[0].gold, 70, '지원군이 남의 체력을 물려받았다');
+  hold.remove('dsw');
 });
 
 check('한쪽이 0 이 되면 끝난다', () => {
@@ -178,14 +233,16 @@ check('한쪽이 0 이 되면 끝난다', () => {
   }
 });
 
-check('서버가 자른 뒤에도 장부가 안 어긋난다', () => {
-  // 시작 체력이 최대치라 회복 쪽으로 넘칠 여지가 있는 판. 잘리는 순간 reconcile 이
-  // 없으면 다음 핸드부터 장부가 비뚤어진다.
+check('서버가 자를 일이 아예 없다', () => {
+  // 시작부터 최대치라 회복 쪽으로 넘칠 여지가 큰 판. 보내는 몫을 서버 값과 견줘서
+  // 재므로 목표가 늘 0~최대치 안이고, **그래서 잘릴 일이 없다** — 자르지 않으면
+  // 장부가 어긋날 일도 없다.
   for (let i = 0; i < ROUNDS; i += 1) {
     const { server, game, me } = runDungeon(`dc-${i}`, MAX_HP, MAX_HP);
     const seat = game.seats.find((s) => s.id === me);
-    assert.equal(server.bal.hp[me], seat.gold);
-    assert.ok(seat.gold >= 0 && seat.gold <= MAX_HP, `체력이 범위를 벗어났다: ${seat.gold}`);
+    assert.equal(server.bal.hp[me], Math.min(seat.gold, MAX_HP));
+    assert.equal(server.bal.hp[me], game.stored[me], '서버와 stored 가 어긋난다');
+    assert.ok(seat.gold >= 0, `체력이 ${seat.gold} 이다`);
   }
 });
 

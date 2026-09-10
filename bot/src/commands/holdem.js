@@ -22,7 +22,7 @@ import { live } from '../holdem/rules.js';
 import { loadAccounts, buyIn } from '../casino/wallet.js';
 import * as payout from '../holdem/payout.js';
 import { roll, listText, TIER as LOOT } from '../casino/loot.js';
-import { ITEM_BY_KEY } from '../casino/items.js';
+import { ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
 import { forget, deadEmbed } from '../casino/alive.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor, DUNGEON } from '../casino/stakes.js';
@@ -479,7 +479,11 @@ async function announceTitles(game, accounts) {
     if (!seat) continue;
     const npc = seat.kind === 'npc';
     const now = earnedTitles(account, { npc });
-    const fresh = gainedTitles(game.titles?.[id] ?? [], now);
+    // **기준이 없으면 아무 말도 안 한다.** 없다는 것은 판을 열 때 이 사람 몫을 안
+    // 적었다는 뜻이고, 그러면 무엇이 새것인지 알 길이 없다. 빈 목록으로 견주면
+    // **원래 가지고 있던 칭호가 전부 새것으로 뜬다** — 실제로 던전 지원군에서 그랬다.
+    const before = game.titles?.[id];
+    const fresh = before ? gainedTitles(before, now) : [];
     game.titles = { ...(game.titles ?? {}), [id]: now.map((t) => t.key) };
     if (!fresh.length) continue;
 
@@ -539,6 +543,22 @@ async function finishTourney(game) {
   }).catch((err) => console.warn('[홀덤] 토너먼트 결과 실패:', err.message));
 }
 
+/**
+ * 넘긴 체력을 골드로 바꿨다는 한 줄. 바꾼 것이 없으면 빈 문자열.
+ *
+ * 체력은 **그 몫의 주인에게** 간다 — 지원군이 뺏은 것은 지원군 계정으로.
+ */
+function overText(game, cashed) {
+  const rows = Object.entries(cashed?.gold ?? {});
+  if (!rows.length) return '';
+  const lines = rows.map(([id, gold]) => {
+    const name = game.seats.find((s) => s.id === id)?.name ?? displayOf(id)?.name ?? '누군가';
+    return `💰 **${name}** — 넘긴 체력을 **${gold.toLocaleString('ko-KR')}골드**로 바꿨어요.`;
+  });
+  if (!cashed.ok) lines.push('_저장하지 못했어요._');
+  return `\n\n${lines.join('\n')}`;
+}
+
 /** 이겼으면 떨군 것, 졌으면 사망. */
 async function finishDungeon(game) {
   const me = game.seats.find((s) => s.id === game.owner) ?? game.seats.find((s) => s.kind !== 'mob');
@@ -546,13 +566,21 @@ async function finishDungeon(game) {
   const won = (mob?.gold ?? 0) <= 0 && (me?.gold ?? 0) > 0;
   const fled = game.endedReason === 'fled';
 
+  // 최대치를 넘긴 체력은 여기서 골드가 된다. **자리 값을 읽기 전에** 부른다 —
+  // 넘긴 몫이 빠져야 "남은 체력" 이 실제로 계정에 남는 값과 같아진다.
+  const cashed = await payout.cashOverflow(game).catch((err) => {
+    console.warn('[홀덤] 넘긴 체력 환산 실패:', err.message);
+    return null;
+  });
+
   // 도망은 이긴 것도 진 것도 아니다. 체력은 이미 핸드마다 저장돼 있다.
   if (fled) {
     await game.message?.channel?.send({
       embeds: [base({
         title: '🏃 도망쳤어요',
         description: `**${mob?.name ?? '적'}** 을(를) 두고 물러났어요.`
-          + `\n남은 체력 **${me?.gold ?? 0}**.`,
+          + `\n남은 체력 **${me?.gold ?? 0}**.`
+          + overText(game, cashed),
         color: THEME_COLOR,
       })],
     }).catch(() => {});
@@ -569,7 +597,8 @@ async function finishDungeon(game) {
         title: mob?.elite ? '⚔️ 엘리트를 쓰러뜨렸어요' : '⚔️ 쓰러뜨렸어요',
         description: `**${mob?.name}** 을(를) 눕혔어요. ${game.handNo}핸드.`
           + `\n\n**주운 것** — ${listText(drops, ITEM_BY_KEY)}`
-          + (saved.ok ? '' : '\n\n_저장하지 못했어요._'),
+          + (saved.ok ? '' : '\n\n_저장하지 못했어요._')
+          + overText(game, cashed),
         color: mob?.elite ? 0xc9a227 : THEME_COLOR,
         footer: `남은 체력 ${me?.gold ?? 0} · /사용 으로 회복약을 먹을 수 있어요`,
       })],
@@ -580,7 +609,8 @@ async function finishDungeon(game) {
       embeds: [base({
         title: '💀 쓰러졌어요',
         description: `**${mob?.name}** 에게 졌어요.`
-          + '\n**부활의 영약**을 마시면 일어납니다 — `/상점` 에서 살 수 있어요.',
+          + '\n**부활의 영약**을 마시면 일어납니다 — `/상점` 에서 살 수 있어요.'
+          + overText(game, cashed),
         color: 0x6b5b5b,
       })],
     }).catch(() => {});
@@ -731,7 +761,10 @@ async function openDungeon(interaction) {
   // 살아 있는 지원군만 데려간다. 쓰러진 미겔을 부를 수는 없다.
   game.reserves = allies.filter((id) => Number(account[id].hp ?? 0) > 0 && !seatedAt(id));
   // 지금 가진 칭호를 적어 둔다. **안 적으면 정산 때 가진 칭호가 전부 "새것"으로 뜬다.**
-  game.titles = { [me]: earnedTitles(account[me]).map((t) => t.key) };
+  // 지원군 몫도 같이 적는다 — 부르고 나서야 적으면 그 자리에서 이미 늦는다.
+  game.titles = Object.fromEntries([me, ...game.reserves].map((id) => [
+    id, earnedTitles(account[id], { npc: id !== me }).map((t) => t.key),
+  ]));
 
   // **대기실을 건너뛴다.** 들고 앉는 것은 가진 체력 전부다 — buyIn 도 tooPoor 도 안 탄다.
   const err = state.start(game, {
@@ -758,6 +791,8 @@ const dungeonHowto = (game, mob, hp) => ((tier) => base({
     '**여기서 거는 것은 골드가 아니라 체력입니다.**',
     `앉은 체력이 곧 스택이에요 — 그쪽 **${hp}**, ${mob.name} **${hpOf(mob)}**.`,
     '한쪽이 0 이 되면 끝나고, **0 이 된 쪽은 쓰러집니다.**',
+    `뺏은 체력이 **${MAX_HP}** 를 넘어도 판 안에서는 그대로 걸 수 있어요.`
+    + ` 넘긴 몫은 나갈 때 **체력 1 = ${payout.OVER_RATE}골드**로 바뀝니다.`,
     '',
     '핸드가 끝날 때마다 **[다음 핸드]** 로 이어가거나 **[도망]** 으로 물러날 수 있어요.',
     '물러나면 그때까지의 체력 그대로 나갑니다.',
@@ -1078,9 +1113,23 @@ async function handlePlay(interaction, game, action, arg) {
         await deny(interaction, '쓰러진 사람은 대신 싸울 수 없어요.');
         return true;
       }
+      // **물러나는 사람의 넘긴 체력은 여기서 정산한다.** 안 그러면 판이 끝날 때까지
+      // 장부에만 남아 있다가, 다시 불려 나오면 또 걸 수 있게 된다 — 나갈 때 받는다는
+      // 규칙이 무너진다.
+      const cashed = await payout.cashOverflow(game, [fighter.id])
+        .catch((err) => { console.warn('[홀덤] 넘긴 체력 환산 실패:', err.message); return null; });
+      // 이름은 **갈아 끼우기 전에** 뽑는다 — 그 뒤에는 그 자리가 지원군이다.
+      const said = overText(game, cashed);
+
       state.swapFighter(game, fighter, arg === 'me'
         ? { ...displayOf(want), kind: 'human', userId: want }
         : { ...state.npcSeat(arg), kind: 'npc' });
+
+      if (said) {
+        await game.message?.channel?.send({ embeds: [base({ description: said.trim() })] })
+          .catch(() => {});
+        game.boardBottom = false;
+      }
       return false;
     }
     if (action === 'stop') { state.end(game, 'finished'); return false; }

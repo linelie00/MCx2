@@ -22,7 +22,9 @@ import * as state from '../yacht/state.js';
 import {
   PREFIX, faces, howto, lobbyEmbed, lobbyRows, boardEmbed, boardRows, resultEmbed,
 } from '../yacht/render.js';
-import { base, fail } from '../embeds.js';
+import { base, fail, THEME_COLOR } from '../embeds.js';
+import { apply } from '../casino/wallet.js';
+import { NPC_ID } from '../casino/accounts.js';
 
 const { filledCount } = state;
 
@@ -231,11 +233,58 @@ async function runNpcTurns(game) {
       await sleep(900);
     }
     if (game.phase === 'done' && game.endedReason === 'finished') await closingLines(game);
+    if (game.phase === 'done') await finish(game);
     // 대사에 밀려 올라간 판을 다시 맨 아래로. NPC 차례 묶음마다 한 번씩만 한다 —
     // 굴릴 때마다 새로 띄우면 스레드가 판으로 도배된다.
     if (spoke) await repost(game);
   } finally {
     game.driving = false;
+  }
+}
+
+/**
+ * 판이 끝났다. **1위에게 MT 한 개.**
+ *
+ * MT 는 얻는 길이 좁다 — 요트 1위와 홀덤 토너먼트 우승뿐이다. 그래서 조건을 좁게 잡는다.
+ *
+ *   - **동점이면 안 준다.** `ranking()` 은 동점을 같은 등수로 묶어서, 셋이 비기면 1위가
+ *     셋이고 MT 가 세 개 생긴다.
+ *   - **혼자 둔 판은 안 준다.** 아무도 안 이긴 1위다.
+ *   - **끝까지 둔 판만.** 접거나 방치로 끝난 판은 아니다.
+ *
+ * **끝나는 길이 둘인데 한 곳으로 안 모인다.** NPC 가 마지막 칸을 채운 판은
+ * `runNpcTurns` 로 오고, **사람이 채운 판은 거기 안 온다** — `kickNpc` 가
+ * `phase !== 'playing'` 이라 바로 돌아오기 때문이다. 그래서 양쪽에서 부르고, 두 번
+ * 부르는 것을 플래그로 막는다. 플래그는 **첫 await 앞에서 동기로** 세운다.
+ */
+async function finish(game) {
+  if (game.rewarded) return;
+  game.rewarded = true;
+  if (game.endedReason !== 'finished' || game.seats.length < 2) return;
+
+  const rows = state.ranking(game);
+  const first = rows.filter((r) => r.rank === 1);
+  if (first.length !== 1) return;
+
+  const seat = first[0].seat;
+  const id = seat.kind === 'human' ? seat.userId : NPC_ID[seat.character];
+  if (!id) return;
+
+  // 요트는 여태 서버를 한 번도 안 불렀다. 여기서 처음 부르는 만큼, 실패해도 판이
+  // 깨지지 않게 통째로 감싼다.
+  try {
+    const res = await apply({ mt: { [id]: 1 } });
+    if (!res.ok) return;
+    await game.message?.channel?.send({
+      embeds: [base({
+        title: '🪙 MT +1',
+        description: `**${seat.name}** 이(가) 1위로 MT 를 얻었어요.`
+          + ` 지금 **${res.accounts[id]?.mt ?? '?'}개**.`,
+        color: THEME_COLOR,
+      })],
+    });
+  } catch (err) {
+    console.warn('[요트] MT 지급 실패:', err.message);
   }
 }
 
@@ -421,6 +470,10 @@ async function component(interaction) {
 
   await interaction.deferUpdate();
   await draw(game);
+
+  // **사람이 마지막 칸을 채운 판은 kickNpc 가 바로 돌아가서 드라이버에 안 닿는다.**
+  // 보상을 드라이버에만 걸면 그런 판이 통째로 빠진다.
+  if (game.phase === 'done') await finish(game);
 
   // 사람이 굴린 것도 채팅에 남긴다. 판을 새로 띄우고 나면 앞 굴림이 판에서 사라지는데,
   // 채팅에 남아 있으면 이번 턴에 무엇을 어떻게 굴렸는지 되짚을 수 있다.

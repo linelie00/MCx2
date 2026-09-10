@@ -52,6 +52,8 @@ async function loadPlaylists(interaction) {
 }
 
 export default {
+  // 사이트 도구 — 세계관 밖이다
+  allowDead: true,
   data: new SlashCommandBuilder()
     .setName('플리')
     .setDescription('플레이리스트를 봅니다.')

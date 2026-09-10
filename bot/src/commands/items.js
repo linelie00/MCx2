@@ -207,5 +207,7 @@ async function component(interaction) {
 }
 
 export default {
+  // 도감 조회. 쓰러졌을 때 쓸 수 있는 것을 찾아보는 창이다
+  allowDead: true,
   data, execute, autocomplete, componentPrefix: PREFIX, component,
 };

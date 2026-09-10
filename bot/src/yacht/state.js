@@ -75,6 +75,7 @@ export function create({ channelId, homeChannelId, guildId, starterId }) {
     lastAt: Date.now(),
     opened: false,          // 첫인사를 이미 했는지
     driving: false,         // NPC 턴 드라이버가 돌고 있는지
+    rewarded: false,        // 1위 MT 를 이미 줬는지 — 끝나는 길이 둘이라 필요하다
     endedReason: null,
   };
   games.set(channelId, game);

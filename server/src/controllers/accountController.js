@@ -1,5 +1,5 @@
 /**
- * accountController — 카지노 계정 (골드 · 칭호 · 아이템)
+ * accountController — 카지노 계정 (골드 · MT · 체력 · 칭호 · 아이템)
  *
  * 봇만 쓴다(라우트에서 requireBot). 사람은 사이트에서 이걸 만질 일이 없다.
  *
@@ -10,7 +10,14 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, title, items, stats, refilledAt, updatedAt }
+ * account shape: { gold, mt, hp, title, items, stats, refilledAt, updatedAt }
+ *
+ * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
+ * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
+ *
+ * `hp` 는 재화가 아니라 상태값이라 혼자 다르다 — **자른다.** 95에서 회복약을 먹어
+ * 넘치는 것은 버그가 아니라 설계다. `hp <= 0` 이 사망이고, **사망을 따로 저장하지
+ * 않는다** — 플래그를 두면 `hp:0 · dead:false` 같은 어긋난 짝이 생긴다.
  *
  * `title` 은 **달고 있는 칭호의 키**다. 이름이 아니라 키를 두는 이유는 나중에 칭호
  * 이름을 고쳐도 달고 있던 게 안 날아가게 하려는 것이고, 무엇이 유효한 키인지는
@@ -41,6 +48,21 @@ const DAILY_FLOOR = 1000;
  */
 const MIN_BALANCE = -1000;
 
+/**
+ * 체력 천장. **봇의 `bot/src/casino/items.js` 의 MAX_HP 와 같은 값이어야 한다.**
+ * 아이템의 `heal` 이 그 값을 천장으로 적혀 있어서, 둘이 어긋나면 회복이 어긋난다.
+ */
+const MAX_HP = 100;
+
+/** 처음 보는 id 의 MT. 얻는 길이 좁아서 0 에서 시작한다. */
+const START_MT = 0;
+
+/**
+ * 아이템 키 모양. **명부는 안 본다** — 무엇이 유효한 아이템인지는 봇이 안다
+ * (`casino/items.js`). 칭호 키와 같은 원칙이다.
+ */
+const ITEM_KEY_RE = /^[a-z][A-Za-z0-9]{0,39}$/;
+
 /** 한 번에 다룰 수 있는 계정 수. 자리는 넷이지만 넉넉히 둔다. */
 const MAX_IDS = 16;
 
@@ -51,7 +73,16 @@ const now = () => new Date().toISOString();
 const isNpc = (id) => id.startsWith('npc:');
 
 const blank = () => ({
-  gold: START_GOLD, title: null, items: {}, stats: {}, refilledAt: null, updatedAt: null,
+  gold: START_GOLD,
+  mt: START_MT,
+  // **0 으로 두면 안 된다.** normalize 가 읽을 때 채우므로, 0 이면 기존 계정이 전부
+  // 죽은 것으로 읽힌다.
+  hp: MAX_HP,
+  title: null,
+  items: {},
+  stats: {},
+  refilledAt: null,
+  updatedAt: null,
 });
 
 /**
@@ -65,12 +96,20 @@ const normalize = (raw) => {
   const acct = { ...blank(), ...(raw || {}) };
   if (raw && raw.gold === undefined && Number.isFinite(raw.chips)) acct.gold = raw.chips;
   delete acct.chips;
+
+  // 저장된 값이 숫자가 아니면 기본값으로. **`null` 이 특히 위험하다** — `null <= 0` 이
+  // 참이라 그냥 두면 멀쩡한 계정이 죽은 것으로 읽힌다.
+  if (!Number.isFinite(acct.mt)) acct.mt = START_MT;
+  if (!Number.isFinite(acct.hp)) acct.hp = MAX_HP;
+  if (!acct.items || typeof acct.items !== 'object') acct.items = {};
   return acct;
 };
 
 /** 밖으로 내보내는 모양. 내부 필드가 늘어도 응답이 저절로 새지 않게 골라 담는다. */
 const publicView = (acct) => ({
   gold: acct.gold,
+  mt: acct.mt,
+  hp: acct.hp,
   title: acct.title,
   items: acct.items,
   stats: acct.stats,
@@ -147,33 +186,65 @@ const BUMP_KEYS = new Set([
   // 쇼다운에서 깐 족보. **최댓값이 아니라 족보마다 따로** 센다 — 칭호가 묻는 것이
   // "그 족보를 직접 만들어 봤나" 라서, 최댓값으로 두면 아래가 전부 딸려 온다.
   'handStraight', 'handFlush', 'handFullHouse', 'handQuads', 'handStraightFlush',
+  'dungeonWon', 'dungeonLost',                     // 던전 — 골드 전적과 섞지 않는다
 ]);
 
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
 const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet']);
 
-/** POST /api/accounts/deltas — `{ deltas: { id: ±n }, bump: { id: { 카운터: n } } }` */
+/**
+ * POST /api/accounts/deltas — 계정 하나의 네 가지를 **한 번에** 옮긴다.
+ *
+ * `{ deltas: {id: ±n}, mt: {id: ±n}, hp: {id: ±n}, items: {id: {키: ±n}}, bump: {id: {카운터: n}} }`
+ *
+ * **다섯 다 선택이다.** 상점은 골드를 빼고 아이템을 넣는 **한 번의 쓰기**여야 하고,
+ * 던전은 체력과 아이템을 같이 써야 한다. 둘로 나누면 락 없는 이 스토어에서 두 번째
+ * 읽기가 첫 번째 쓰기를 통째로 놓치고, 중간에 죽으면 반쪽만 남는다.
+ *
+ * 다루는 id 는 **다섯 맵 키의 합집합**이다. `deltas` 를 필수로 두면 MT 만 주는 보상이
+ * `deltas: { id: 0 }` 을 억지로 끼워야 하는데, 봇의 `wallet.apply` 가 0 을 걸러 내서
+ * 그 쓰기가 통째로 사라진다.
+ */
 exports.applyDeltas = (req, res) => {
-  const deltas = req.body && req.body.deltas;
-  if (!deltas || typeof deltas !== 'object' || Array.isArray(deltas)) {
-    return res.status(400).json({ error: 'deltas 객체가 필요합니다' });
+  const body = req.body || {};
+  const maps = { deltas: body.deltas, mt: body.mt, hp: body.hp, items: body.items };
+  for (const [name, m] of Object.entries(maps)) {
+    if (m === undefined) { maps[name] = {}; continue; }
+    if (!m || typeof m !== 'object' || Array.isArray(m)) {
+      return res.status(400).json({ error: `${name} 는 객체여야 합니다` });
+    }
   }
   // 전적 카운터. 없어도 된다 — 골드만 옮기는 호출(`/급여`)이 대부분이다.
-  const bump = (req.body && req.body.bump) || {};
+  const bump = body.bump || {};
   if (typeof bump !== 'object' || Array.isArray(bump)) {
     return res.status(400).json({ error: 'bump 는 객체여야 합니다' });
   }
 
-  const ids = parseIds(Object.keys(deltas));
+  // **bump 도 합집합에 넣는다.** 토너먼트는 핸드마다 전적만 적고 골드는 끝에 한 번
+  // 옮기므로, 카운터만 있는 쓰기가 실제로 온다.
+  const ids = parseIds([...new Set(
+    [...Object.values(maps), bump].flatMap((m) => Object.keys(m)),
+  )]);
   if (typeof ids === 'string') return res.status(400).json({ error: ids });
 
-  for (const id of ids) {
-    const n = deltas[id];
-    // 소수가 들어오면 지갑이 영영 소수를 안고 간다. 여기서 막는다.
-    if (!Number.isSafeInteger(n)) return res.status(400).json({ error: `정수가 아닙니다: ${id}=${n}` });
+  // 소수가 들어오면 지갑이 영영 소수를 안고 간다. 여기서 막는다.
+  for (const name of ['deltas', 'mt', 'hp']) {
+    for (const [id, n] of Object.entries(maps[name])) {
+      if (!Number.isSafeInteger(n)) {
+        return res.status(400).json({ error: `정수가 아닙니다: ${name}.${id}=${n}` });
+      }
+    }
+  }
+  for (const [id, moves] of Object.entries(maps.items)) {
+    if (!moves || typeof moves !== 'object' || Array.isArray(moves)) {
+      return res.status(400).json({ error: `items.${id} 가 객체가 아닙니다` });
+    }
+    for (const [key, n] of Object.entries(moves)) {
+      if (!ITEM_KEY_RE.test(key)) return res.status(400).json({ error: `아이템 키 모양이 아닙니다: ${key}` });
+      if (!Number.isSafeInteger(n)) return res.status(400).json({ error: `정수가 아닙니다: items.${id}.${key}=${n}` });
+    }
   }
   for (const [id, counters] of Object.entries(bump)) {
-    if (!ids.includes(id)) return res.status(400).json({ error: `deltas 에 없는 id: ${id}` });
     if (!counters || typeof counters !== 'object') return res.status(400).json({ error: `bump.${id} 가 객체가 아닙니다` });
     for (const [k, v] of Object.entries(counters)) {
       if (!BUMP_KEYS.has(k) && !MAX_KEYS.has(k)) return res.status(400).json({ error: `모르는 카운터: ${k}` });
@@ -188,22 +259,45 @@ exports.applyDeltas = (req, res) => {
   const next = {};
   for (const id of ids) {
     const acct = normalize(data.accounts[id]);
-    const after = acct.gold + deltas[id];
-    if (after < MIN_BALANCE) {
+
+    const gold = acct.gold + (maps.deltas[id] ?? 0);
+    if (gold < MIN_BALANCE) {
       return res.status(409).json({
-        error: `잔액이 너무 내려갑니다: ${id} ${acct.gold} → ${after}`
+        error: `잔액이 너무 내려갑니다: ${id} ${acct.gold} → ${gold}`
           + ' (같은 골드를 두 판에서 겹쳐 걸었을 수 있습니다)',
       });
     }
 
+    // MT 는 재화라 골드와 같은 규칙 — 모자라면 거절하고 0 으로 깎지 않는다.
+    const mt = acct.mt + (maps.mt[id] ?? 0);
+    if (mt < 0) return res.status(409).json({ error: `MT 가 모자랍니다: ${id} ${acct.mt} → ${mt}` });
+
+    // 체력만 **자른다.** 재화가 아니라 상태값이고, 천장을 넘는 회복은 정상이다.
+    const hp = Math.max(0, Math.min(MAX_HP, acct.hp + (maps.hp[id] ?? 0)));
+
+    // **복사해서 고친다.** normalize 는 저장된 객체를 그대로 물려준다(`{...blank(), ...raw}`
+    // 는 얕은 복사라 items 는 같은 객체다). 지금은 store.read() 가 요청마다 파일을 다시
+    // 파싱하므로 제자리에서 고쳐도 그 객체가 버려지지만, 스토어가 언젠가 파싱 결과를
+    // 들고 있게 되면 그 순간 409 를 내고도 절반이 써진다. 한 줄로 막아 둔다.
+    const items = { ...acct.items };
+    for (const [key, n] of Object.entries(maps.items[id] ?? {})) {
+      const have = items[key] ?? 0;
+      if (have + n < 0) {
+        return res.status(409).json({ error: `가진 것보다 많이 씁니다: ${id} ${key} ${have} → ${have + n}` });
+      }
+      // 0 이 된 칸은 지운다. 빈 칸이 쌓이면 창고 화면이 지저분해진다.
+      if (have + n === 0) delete items[key];
+      else items[key] = have + n;
+    }
+
     // 최고 잔액은 **서버가 알아서** 센다. 봇은 새 잔액을 모르는 채로 증감만 보내므로
     // (그게 이 설계의 핵심이다) 여기서 재는 것이 유일하게 맞는 자리다.
-    const stats = { ...acct.stats, peak: Math.max(acct.stats?.peak ?? 0, after) };
+    const stats = { ...acct.stats, peak: Math.max(acct.stats?.peak ?? 0, gold) };
     for (const [k, v] of Object.entries(bump[id] ?? {})) {
       stats[k] = MAX_KEYS.has(k) ? Math.max(stats[k] ?? 0, v) : (stats[k] ?? 0) + v;
     }
 
-    next[id] = { ...acct, gold: after, stats, updatedAt: now() };
+    next[id] = { ...acct, gold, mt, hp, items, stats, updatedAt: now() };
   }
 
   Object.assign(data.accounts, next);

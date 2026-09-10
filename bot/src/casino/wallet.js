@@ -23,6 +23,7 @@
  * 클릭이 통째로 날아간다(10062). `commit` 은 드라이버 안이라 시한과 무관하다.
  */
 import { getAccounts, postAccountDeltas } from '../api.js';
+import { MAX_HP } from './items.js';
 
 /** 처음 보는 사람의 잔액. 등록 절차가 없다 — 저장소에 없으면 이 값으로 친다. */
 export const START_GOLD = 1000;
@@ -83,7 +84,10 @@ export const roundToUnit = (amount, unit) => Math.max(0, Math.floor(amount / uni
 export async function loadAccounts(guildId, userIds) {
   const { accounts } = await getAccounts(userIds);
   return Object.fromEntries(userIds.map(
-    (id) => [id, accounts?.[id] ?? { gold: START_GOLD, stats: {}, items: {}, title: null }],
+    // **`blank()` 와 짝이 맞아야 한다.** 어긋나면 서버에 없는 계정만 조용히 다른
+    // 기본값으로 논다.
+    (id) => [id, accounts?.[id]
+      ?? { gold: START_GOLD, mt: 0, hp: MAX_HP, stats: {}, items: {}, title: null }],
   ));
 }
 
@@ -94,40 +98,69 @@ export async function load(guildId, userIds) {
 }
 
 /**
- * 정산 결과를 남긴다. deltas 는 `{ id: ±n }`. `{ ok, accounts }` 를 돌려준다 —
- * `accounts` 는 **쓰고 난 뒤의 계정**이라 부르는 쪽이 새 칭호를 바로 계산할 수 있다.
+ * 계정의 네 가지를 **한 번의 쓰기로** 옮긴다. `{ ok, accounts }` 를 돌려준다 —
+ * `accounts` 는 **쓰고 난 뒤의 계정**이라 부르는 쪽이 새 칭호나 남은 체력을 바로 읽는다.
  *
- * 던지지 않는 이유는 저장이 판을 막을 이유가 아니어서다 — 대사가 그렇듯 있으면 좋은
- * 것이다. 실패하면 부르는 쪽이 판에 "저장 안 됨" 을 띄우고 계속 돈다. 골드는 인메모리
- * 장부에서만 움직였으므로 그 핸드가 없던 일이 될 뿐이고, `ledger.rebase` 를 안 하니
- * 밀린 몫은 다음 커밋이 성공할 때 함께 반영된다.
+ *   deltas  골드 증감          `{ id: ±n }`
+ *   mt      MT 증감            `{ id: ±n }`
+ *   hp      체력 증감          `{ id: ±n }` — 서버가 0~최대치로 **자른다**
+ *   items   아이템 증감        `{ id: { 키: ±n } }`
+ *   bump    그 판의 전적 카운터 `{ id: { 이름: n } }`
  *
- * 0인 증감과 **지갑 없는 자리(모브)** 는 빼고 보낸다. 앉기만 하고 아무 일 없던
- * 계정에 updatedAt 을 찍을 이유가 없고, 모브는 애초에 서버가 몰라야 한다.
+ * **다섯이 한 번에 나가는 것이 핵심이다.** 상점은 골드를 빼고 아이템을 넣는 한 번의
+ * 쓰기여야 하고, 던전은 체력과 아이템을 같이 써야 한다. 나눠 보내면 반쪽만 저장된
+ * 상태가 생긴다.
  *
- * `bump` 는 그 핸드의 전적 카운터다. **골드와 같은 한 번의 쓰기로 나간다** — 따로 보내면
- * 골드만 저장되고 전적은 빠지는 어긋남이 생긴다.
+ * **던지지 않는다.** 저장이 판을 막을 이유가 아니어서다 — 실패하면 부르는 쪽이 판에
+ * "저장 안 됨" 을 띄우고 계속 돈다. 값은 인메모리 장부에서만 움직였으므로 그 핸드가
+ * 없던 일이 될 뿐이고, `ledger.rebase` 를 안 하니 밀린 몫은 다음 커밋이 성공할 때
+ * 함께 반영된다.
+ *
+ * 0인 증감과 **지갑 없는 자리(모브)** 는 빼고 보낸다. 앉기만 하고 아무 일 없던 계정에
+ * updatedAt 을 찍을 이유가 없고, 모브는 애초에 서버가 몰라야 한다.
+ *
+ * 거르는 일은 `applyBody` 로 따로 빼 뒀다 — HTTP 없이 검사할 수 있게.
  */
-export async function commit(guildId, deltas, bump = {}) {
-  const moved = Object.fromEntries(
-    Object.entries(deltas).filter(([id, n]) => n !== 0 && isPersistent(id)),
+export function applyBody({ deltas = {}, mt = {}, hp = {}, items = {}, bump = {} } = {}) {
+  const clean = (map) => Object.fromEntries(
+    Object.entries(map).filter(([id, n]) => n !== 0 && isPersistent(id)),
   );
-  if (!Object.keys(moved).length) return { ok: true, accounts: {} };
+  return {
+    deltas: clean(deltas),
+    mt: clean(mt),
+    hp: clean(hp),
+    items: Object.fromEntries(
+      Object.entries(items)
+        .filter(([id]) => isPersistent(id))
+        .map(([id, moves]) => [id, clean(moves)])
+        .filter(([, moves]) => Object.keys(moves).length),
+    ),
+    // 전적은 **이 쓰기가 다루는 자리 것만.** 예전에는 "골드가 움직인 자리" 였는데,
+    // 골드를 안 옮기는 핸드(던전·토너먼트)가 생기면서 그 조건이면 전적이 매번 사라진다.
+    bump: Object.fromEntries(
+      Object.entries(bump).filter(([id, c]) => isPersistent(id) && Object.keys(c).length),
+    ),
+  };
+}
 
-  // 전적은 **골드가 움직인 자리 것만** 보낸다. 서버가 deltas 에 없는 id 를 거절하고,
-  // 애초에 골드가 안 움직였으면 그 사람이 그 핸드에 낸 것도 없다.
-  const counters = Object.fromEntries(
-    Object.entries(bump).filter(([id, c]) => moved[id] !== undefined && Object.keys(c).length),
-  );
+/** 보낼 것이 하나라도 있는지. 다섯이 다 비면 굳이 서버를 부르지 않는다. */
+export const hasMoves = (body) => Object.values(body).some((m) => Object.keys(m).length);
+
+export async function apply(moves = {}) {
+  const body = applyBody(moves);
+  if (!hasMoves(body)) return { ok: true, accounts: {} };
 
   try {
-    const res = await postAccountDeltas(moved, counters);
+    const res = await postAccountDeltas(body);
     return { ok: true, accounts: res?.accounts ?? {} };
   } catch (err) {
-    console.warn('[카지노] 골드 저장 실패 — 다음 정산에서 다시 시도합니다:', err.message);
+    console.warn('[카지노] 계정 저장 실패 — 다음 정산에서 다시 시도합니다:', err.message);
     return { ok: false, accounts: {} };
   }
 }
+
+/** 골드와 전적만 옮기는 판 정산. `apply` 위의 얇은 껍데기다. */
+export const commit = (guildId, deltas, bump = {}) => apply({ deltas, bump });
 
 /**
  * 판 안에서 쓰는 동기 장부.
@@ -190,5 +223,6 @@ export function ledger(initial) {
 }
 
 export default {
-  START_GOLD, isPersistent, buyIn, roundToUnit, load, loadAccounts, commit, ledger,
+  START_GOLD, isPersistent, buyIn, roundToUnit, load, loadAccounts,
+  applyBody, hasMoves, apply, commit, ledger,
 };

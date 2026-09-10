@@ -72,4 +72,6 @@ async function execute(interaction) {
   });
 }
 
-export default { data, execute };
+export default {
+  // 골드를 받는 것뿐이다. 이걸 막으면 파산한 채로 죽은 사람이 영영 못 일어난다
+  allowDead: true, data, execute };

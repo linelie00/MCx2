@@ -33,14 +33,14 @@ import {
   TITLES, GROUPS, earned as earnedTitles, TITLE_BY_KEY, TOTAL as TITLE_TOTAL,
 } from '../casino/titles.js';
 import { stamp, stampMd } from '../casino/titleCard.js';
-import { ITEM_BY_KEY } from '../casino/items.js';
+import { ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
 export const PREFIX = 'prof';
 
 const data = new SlashCommandBuilder()
   .setName('프로필')
-  .setDescription('칭호와 골드, 전적, 아이템을 봅니다.')
+  .setDescription('칭호와 골드·MT·체력, 전적, 아이템을 봅니다.')
   .addUserOption((o) => o.setName('사람').setDescription('기본값은 본인'))
   .addStringOption((o) => o.setName('캐릭터').setDescription('미겔·마티암의 지갑')
     .addChoices(...NPC_CHOICES));
@@ -94,8 +94,10 @@ function table(rows) {
 function cardTab(account, seated) {
   const s = account.stats ?? {};
 
+  // 임베드는 한 줄에 세 칸이다. 전적을 내리고 MT 를 올려 재화 둘이 나란히 서게 한다.
   const fields = [
     { name: '💰 골드', value: `**${num(account.gold)}**`, inline: true },
+    { name: '🪙 MT', value: `**${num(account.mt)}**`, inline: true },
     { name: '📈 최고', value: `**${num(s.peak ?? account.gold)}**`, inline: true },
     {
       name: '🎲 전적',
@@ -105,6 +107,12 @@ function cardTab(account, seated) {
   ];
 
   const lines = [];
+  // 체력은 칸이 아니라 막대다. 숫자만으로는 얼마나 남았는지가 안 읽힌다.
+  const hp = Number(account.hp ?? MAX_HP);
+  lines.push(hp > 0
+    ? `**체력** ${gauge(hp, MAX_HP, { percent: false })} **${hp}** / ${MAX_HP}`
+    : '💀 **쓰러졌어요.** 부활의 영약을 마시면 일어납니다.');
+
   if (s.hands) {
     lines.push(`**승률** ${gauge(s.won ?? 0, s.hands)}`, '');
     const net = (s.earned ?? 0) - (s.lost ?? 0);
@@ -422,4 +430,6 @@ async function component(interaction) {
   }
 }
 
-export default { data, execute, componentPrefix: PREFIX, component };
+export default {
+  // 조회만 한다 — 쓰러져 있어도 자기 상태는 봐야 한다
+  allowDead: true, data, execute, componentPrefix: PREFIX, component };

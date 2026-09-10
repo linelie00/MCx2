@@ -72,7 +72,9 @@ const server = app.listen(0, async () => {
   eq('작은 값은 안 덮는다', mx2.body.accounts['1000004'].stats.bestPot, 500);
   eq('모르는 카운터는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { hax: 1 } } })).status, 400);
   eq('음수 카운터는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { hands: -1 } } })).status, 400);
-  eq('deltas 에 없는 id 는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000005: { hands: 1 } } })).status, 400);
+  // 카운터만 있는 쓰기도 되므로(토너먼트가 그렇게 쓴다) deltas 에 없는 id 는 이제 정상이다.
+  eq('카운터만 있는 id 도 받는다', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000005: { hands: 1 } } })).status, 200);
+  eq('이상한 id 는 여전히 400', (await post('/deltas', { bump: { 'drop-table': { hands: 1 } } })).status, 400);
   // --- 출첵
   const c1 = await post('/claim', { id: '1000001' });
   eq('출첵으로 1000', c1.body.gold, 1000);
@@ -126,19 +128,80 @@ const server = app.listen(0, async () => {
   eq('최고 족보도 큰 쪽만',
     (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { bestHand: 2 } } })).body.accounts['1000004'].stats.bestHand, 5);
 
+  // --- MT · 체력 · 아이템. 넷이 **한 번의 쓰기**로 같이 움직인다.
+  const A = '1000021';
+  const fresh = (await hit(`?ids=${A}`)).body.accounts[A];
+  eq('새 계정 MT 는 0', fresh.mt, 0);
+  eq('새 계정 체력은 가득', fresh.hp, 100);
+  eq('아이템은 빈 칸', fresh.items, {});
+
+  const one = await post('/deltas', {
+    deltas: { [A]: -300 }, mt: { [A]: 2 }, hp: { [A]: -40 },
+    items: { [A]: { twig: 3, ruby: 1 } },
+  });
+  eq('한 번에 넷이 움직인다',
+    [one.body.accounts[A].gold, one.body.accounts[A].mt, one.body.accounts[A].hp, one.body.accounts[A].items],
+    [700, 2, 60, { twig: 3, ruby: 1 }]);
+
+  eq('아이템은 더해진다', (await post('/deltas', { items: { [A]: { twig: 2 } } })).body.accounts[A].items.twig, 5);
+  const gone = await post('/deltas', { items: { [A]: { ruby: -1 } } });
+  eq('0 이 되면 칸을 지운다', 'ruby' in gone.body.accounts[A].items, false);
+  eq('가진 것보다 많이 쓰면 409', (await post('/deltas', { items: { [A]: { twig: -99 } } })).status, 409);
+  eq('아이템 키 모양이 아니면 400', (await post('/deltas', { items: { [A]: { '나뭇가지': 1 } } })).status, 400);
+  eq('아이템 개수가 소수면 400', (await post('/deltas', { items: { [A]: { twig: 1.5 } } })).status, 400);
+
+  // --- 골드를 하나도 안 옮기는 쓰기가 되어야 한다. 안 되면 MT 만 주는 보상이 사라진다.
+  eq('MT 만 쓰기', (await post('/deltas', { mt: { [A]: 1 } })).body.accounts[A].mt, 3);
+  eq('체력만 쓰기', (await post('/deltas', { hp: { [A]: 5 } })).body.accounts[A].hp, 65);
+  eq('아이템만 쓰기', (await post('/deltas', { items: { [A]: { acorn: 1 } } })).body.accounts[A].items.acorn, 1);
+  eq('전적만 쓰기', (await post('/deltas', { bump: { [A]: { dungeonWon: 1 } } })).body.accounts[A].stats.dungeonWon, 1);
+  eq('골드는 그대로', (await hit(`?ids=${A}`)).body.accounts[A].gold, 700);
+  eq('본문이 통째로 비면 400', (await hit('/deltas', { method: 'POST' })).status, 400);
+
+  // --- MT 는 재화라 거절, 체력은 상태값이라 자른다
+  eq('MT 가 모자라면 409', (await post('/deltas', { mt: { [A]: -99 } })).status, 409);
+  eq('거절 뒤에도 MT 그대로', (await hit(`?ids=${A}`)).body.accounts[A].mt, 3);
+  eq('체력은 위로 잘린다', (await post('/deltas', { hp: { [A]: 9999 } })).body.accounts[A].hp, 100);
+  eq('체력은 아래로 잘린다', (await post('/deltas', { hp: { [A]: -9999 } })).body.accounts[A].hp, 0);
+  eq('죽어도 잔액은 그대로', (await hit(`?ids=${A}`)).body.accounts[A].gold, 700);
+  eq('다시 채울 수 있다', (await post('/deltas', { hp: { [A]: 100 } })).body.accounts[A].hp, 100);
+
+  // --- **거절된 배치는 한 글자도 안 써야 한다.** 두 번 도는 구조(전부 계산 → 하나라도
+  //     걸리면 아무것도 안 씀)가 사는지 본다. 아이템은 id 를 넘나들며 걸리는 유일한 값이라
+  //     여기서 재는 것이 맞다.
+  const B = '1000022';
+  await post('/deltas', { items: { [B]: { acorn: 2 } } });
+  const before = JSON.stringify((await hit(`?ids=${A},${B}`)).body.accounts);
+  const nope = await post('/deltas', {
+    items: { [A]: { twig: 1 }, [B]: { acorn: -5 } },   // 뒤엣것이 409
+  });
+  eq('한쪽이 걸리면 거절', nope.status, 409);
+  eq('아무것도 안 써졌다', JSON.stringify((await hit(`?ids=${A},${B}`)).body.accounts), before);
+
+  // --- 골드만 옮기면 나머지는 안 건드린다 (기존 호출부가 그대로 도는지)
+  const keep = await post('/deltas', { deltas: { [A]: 100 } });
+  eq('MT·체력·아이템 그대로',
+    [keep.body.accounts[A].mt, keep.body.accounts[A].hp, keep.body.accounts[A].items.twig], [3, 100, 5]);
+
   // --- 옛 기록(chips)이 gold 로 넘어오는지. 돈 이름을 바꾸기 전에 저장된 계정이다.
   fs.writeFileSync(FILE, JSON.stringify({
     accounts: {
       1000009: { chips: 7777, title: 'crown', items: { twig: 2 }, stats: { hands: 5 }, refilledAt: null },
       1000010: { chips: 100, gold: 200 },
+      1000011: { gold: 5, hp: null, mt: null },
     },
   }), 'utf-8');
-  const old = await hit('?ids=1000009,1000010');
+  const old = await hit('?ids=1000009,1000010,1000011');
   eq('옛 chips 를 gold 로 읽는다', old.body.accounts['1000009'].gold, 7777);
+  eq('옛 기록에도 MT·체력이 채워진다',
+    [old.body.accounts['1000009'].mt, old.body.accounts['1000009'].hp], [0, 100]);
   eq('나머지 필드는 그대로', old.body.accounts['1000009'].title, 'crown');
   eq('전적도 그대로', old.body.accounts['1000009'].stats.hands, 5);
   eq('chips 는 응답에 안 나온다', old.body.accounts['1000009'].chips, undefined);
   eq('둘 다 있으면 gold 가 이긴다', old.body.accounts['1000010'].gold, 200);
+  // null 은 `null <= 0` 이 참이라 그냥 두면 멀쩡한 계정이 죽은 것으로 읽힌다.
+  eq('hp: null 은 죽음이 아니다', old.body.accounts['1000011'].hp, 100);
+  eq('mt: null 도 0 으로', old.body.accounts['1000011'].mt, 0);
 
   // 한 번 쓰면 파일에서도 넘어간다
   eq('옛 계정에 delta 적용', (await post('/deltas', { deltas: { 1000009: -777 } })).body.accounts['1000009'].gold, 7000);

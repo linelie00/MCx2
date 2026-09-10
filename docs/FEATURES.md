@@ -401,6 +401,7 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/출첵` | 누구나 | `POST /api/accounts/claim` |
 | `/급여` | 누구나 | `POST /api/accounts/deltas` |
 | `/프로필` | 누구나 | `GET /api/accounts` · `POST /accounts/title` (카드·전적·칭호·아이템 탭) |
+| `/요트` 1위 | — | `POST /api/accounts/deltas` (MT +1) |
 | `/아이템 정보` | 누구나 | 없음 (명부가 코드 안에 있다) |
 | `/주사위` `/뽑기` | 누구나 | 없음 |
 
@@ -412,6 +413,7 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 
 - **요트 다이스** — 한국식 12칸(포카드·풀하우스가 서양 Yahtzee 와 다르게 **눈 다섯 개의 합**).
   최대 4자리, 두 자리부터 시작한다. 미겔·마티암을 NPC 로 부를 수 있다.
+  끝까지 둔 판에서 **1위가 한 명이면 MT 한 개**. 동점이면 안 준다.
 - **블랙잭** — 카지노 "bard" 이고 **미겔이 딜러**다. 미겔을 손님 자리에 앉히면 `npc` 가
   딜러를 맡는다(이름과 얼굴이 따로 있다). 최대 4자리, 혼자서도 시작된다.
   6덱 S17 · 3:2 · Split · Double · Insurance · Surrender 전부 있다.

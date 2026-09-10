@@ -9,6 +9,8 @@ import { randomInt } from 'node:crypto';
 import { base } from '../embeds.js';
 
 const dice = {
+  // 계정을 안 건드린다. 쓰러져 있어도 주사위는 굴릴 수 있다.
+  allowDead: true,
   data: new SlashCommandBuilder()
     .setName('주사위')
     .setDescription('주사위를 굴립니다.')
@@ -43,6 +45,8 @@ const dice = {
 };
 
 const draw = {
+  // 계정을 안 건드린다. 쓰러져 있어도 주사위는 굴릴 수 있다.
+  allowDead: true,
   data: new SlashCommandBuilder()
     .setName('뽑기')
     .setDescription('항목 중에서 무작위로 뽑습니다.')

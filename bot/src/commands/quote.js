@@ -37,6 +37,8 @@ const render = (q, footerExtra) =>
   (q.type === 'pair' ? pairEmbed(q, footerExtra) : lineEmbed(q, footerExtra));
 
 export default {
+  // 사이트 도구 — 세계관 밖이다
+  allowDead: true,
   data: new SlashCommandBuilder()
     .setName('대사')
     .setDescription('미하티의 대사를 꺼내옵니다.')

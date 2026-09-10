@@ -119,6 +119,8 @@ async function register(interaction, me, movies) {
 }
 
 export default {
+  // 사이트 도구 — 세계관 밖이다
+  allowDead: true,
   data: new SlashCommandBuilder()
     .setName('영화')
     .setDescription('본 영화와 평점을 다룹니다.')

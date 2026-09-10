@@ -104,10 +104,10 @@
 
 ```json
 { "accounts": {
-  "123456789012345678": { "gold": 1250, "title": null, "items": {},
+  "123456789012345678": { "gold": 1250, "mt": 3, "hp": 74, "title": null, "items": {},
                           "stats": { "hands": 12, "won": 5, "peak": 2100 },
                           "refilledAt": "2026-09-10", "updatedAt": "2026-09-10T12:31:04.221Z" },
-  "npc:migel":          { "gold": 1000, "title": null, "items": {}, "refilledAt": "2026-09-10", "updatedAt": "..." }
+  "npc:migel":          { "gold": 1000, "mt": 0, "hp": 100, "title": null, "items": {}, "refilledAt": "2026-09-10", "updatedAt": "..." }
 } }
 ```
 
@@ -133,10 +133,10 @@
 | `services/accountStore.js` | 읽기·쓰기. 아래 두 가지가 다른 스토어와 다르다 |
 | `services/dayKey.js` | KST `YYYY-MM-DD` |
 | `middleware/requireBot.js` | `X-Bot-Key`. `BOT_KEY` 가 비면 전부 401(fail closed) |
-| `controllers/accountController.js` | `list` · `applyDeltas` · `claim` · `setTitle` |
+| `controllers/accountController.js` | `list` · `applyDeltas`(골드·MT·체력·아이템) · `claim` · `setTitle` |
 | `routes/accounts.js` | `express.json()` 은 **POST 마다 따로** |
 | `data/accounts.seed.json` | `{ "accounts": {} }` |
-| `scripts/check-accounts.js` | `npm run check-accounts` — 53건 |
+| `scripts/check-accounts.js` | `npm run check-accounts` — 89건 |
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
@@ -180,6 +180,7 @@ src/casino/accounts.js     id 해석과 표기 (/프로필·/출첵·나중의 �
 src/casino/titles.js       칭호 명부 34종 — 전적에서 계산해 낸다
 src/casino/titleCard.js    칭호를 화면에 내는 모양 (명패·별·등급 색)
 src/casino/items.js        아이템 명부 95종 — 시트에서 옮겼다
+src/casino/alive.js        쓰러진 사람 막기 (hp <= 0). 30초 캐시
 src/holdem/mobs.js         엘리트 에너미 35종과 성향
 src/casino/tables.js       다른 채널 판에 앉아 있는지
 src/commands/checkin.js    /출첵 (사람)
@@ -298,6 +299,49 @@ cd bot && npm run check-keys          # BOT_KEY 가 통하는지
 - 두 채널에서 같은 사람/같은 NPC 앉히기 → 거절
 - 미겔을 파산시키고 다음 날 판 열기 → 1000으로 돌아오는지
 - 20000 가진 사람이 앉아도 스택이 1000인지, 다 잃으면 19000인지
+
+## 6-0. 재화 둘과 체력
+
+| 칸 | 뜻 | 범위를 벗어나면 |
+|---|---|---|
+| `gold` | 걸고 쓰는 돈 | `MIN_BALANCE` 아래는 **409**. 0 으로 깎지 않는다 |
+| `mt` | 모으는 것. 요트 1위·홀덤 토너먼트 우승으로만 는다 | 0 아래는 **409** |
+| `hp` | 상태값. `0` 이면 사망 | `0~MAX_HP` 로 **자른다** |
+
+**체력만 자르는 것은 일부러다.** 95에서 회복약을 먹어 넘치는 것은 버그가 아니라 설계다.
+나머지 둘은 천장이 없으므로 범위를 벗어나면 버그이고, 그래서 거절이 맞다.
+
+**사망을 저장하지 않는다.** `hp <= 0` 으로 계산해 낸다 — 플래그를 두면 `hp: 0 · dead: false`
+같은 어긋난 짝이 생기고 어느 쪽이 맞는지 알 길이 없다(칭호와 같은 원칙).
+저장된 `hp: null` 을 그냥 두면 `null <= 0` 이 참이라 멀쩡한 계정이 죽으므로 `normalize` 가
+숫자가 아닌 값을 기본값으로 되돌린다.
+
+막는 것은 `bot/src/casino/alive.js` 가 **중앙 디스패치에서 한 번에** 본다 — 명령마다
+흩뿌리면 새 명령을 만들 때 빠뜨린다. 계정을 안 보는 명령과 세계관 밖 사이트 도구는
+`allowDead: true` 로 지나간다. **조회를 30초 캐시한다** — 인터랙션마다 HTTP 를 치면
+3초 시한을 갉아먹고, `/아이템 정보`·`/홀덤 족보` 처럼 일부러 즉답하는 명령이 느려진다.
+값을 쓴 쪽은 `forget(id)` 로 캐시를 비운다.
+
+**죽어도 `/출첵` 과 `/상점` 은 열려 있다.** 안 그러면 파산한 채로 죽은 사람이 부활의
+영약을 살 길이 없어 영영 못 일어난다.
+
+## 6-0-1. 한 번의 쓰기로 넷을 옮긴다
+
+`POST /api/accounts/deltas` 가 `{ deltas, mt, hp, items, bump }` 를 받는다. **다섯 다
+선택이고 함께 나간다.**
+
+상점은 골드를 빼고 아이템을 넣는 **한 번의 쓰기**여야 하고, 던전은 체력과 아이템을 같이
+써야 한다. 둘로 나누면 락 없는 이 스토어에서 두 번째 읽기가 첫 번째 쓰기를 통째로 놓치고,
+중간에 죽으면 반쪽만 남는다. 그래서 라우트를 새로 만들지 않았다.
+
+다루는 id 는 **다섯 맵 키의 합집합**이다. `deltas` 를 필수로 두면 MT 만 주는 보상이
+`deltas: { id: 0 }` 을 억지로 끼워야 하는데 봇의 `wallet.apply` 가 0 을 걸러 내서 그 쓰기가
+통째로 사라진다. `bump` 도 합집합에 들어간다 — 토너먼트는 핸드마다 전적만 적고 골드는
+끝에 한 번 옮기므로 **카운터만 있는 쓰기**가 실제로 온다.
+
+봇 쪽은 `wallet.apply({...})` 하나다. `commit(guildId, deltas, bump)` 은 그 위의 얇은
+껍데기로 남아 판 정산이 쓰던 길을 그대로 지킨다. 거르는 일은 `applyBody` 로 빼 뒀다 —
+HTTP 없이 검사할 수 있게.
 
 ## 6-1. 칭호
 

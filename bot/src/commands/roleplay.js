@@ -17,6 +17,8 @@ const CHARACTER_CHOICES = [
 ];
 
 export default {
+  // 사이트 도구 — 세계관 밖이다
+  allowDead: true,
   data: new SlashCommandBuilder()
     .setName('캐입')
     .setDescription('미겔·마티암과 이야기합니다.')

@@ -45,7 +45,7 @@ async function execute(interaction) {
   const who = displayOf(id);
   let gold;
   try {
-    const res = await postAccountDeltas({ [id]: amount });
+    const res = await postAccountDeltas({ deltas: { [id]: amount } });
     gold = res.accounts[id].gold;
   } catch (err) {
     await interaction.editReply({ embeds: [fail(`일당을 주지 못했어요. ${err.message}`)] });

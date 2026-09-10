@@ -17,11 +17,12 @@
  *   2. 커밋이 실패한 핸드의 몫이 사라지는 것 (실패했는데 rebase 함)
  *   3. rebase 가 화면용 결산까지 0으로 만드는 것 (net 과 deltas 를 안 나눔)
  *   4. 판에 들고 앉는 상한이 계정 잔액에 잘못 적용되는 것 (남은 돈이 증발)
+ *   5. 서버로 보낼 것을 고를 때 빠뜨리거나 남기는 것 (applyBody)
  */
 import assert from 'node:assert/strict';
 import * as bj from '../src/blackjack/state.js';
 import * as hold from '../src/holdem/state.js';
-import { buyIn, ledger } from '../src/casino/wallet.js';
+import { buyIn, ledger, applyBody, hasMoves } from '../src/casino/wallet.js';
 import { STAKES } from '../src/casino/stakes.js';
 
 /** 기본 등급(로우)으로 검사한다. 등급마다 비율이 같아서 하나만 봐도 된다. */
@@ -241,6 +242,32 @@ check('상한만큼 다 잃어도 남긴 돈은 그대로다', () => {
   server.apply(book.deltas());
   book.rebase();
   assert.equal(server.bal.u, 5000 - TABLE_STACK, '남겨 둔 돈까지 사라졌다');
+});
+
+console.log('\n서버로 보낼 것 고르기');
+check('0 인 증감과 모브는 안 보낸다', () => {
+  const body = applyBody({
+    deltas: { a: 0, 'mob:1': 500, b: -3 },
+    items: { 'mob:1': { twig: 1 }, b: { twig: 2, acorn: 0 } },
+  });
+  assert.deepStrictEqual(body.deltas, { b: -3 });
+  assert.deepStrictEqual(body.items, { b: { twig: 2 } }, '모브나 0 짜리 칸이 남았다');
+});
+check('네 가지가 각자 걸러진다', () => {
+  const body = applyBody({ mt: { a: 1, 'mob:0': 9 }, hp: { a: -20, b: 0 } });
+  assert.deepStrictEqual(body.mt, { a: 1 });
+  assert.deepStrictEqual(body.hp, { a: -20 }, '0 인 체력 증감이 남았다');
+});
+check('전적은 골드가 안 움직여도 살아남는다', () => {
+  // 던전·토너먼트는 골드를 안 옮기고 전적만 적는다. 예전 조건("골드가 움직인 id")
+  // 이면 그 전적이 매번 통째로 사라진다.
+  const body = applyBody({ bump: { a: { dungeonWon: 1 }, b: {} } });
+  assert.deepStrictEqual(body.bump, { a: { dungeonWon: 1 } });
+  assert.equal(hasMoves(body), true, '전적만 있는 쓰기를 접어 버렸다');
+});
+check('다섯이 다 비면 안 보낸다', () => {
+  assert.equal(hasMoves(applyBody({})), false);
+  assert.equal(hasMoves(applyBody({ deltas: { a: 0 }, items: { 'mob:1': { twig: 1 } } })), false);
 });
 
 console.log(failed ? `\n실패 ${failed}건` : '\n전부 통과');

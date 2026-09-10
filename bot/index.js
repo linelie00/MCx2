@@ -9,6 +9,7 @@ import config from './src/config.js';
 import { loadCommands } from './src/loadCommands.js';
 import { fail } from './src/embeds.js';
 import { checkOwnerKeys, checkBotKey } from './src/api.js';
+import { ensureAlive } from './src/casino/alive.js';
 import { useCustomFaces } from './src/yacht/render.js';
 import {
   useCardEmoji, emojiName, BACK_NAME, SUITS, RANKS,
@@ -130,6 +131,12 @@ client.on('interactionCreate', async (interaction) => {
       await handler.autocomplete?.(interaction);
       return;
     }
+
+    // **쓰러진 사람은 아무것도 못 한다.** 명령을 내는 쪽마다 검사를 흩뿌리면 새 명령을
+    // 만들 때마다 빠뜨리므로 여기서 한 번에 본다. 계정을 안 보는 명령(`allowDead`)과
+    // 세계관 밖 사이트 도구는 그냥 지나간다. 조회는 캐시라 HTTP 를 거의 안 친다.
+    if (!handler.allowDead && !(await ensureAlive(interaction))) return;
+
     if (isComponent) {
       await handler.component(interaction);
       return;

@@ -176,6 +176,8 @@ async function upload(interaction) {
 }
 
 export default {
+  // 사이트 도구 — 세계관 밖이다
+  allowDead: true,
   data: new SlashCommandBuilder()
     .setName('그림')
     .setDescription('갤러리에서 그림을 꺼내옵니다.')

@@ -218,12 +218,14 @@ export const getAccounts = (ids) =>
   request(`/api/accounts?ids=${encodeURIComponent(ids.join(','))}`, { bot: true });
 
 /**
- * 정산·급여. **잔액이 아니라 증감**을 보낸다 — 락이 없는 스토어에서 안전한 유일한 방식이다.
+ * 정산·급여·상점·던전. **잔액이 아니라 증감**을 보낸다 — 락이 없는 스토어에서 안전한
+ * 유일한 방식이다.
  *
- * `bump` 는 전적 카운터(`{ id: { hands: 1, won: 1 } }`). 이것도 더하기라 같은 길을 탄다.
+ * 본문을 통째로 받는다: `{ deltas, mt, hp, items, bump }`. 다섯 다 선택이고 **한 번의
+ * 쓰기로 같이 나간다** — 나눠 보내면 반쪽만 저장된 상태가 생긴다.
  */
-export const postAccountDeltas = (deltas, bump) =>
-  request('/api/accounts/deltas', { method: 'POST', bot: true, json: { deltas, bump } });
+export const postAccountDeltas = (body) =>
+  request('/api/accounts/deltas', { method: 'POST', bot: true, json: body });
 
 /** 달고 있을 칭호의 키를 바꾼다. `null` 이면 벗는다. */
 export const setTitle = (id, title) =>

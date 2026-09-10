@@ -560,12 +560,32 @@ function overText(game, cashed) {
   return `\n\n${lines.join('\n')}`;
 }
 
-/** 이겼으면 떨군 것, 졌으면 사망. */
+/**
+ * 살아서 나간 판을 어떻게 말할지. **끝난 까닭이 저마다 다르다**(state.end 의 reason).
+ *
+ * 여기 없는 까닭은 `finished` 로 떨어진다 — 무슨 일이 있었는지는 몰라도, 체력이
+ * 남아 있으면 죽었다고 말하지는 않는다.
+ */
+const LEFT_TEXT = {
+  fled: { title: '🏃 도망쳤어요', body: '을(를) 두고 물러났어요.' },
+  idle: { title: '⏳ 던전이 저절로 닫혔어요', body: '앞에서 한참 아무도 안 움직였어요.' },
+  cancelled: { title: '🚪 던전에서 나왔어요', body: '을(를) 두고 판을 접었어요.' },
+  finished: { title: '🚪 던전에서 나왔어요', body: '와(과)의 싸움이 끝났어요.' },
+};
+
+/** 이겼으면 떨군 것, 쓰러졌으면 사망, 그 밖에는 살아서 나간 것. */
 async function finishDungeon(game) {
-  const me = game.seats.find((s) => s.id === game.owner) ?? game.seats.find((s) => s.kind !== 'mob');
+  // 싸우고 있던 자리. 지원군을 불렀으면 **주인이 아니라 지원군**이다.
+  const me = game.seats.find((s) => s.kind !== 'mob');
   const mob = game.seats.find((s) => s.kind === 'mob');
-  const won = (mob?.gold ?? 0) <= 0 && (me?.gold ?? 0) > 0;
-  const fled = game.endedReason === 'fled';
+  const alone = me?.id === game.owner;
+
+  // **쓰러졌는지는 체력으로만 판단한다.** 예전에는 "이긴 게 아니면 진 것" 으로 갈라서,
+  // 방치로 닫히거나 `/홀덤 그만` 으로 접은 판에서 **체력이 98 인 사람에게 부활을
+  // 권했다.** 끝나는 길은 넷이고 그중 죽음은 하나뿐이다.
+  const dead = (me?.gold ?? 0) <= 0;
+  const won = !dead && (mob?.gold ?? 0) <= 0;
+  const left = !dead && !won;              // 도망 · 방치 · 접기 — 살아서 나갔다
 
   // 최대치를 넘긴 체력은 여기서 골드가 된다. **자리 값을 읽기 전에** 부른다 —
   // 넘긴 몫이 빠져야 "남은 체력" 이 실제로 계정에 남는 값과 같아진다.
@@ -574,17 +594,20 @@ async function finishDungeon(game) {
     return null;
   });
 
-  // 도망은 이긴 것도 진 것도 아니다. 체력은 이미 핸드마다 저장돼 있다.
-  if (fled) {
+  // 살아서 나간 판. 이긴 것도 진 것도 아니다 — 체력은 이미 핸드마다 저장돼 있다.
+  if (left) {
+    const how = LEFT_TEXT[game.endedReason] ?? LEFT_TEXT.finished;
     await game.message?.channel?.send({
       embeds: [base({
-        title: '🏃 도망쳤어요',
-        description: `**${mob?.name ?? '적'}** 을(를) 두고 물러났어요.`
-          + `\n남은 체력 **${me?.gold ?? 0}**.`
+        title: how.title,
+        description: `**${mob?.name ?? '적'}** ${how.body}`
+          + `\n${alone ? '남은 체력' : `**${me?.name}** 의 남은 체력`} **${me?.gold ?? 0}**.`
           + overText(game, cashed),
         color: THEME_COLOR,
       })],
     }).catch(() => {});
+    forget(game.owner);
+    if (me) forget(me.id);
     return;
   }
 
@@ -609,14 +632,21 @@ async function finishDungeon(game) {
     await game.message?.channel?.send({
       embeds: [base({
         title: '💀 쓰러졌어요',
-        description: `**${mob?.name}** 에게 졌어요.`
-          + '\n**부활의 영약**을 마시면 일어납니다 — `/상점` 에서 살 수 있어요.'
+        // 지원군이 대신 싸우다 쓰러졌으면 **쓰러진 것은 지원군**이다. 주인에게
+        // 부활의 영약을 마시라고 하면 엉뚱한 사람이 약을 먹는다.
+        description: (alone
+          ? `**${mob?.name}** 에게 졌어요.`
+            + '\n**부활의 영약**을 마시면 일어납니다 — `/상점` 에서 살 수 있어요.'
+          : `**${me?.name}** 이(가) **${mob?.name}** 에게 졌어요.`
+            + `\n**부활의 영약**을 먹이면 일어납니다 — \`/사용 이름:부활의 영약 캐릭터:${me?.name}\`.`)
           + overText(game, cashed),
         color: 0x6b5b5b,
       })],
     }).catch(() => {});
   }
+  // 캐시를 비워야 다음 명령이 서버를 다시 본다. 쓰러진 것도 일어난 것도 여기서 갈린다.
   forget(id);
+  if (me) forget(me.id);
 }
 
 async function settleAndShow(game) {

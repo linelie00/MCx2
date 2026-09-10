@@ -7,7 +7,8 @@
  * 되고, 무엇보다 칭호와 아이템은 늘어나는 목록이라 언젠가 혼자 화면을 다 먹는다.
  *
  * **칭호는 저장돼 있지 않다.** 전적에서 계산해 낸다(casino/titles.js) — 저장하는 것은
- * 지금 달고 있는 것 하나뿐이고, 그것도 이름이 아니라 키다.
+ * 지금 달고 있는 것 하나뿐이고, 그것도 이름이 아니라 키다. 꾸밈(별·등급 색)은
+ * casino/titleCard.js 가 판의 획득 알림과 함께 쓴다.
  *
  * 대상을 옵션 둘로 받는다 — 사람은 유저 옵션, 미겔·마티암은 선택지. 하나로 못 합친다:
  * 길드 멤버를 자동완성으로 뒤지려면 GuildMembers 인텐트가 필요한데 봇은 Guilds 만 켠다.
@@ -24,11 +25,14 @@ import {
   AttachmentBuilder, StringSelectMenuBuilder,
 } from 'discord.js';
 import { getAccounts, setTitle } from '../api.js';
-import { base, fail, THEME_COLOR } from '../embeds.js';
+import { base, fail, gauge, THEME_COLOR } from '../embeds.js';
 import { NPC_CHOICES, resolveTarget, displayOf } from '../casino/accounts.js';
 import { seatedAt } from '../casino/tables.js';
 import { CATEGORIES, CATEGORY_LABEL } from '../casino/poker.js';
-import { earned as earnedTitles, TITLE_BY_KEY, TOTAL as TITLE_TOTAL } from '../casino/titles.js';
+import {
+  TITLES, GROUPS, earned as earnedTitles, TITLE_BY_KEY, TOTAL as TITLE_TOTAL,
+} from '../casino/titles.js';
+import { stamp, stampMd } from '../casino/titleCard.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
 export const PREFIX = 'prof';
@@ -67,18 +71,6 @@ const NO_TITLE = '-';
 const PER_PAGE = 12;
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
-
-/**
- * 텍스트 게이지. `▰▰▰▰▱▱▱ 57%`
- *
- * 이미지를 안 쓰기로 한 이상 "얼마나 찼는지" 를 보여줄 방법이 이것뿐이다. 숫자만
- * 적어 두면 카드가 표처럼 보이는데, 막대가 하나 있으면 그것만으로 게임 화면이 된다.
- */
-function gauge(done, total, cells = 8) {
-  if (!total) return `\`${'▱'.repeat(cells)}\` _아직_`;
-  const filled = Math.max(0, Math.min(cells, Math.round((done / total) * cells)));
-  return `\`${'▰'.repeat(filled)}${'▱'.repeat(cells - filled)}\` ${Math.round((done / total) * 100)}%`;
-}
 
 /** 최고 족보 숫자 → 이름. 서버는 큰 쪽만 남기려고 숫자로 들고 있다. */
 function bestHandLabel(n) {
@@ -163,40 +155,50 @@ function recordTab(account) {
 }
 
 /**
- * 가진 칭호. **저장된 목록이 아니라 전적에서 계산해 낸 것**이다(casino/titles.js).
+ * 칭호 도감. **가진 것과 못 가진 것을 함께** 보여 준다.
  *
- * 갈래별로 묶어 보여 준다 — 서른 개가 넘어가면 줄줄이 늘어놓아서는 뭘 가졌는지 안 보인다.
+ * 가진 것만 늘어놓으면 "뭘 더 모아야 하나" 를 알 길이 없다. 그렇다고 못 가진 것의
+ * 이름과 조건을 다 까 두면 모으는 맛이 없어서, 잠긴 자리는 `???` 로만 둔다 —
+ * 몇 개가 남았는지는 보이고 무엇인지는 안 보인다.
+ *
+ * 잠긴 것은 한 줄에 몰아 찍는다. `🔒 ??? ??? ???` — 줄마다 물음표를 늘어놓으면
+ * 아직 아무것도 없는 사람의 화면이 물음표 서른 줄이 된다.
  */
 function titlesTab(account, page, npc) {
   const held = earnedTitles(account, { npc });
+  const has = new Set(held.map((t) => t.key));
+
+  // 셀렉트만 쪽을 넘긴다. 목록은 서른넷이 다 들어가지만 셀렉트는 25칸이 한도다.
   const pages = Math.max(1, Math.ceil(held.length / TITLES_PER_PAGE));
   const at = Math.min(Math.max(0, page), pages - 1);
   const slice = held.slice(at * TITLES_PER_PAGE, (at + 1) * TITLES_PER_PAGE);
 
   const worn = account.title ? TITLE_BY_KEY[account.title] : null;
-  const lines = [`**수집** ${gauge(held.length, TITLE_TOTAL)} ${held.length} / ${TITLE_TOTAL}`, ''];
+  const lines = [`**수집** ${gauge(held.length, TITLE_TOTAL, { percent: false })} **${held.length}** / ${TITLE_TOTAL}`];
 
-  if (!held.length) {
-    lines.push('_아직 하나도 없어요._ 한 판만 둬도 `첫걸음` 이 붙습니다.');
-  } else {
-    let group = null;
-    for (const t of slice) {
-      if (t.group !== group) { group = t.group; lines.push(`**■ ${group}**`); }
+  for (const group of GROUPS) {
+    const all = TITLES.filter((t) => t.group === group && (t.npc !== false || !npc));
+    if (!all.length) continue;
+    const mine = all.filter((t) => has.has(t.key));
+
+    lines.push('', `**■ ${group}**　\`${mine.length}/${all.length}\``);
+    for (const t of mine) {
       const mark = t === worn ? '▸ ' : '　';
-      lines.push(`${mark}**${t.name}** · _${t.desc}_`);
+      lines.push(`${mark}${stampMd(t)} · _${t.desc}_`);
     }
+    const locked = all.length - mine.length;
+    if (locked) lines.push(`　🔒 ${'`???` '.repeat(locked).trim()}`);
   }
 
+  const fields = [
+    { name: '가진 칭호', value: `**${held.length}** / ${TITLE_TOTAL}`, inline: true },
+    { name: '달고 있는 것', value: worn ? `**${stamp(worn)}**` : '_없음_', inline: true },
+  ];
+  // 쪽 버튼은 스물다섯 개를 넘게 가졌을 때만 나온다. 그때만 "고르기" 칸을 붙인다.
+  if (pages > 1) fields.push({ name: '고르기', value: `${at + 1} / ${pages}쪽`, inline: true });
+
   return {
-    fields: [
-      { name: '가진 칭호', value: `**${held.length}** / ${TITLE_TOTAL}`, inline: true },
-      { name: '달고 있는 것', value: worn ? `**${worn.name}**` : '_없음_', inline: true },
-      { name: '쪽', value: `${at + 1} / ${pages}`, inline: true },
-    ],
-    description: lines.join('\n'),
-    pages,
-    page: at,
-    held: slice,
+    fields, description: lines.join('\n'), pages, page: at, held: slice,
   };
 }
 
@@ -252,7 +254,7 @@ function cardFor(who, account, tab, page) {
       ? '/급여 로 일당을 받습니다 (자동으로 늘지 않아요)'
       : '/출첵 으로 하루 한 번 받을 수 있어요',
   })
-    .setAuthor({ name: worn ? `〈 ${worn.name} 〉` : '칭호 없음' })
+    .setAuthor({ name: worn ? `〈 ${stamp(worn)} 〉` : '칭호 없음' })
     .addFields(body.fields);
 
   // **초상화는 오른쪽 위다.** 임베드에서 thumbnail 은 자리를 못 옮긴다 — 왼쪽에
@@ -299,7 +301,7 @@ function rows(who, tab, page, pages, held) {
         .setPlaceholder('달 칭호 고르기')
         .addOptions(
           { label: '칭호 벗기', value: NO_TITLE, description: '아무것도 안 답니다' },
-          ...held.map((t) => ({ label: t.name, value: t.key, description: clipW(t.desc, 90) })),
+          ...held.map((t) => ({ label: stamp(t), value: t.key, description: clipW(t.desc, 90) })),
         ),
     ));
   }

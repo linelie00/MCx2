@@ -45,6 +45,9 @@ export function humanSeat(user, displayName) {
     character: null,
     name: meta ? meta.label : (displayName || user.globalName || user.username),
     color: meta ? meta.color : THEME_COLOR,
+    // 칭호 알림이 얼굴을 쓴다. 정산 시점에는 인터랙션이 없어서 유저 객체를
+    // 다시 못 얻으므로 앉을 때 주소만 챙겨 둔다.
+    avatar: user.displayAvatarURL?.({ size: 256 }) ?? null,
     chips: 0,
     bet: 0,          // 이번 핸드에 걸기로 한 액수(아직 확정 전이면 stage 에 있다)
     staged: 0,

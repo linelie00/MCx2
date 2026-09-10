@@ -20,6 +20,8 @@ import * as state from '../blackjack/state.js';
 import { chooseAction, chooseInsurance, chooseBet } from '../blackjack/ai.js';
 import { loadAccounts, commit, buyIn } from '../casino/wallet.js';
 import { earned as earnedTitles, gained as gainedTitles } from '../casino/titles.js';
+import { awardCard } from '../casino/titleCard.js';
+import { displayOf } from '../casino/accounts.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor } from '../casino/stakes.js';
 import {
@@ -577,14 +579,18 @@ async function announceTitles(game, accounts) {
   for (const [id, account] of Object.entries(accounts)) {
     const seat = game.seats.find((s) => s.id === id);
     if (!seat) continue;
-    const now = earnedTitles(account, { npc: seat.kind === 'npc' });
+    const npc = seat.kind === 'npc';
+    const now = earnedTitles(account, { npc });
     const fresh = gainedTitles(game.titles?.[id] ?? [], now);
     game.titles = { ...(game.titles ?? {}), [id]: now.map((t) => t.key) };
     if (!fresh.length) continue;
 
-    const lines = fresh.map((t) => `🏅 **${t.name}** · _${t.desc}_`);
-    await game.message.channel.send({ content: [`**${seat.name}** 새 칭호`, ...lines].join('\n') })
-      .catch((err) => console.warn('[카지노] 칭호 알림 실패:', err.message));
+    // 미겔·마티암 얼굴은 로컬 파일이라 displayOf 가 첨부까지 챙겨 준다. 사람은
+    // 앉을 때 담아 둔 CDN 주소를 쓴다.
+    const face = npc ? displayOf(id) : { avatar: seat.avatar, avatarFile: null };
+    await game.message.channel.send(awardCard({
+      name: seat.name, avatar: face.avatar, avatarFile: face.avatarFile, fresh, held: now.length,
+    })).catch((err) => console.warn('[카지노] 칭호 알림 실패:', err.message));
   }
 }
 

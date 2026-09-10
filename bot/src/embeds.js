@@ -34,9 +34,25 @@ export function base({ title, description, color = THEME_COLOR, footer } = {}) {
   return e;
 }
 
+/**
+ * 텍스트 게이지. `▰▰▰▰▱▱▱ 57%`
+ *
+ * 그림을 안 쓰기로 한 이상 "얼마나 찼는지" 를 보여줄 방법이 이것뿐이다. 숫자만
+ * 적어 두면 표처럼 보이는데, 막대가 하나 있으면 그것만으로 게임 화면이 된다.
+ *
+ * `percent: false` 면 퍼센트를 안 붙인다 — 수집처럼 뒤에 `3 / 34` 를 따로 적을 때.
+ */
+export function gauge(done, total, { cells = 8, percent = true } = {}) {
+  if (!total) return `\`${'▱'.repeat(cells)}\``;
+  const ratio = Math.max(0, Math.min(1, done / total));
+  const filled = Math.round(ratio * cells);
+  const bar = `\`${'▰'.repeat(filled)}${'▱'.repeat(cells - filled)}\``;
+  return percent ? `${bar} ${Math.round(ratio * 100)}%` : bar;
+}
+
 /** 실패를 알릴 때. 사용자에게는 항상 한국어 한 줄로 보여준다. */
 export function fail(message) {
   return base({ title: '실패', description: message, color: 0x9c5a4a });
 }
 
-export default { THEME_COLOR, trunc, mdEscape, base, fail };
+export default { THEME_COLOR, trunc, mdEscape, gauge, base, fail };

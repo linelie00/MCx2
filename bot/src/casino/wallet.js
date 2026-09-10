@@ -80,13 +80,22 @@ export const roundToUnit = (amount, unit) => Math.max(0, Math.floor(amount / uni
  *
  * 길드는 안 본다 — 계정은 디스코드 유저 하나에 하나다.
  */
-export async function load(guildId, userIds) {
+export async function loadAccounts(guildId, userIds) {
   const { accounts } = await getAccounts(userIds);
-  return Object.fromEntries(userIds.map((id) => [id, accounts?.[id]?.chips ?? START_CHIPS]));
+  return Object.fromEntries(userIds.map(
+    (id) => [id, accounts?.[id] ?? { chips: START_CHIPS, stats: {}, items: {}, title: null }],
+  ));
+}
+
+/** 잔액만 필요할 때. 판을 여는 쪽은 전적도 봐야 해서 loadAccounts 를 쓴다. */
+export async function load(guildId, userIds) {
+  const accounts = await loadAccounts(guildId, userIds);
+  return Object.fromEntries(userIds.map((id) => [id, accounts[id].chips ?? START_CHIPS]));
 }
 
 /**
- * 정산 결과를 남긴다. deltas 는 `{ id: ±n }`. **성공 여부를 돌려준다.**
+ * 정산 결과를 남긴다. deltas 는 `{ id: ±n }`. `{ ok, accounts }` 를 돌려준다 —
+ * `accounts` 는 **쓰고 난 뒤의 계정**이라 부르는 쪽이 새 칭호를 바로 계산할 수 있다.
  *
  * 던지지 않는 이유는 저장이 판을 막을 이유가 아니어서다 — 대사가 그렇듯 있으면 좋은
  * 것이다. 실패하면 부르는 쪽이 판에 "저장 안 됨" 을 띄우고 계속 돈다. 칩은 인메모리
@@ -103,7 +112,7 @@ export async function commit(guildId, deltas, bump = {}) {
   const moved = Object.fromEntries(
     Object.entries(deltas).filter(([id, n]) => n !== 0 && isPersistent(id)),
   );
-  if (!Object.keys(moved).length) return true;
+  if (!Object.keys(moved).length) return { ok: true, accounts: {} };
 
   // 전적은 **칩이 움직인 자리 것만** 보낸다. 서버가 deltas 에 없는 id 를 거절하고,
   // 애초에 칩이 안 움직였으면 그 사람이 그 핸드에 낸 것도 없다.
@@ -112,11 +121,11 @@ export async function commit(guildId, deltas, bump = {}) {
   );
 
   try {
-    await postAccountDeltas(moved, counters);
-    return true;
+    const res = await postAccountDeltas(moved, counters);
+    return { ok: true, accounts: res?.accounts ?? {} };
   } catch (err) {
     console.warn('[카지노] 칩 저장 실패 — 다음 정산에서 다시 시도합니다:', err.message);
-    return false;
+    return { ok: false, accounts: {} };
   }
 }
 
@@ -180,4 +189,6 @@ export function ledger(initial) {
   };
 }
 
-export default { START_CHIPS, isPersistent, buyIn, roundToUnit, load, commit, ledger };
+export default {
+  START_CHIPS, isPersistent, buyIn, roundToUnit, load, loadAccounts, commit, ledger,
+};

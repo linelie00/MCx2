@@ -3,8 +3,11 @@
  *
  * 계정을 사람이 볼 수 있는 유일한 창이다. 대상을 안 주면 자기 것.
  *
- * **탭이 셋이다** — 카드 · 전적 · 아이템. 한 화면에 다 넣으면 임베드가 스크롤이 되고,
- * 무엇보다 아이템은 늘어나는 목록이라 언젠가 혼자 화면을 다 먹는다. 버튼으로 나눈다.
+ * **탭이 넷이다** — 카드 · 전적 · 칭호 · 아이템. 한 화면에 다 넣으면 임베드가 스크롤이
+ * 되고, 무엇보다 칭호와 아이템은 늘어나는 목록이라 언젠가 혼자 화면을 다 먹는다.
+ *
+ * **칭호는 저장돼 있지 않다.** 전적에서 계산해 낸다(casino/titles.js) — 저장하는 것은
+ * 지금 달고 있는 것 하나뿐이고, 그것도 이름이 아니라 키다.
  *
  * 대상을 옵션 둘로 받는다 — 사람은 유저 옵션, 미겔·마티암은 선택지. 하나로 못 합친다:
  * 길드 멤버를 자동완성으로 뒤지려면 GuildMembers 인텐트가 필요한데 봇은 Guilds 만 켠다.
@@ -18,13 +21,14 @@
  */
 import {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
-  AttachmentBuilder,
+  AttachmentBuilder, StringSelectMenuBuilder,
 } from 'discord.js';
-import { getAccounts } from '../api.js';
+import { getAccounts, setTitle } from '../api.js';
 import { base, fail, THEME_COLOR } from '../embeds.js';
 import { NPC_CHOICES, resolveTarget, displayOf } from '../casino/accounts.js';
 import { seatedAt } from '../casino/tables.js';
 import { CATEGORIES, CATEGORY_LABEL } from '../casino/poker.js';
+import { earned as earnedTitles, TITLE_BY_KEY, TOTAL as TITLE_TOTAL } from '../casino/titles.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
 export const PREFIX = 'prof';
@@ -41,8 +45,23 @@ const data = new SlashCommandBuilder()
 const TABS = [
   { key: 'card', label: '카드' },
   { key: 'record', label: '전적' },
+  { key: 'titles', label: '칭호' },
   { key: 'items', label: '아이템' },
 ];
+
+/**
+ * 셀렉트 한 벌에 넣을 수 있는 칭호 수.
+ *
+ * 디스코드가 선택지를 25개로 막는데, 한 칸은 '벗기' 가 쓴다. 칭호가 그보다
+ * 많아지면 쪽을 넘겨 고른다.
+ */
+const TITLES_PER_PAGE = 24;
+
+/**
+ * '벗기' 칸의 값. **빈 문자열을 못 쓴다** — 디스코드가 셀렉트 값을 한 글자 이상으로
+ * 막아서, `value: ''` 로 두면 카드를 만드는 자리에서 통째로 터진다.
+ */
+const NO_TITLE = '-';
 
 /** 한 페이지에 보여 줄 아이템 수. 임베드 한 칸에 넉넉히 들어가는 양. */
 const PER_PAGE = 12;
@@ -143,6 +162,44 @@ function recordTab(account) {
   };
 }
 
+/**
+ * 가진 칭호. **저장된 목록이 아니라 전적에서 계산해 낸 것**이다(casino/titles.js).
+ *
+ * 갈래별로 묶어 보여 준다 — 서른 개가 넘어가면 줄줄이 늘어놓아서는 뭘 가졌는지 안 보인다.
+ */
+function titlesTab(account, page, npc) {
+  const held = earnedTitles(account, { npc });
+  const pages = Math.max(1, Math.ceil(held.length / TITLES_PER_PAGE));
+  const at = Math.min(Math.max(0, page), pages - 1);
+  const slice = held.slice(at * TITLES_PER_PAGE, (at + 1) * TITLES_PER_PAGE);
+
+  const worn = account.title ? TITLE_BY_KEY[account.title] : null;
+  const lines = [`**수집** ${gauge(held.length, TITLE_TOTAL)} ${held.length} / ${TITLE_TOTAL}`, ''];
+
+  if (!held.length) {
+    lines.push('_아직 하나도 없어요._ 한 판만 둬도 `첫걸음` 이 붙습니다.');
+  } else {
+    let group = null;
+    for (const t of slice) {
+      if (t.group !== group) { group = t.group; lines.push(`**■ ${group}**`); }
+      const mark = t === worn ? '▸ ' : '　';
+      lines.push(`${mark}**${t.name}** · _${t.desc}_`);
+    }
+  }
+
+  return {
+    fields: [
+      { name: '가진 칭호', value: `**${held.length}** / ${TITLE_TOTAL}`, inline: true },
+      { name: '달고 있는 것', value: worn ? `**${worn.name}**` : '_없음_', inline: true },
+      { name: '쪽', value: `${at + 1} / ${pages}`, inline: true },
+    ],
+    description: lines.join('\n'),
+    pages,
+    page: at,
+    held: slice,
+  };
+}
+
 function itemsTab(account, page) {
   const owned = Object.entries(account.items ?? {}).filter(([, n]) => n > 0).sort();
   if (!owned.length) {
@@ -172,10 +229,20 @@ function itemsTab(account, page) {
 
 // ---------------------------------------------------------------- 카드
 
+const TAB_BODY = {
+  record: (account) => recordTab(account),
+  items: (account, page) => itemsTab(account, page),
+  titles: (account, page, who) => titlesTab(account, page, who.npc),
+};
+
 function cardFor(who, account, tab, page) {
-  const seated = seatedAt(who.id);
-  const body = tab === 'record' ? recordTab(account)
-    : (tab === 'items' ? itemsTab(account, page) : cardTab(account, seated));
+  const body = TAB_BODY[tab]
+    ? TAB_BODY[tab](account, page, who)
+    : cardTab(account, seatedAt(who.id));
+
+  // 달고 있는 칭호는 **키**로 저장돼 있다. 이름은 명부에서 찾아 쓴다 — 그래야 나중에
+  // 칭호 이름을 고쳐도 달고 있던 게 안 날아간다.
+  const worn = account.title ? TITLE_BY_KEY[account.title] : null;
 
   const embed = base({
     title: who.name,
@@ -185,14 +252,16 @@ function cardFor(who, account, tab, page) {
       ? '/급여 로 일당을 받습니다 (자동으로 늘지 않아요)'
       : '/출첵 으로 하루 한 번 받을 수 있어요',
   })
-    .setAuthor({ name: account.title ? `〈 ${account.title} 〉` : '칭호 없음' })
+    .setAuthor({ name: worn ? `〈 ${worn.name} 〉` : '칭호 없음' })
     .addFields(body.fields);
 
   // **초상화는 오른쪽 위다.** 임베드에서 thumbnail 은 자리를 못 옮긴다 — 왼쪽에
   // 걸 수 있는 곳은 author 아이콘뿐인데 그건 24px 라 얼굴이 안 보인다. 크기를 골랐다.
   if (who.avatar) embed.setThumbnail(who.avatar);
 
-  return { embed, pages: body.pages ?? 1, page: body.page ?? 0 };
+  return {
+    embed, pages: body.pages ?? 1, page: body.page ?? 0, held: body.held ?? null,
+  };
 }
 
 /**
@@ -204,21 +273,38 @@ function cardFor(who, account, tab, page) {
  */
 const cid = (id, tab, page) => [PREFIX, tab, page, id].join(':');
 
-function rows(who, tab, page, pages) {
+function rows(who, tab, page, pages, held) {
   const tabs = new ActionRowBuilder().addComponents(...TABS.map((t) => new ButtonBuilder()
     .setCustomId(cid(who.id, t.key, 0))
     .setLabel(t.label)
     .setStyle(t.key === tab ? ButtonStyle.Primary : ButtonStyle.Secondary)
     .setDisabled(t.key === tab)));
 
-  if (tab !== 'items' || pages <= 1) return [tabs];
+  const out = [tabs];
 
-  return [tabs, new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId(cid(who.id, 'items', page - 1))
-      .setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(page <= 0),
-    new ButtonBuilder().setCustomId(cid(who.id, 'items', page + 1))
-      .setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(page >= pages - 1),
-  )];
+  if (pages > 1) {
+    out.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(cid(who.id, tab, page - 1))
+        .setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(page <= 0),
+      new ButtonBuilder().setCustomId(cid(who.id, tab, page + 1))
+        .setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(page >= pages - 1),
+    ));
+  }
+
+  // 칭호 탭에서만 고르는 줄이 붙는다. **가진 것만** 고를 수 있게 이 쪽의 목록으로 채운다.
+  if (tab === 'titles' && held?.length) {
+    out.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(cid(who.id, 'wear', page))
+        .setPlaceholder('달 칭호 고르기')
+        .addOptions(
+          { label: '칭호 벗기', value: NO_TITLE, description: '아무것도 안 답니다' },
+          ...held.map((t) => ({ label: t.name, value: t.key, description: clipW(t.desc, 90) })),
+        ),
+    ));
+  }
+
+  return out;
 }
 
 /**
@@ -233,7 +319,7 @@ async function payloadFor(who, tab, page) {
   const card = cardFor(who, account, tab, page);
   return {
     embeds: [card.embed],
-    components: rows(who, tab, card.page, card.pages),
+    components: rows(who, tab, card.page, card.pages, card.held),
     files: who.avatarFile
       ? [new AttachmentBuilder(who.avatarFile.file, { name: who.avatarFile.name })]
       : [],
@@ -274,9 +360,25 @@ async function component(interaction) {
     ? { user: interaction.user, member: interaction.member }
     : {});
 
+  // **칭호를 바꾸는 것은 남이 못 한다.** 탭을 넘기는 것과 달리 이건 계정을 고친다.
+  // 미겔·마티암은 함께 쓰는 인물이라 누구든 달아 줄 수 있게 뒀다.
+  if (tab === 'wear' && !self && !who.npc) {
+    await interaction.reply({
+      embeds: [fail('자기 칭호만 바꿀 수 있어요.')],
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   await interaction.deferUpdate();
   try {
-    await interaction.editReply(await payloadFor(who, tab, Number(page) || 0));
+    if (tab === 'wear') {
+      const picked = interaction.values?.[0];
+      await setTitle(id, !picked || picked === NO_TITLE ? null : picked);
+    }
+    await interaction.editReply(
+      await payloadFor(who, tab === 'wear' ? 'titles' : tab, Number(page) || 0),
+    );
   } catch (err) {
     await interaction.followUp({
       embeds: [fail(`계정을 읽지 못했어요. ${err.message}`)],

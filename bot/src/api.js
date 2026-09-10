@@ -225,6 +225,10 @@ export const getAccounts = (ids) =>
 export const postAccountDeltas = (deltas, bump) =>
   request('/api/accounts/deltas', { method: 'POST', bot: true, json: { deltas, bump } });
 
+/** 달고 있을 칭호의 키를 바꾼다. `null` 이면 벗는다. */
+export const setTitle = (id, title) =>
+  request('/api/accounts/title', { method: 'POST', bot: true, json: { id, title } });
+
 /** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
 export const claimDaily = (id) =>
   request('/api/accounts/claim', { method: 'POST', bot: true, json: { id } });
@@ -274,5 +278,5 @@ export async function checkBotKey() {
 
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
-  getAccounts, postAccountDeltas, claimDaily, checkBotKey,
+  getAccounts, postAccountDeltas, claimDaily, setTitle, checkBotKey,
 };

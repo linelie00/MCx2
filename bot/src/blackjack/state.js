@@ -195,6 +195,7 @@ export function beginBetting(game) {
     s.bet = 0;
     s.staged = 0;
     s.insurance = undefined;
+    s.wentAllIn = false;   // 이 핸드에 칩을 다 밀어 넣었는지 (칭호가 읽는다)
     if (s.chips < game.stakes.minBet) s.out = true;  // 최소 베팅도 못 걸면 빠진다
   }
   touch(game);
@@ -228,6 +229,7 @@ export function placeBet(game, seat, amount = seat.staged) {
   if (bet < game.stakes.minBet) return `${game.stakes.minBet}칩 이상 걸어야 해요.`;
   if (!game.chips.take(seat.id, bet)) return `칩이 모자라요. (${seat.chips}칩 남음)`;
   seat.chips = game.chips.get(seat.id);
+  if (seat.chips === 0) seat.wentAllIn = true;
   seat.bet = bet;
   seat.staged = 0;
   touch(game);
@@ -381,6 +383,7 @@ export function act(game, action) {
   if (action === 'double') {
     game.chips.take(seat.id, hand.bet);
     seat.chips = game.chips.get(seat.id);
+    if (seat.chips === 0) seat.wentAllIn = true;
     hand.bet *= 2;
     hand.doubled = true;
     hand.cards.push(card(game));
@@ -393,6 +396,7 @@ export function act(game, action) {
   if (action === 'split') {
     game.chips.take(seat.id, hand.bet);
     seat.chips = game.chips.get(seat.id);
+    if (seat.chips === 0) seat.wentAllIn = true;
     const splitAce = hand.cards[0].rank === 'a';
     const moved = hand.cards.pop();
 

@@ -18,7 +18,8 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import * as state from '../blackjack/state.js';
 import { chooseAction, chooseInsurance, chooseBet } from '../blackjack/ai.js';
-import { load, commit, buyIn } from '../casino/wallet.js';
+import { loadAccounts, commit, buyIn } from '../casino/wallet.js';
+import { earned as earnedTitles, gained as gainedTitles } from '../casino/titles.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor } from '../casino/stakes.js';
 import {
@@ -550,9 +551,41 @@ function handStats(game) {
     const bj = mine.filter((r) => r.outcome === 'blackjack').length;
     if (bj) c.blackjacks = bj;
     c.bestBet = Math.max(...mine.map((r) => r.hand.bet));
+
+    // 올인은 **걸 때** 표시해 둔다(state.placeBet). 정산 시점에는 이미 돌려받은 뒤라
+    // 칩만 봐서는 다 밀었는지 알 수가 없다.
+    if (seat.wentAllIn) {
+      if (net > 0) c.allInWon = 1; else if (net < 0) c.allInLost = 1;
+    }
+
     bump[seat.id] = c;
   }
   return bump;
+}
+
+/**
+ * 이번 정산으로 **새로 생긴 칭호**를 알린다.
+ *
+ * 칭호는 저장하지 않고 전적에서 계산해 내므로, 무엇이 새것인지 알려면 **판을 열 때의
+ * 목록**과 견줘야 한다(game.titles). 커밋 응답이 쓰고 난 뒤의 계정을 주니 그걸로 잰다.
+ *
+ * 커밋이 실패하면 응답이 비어 있어 아무 말도 안 한다 — 저장이 안 된 칭호를 announce
+ * 하면 다음에 또 새것으로 나온다.
+ */
+async function announceTitles(game, accounts) {
+  if (!game.message?.channel) return;
+  for (const [id, account] of Object.entries(accounts)) {
+    const seat = game.seats.find((s) => s.id === id);
+    if (!seat) continue;
+    const now = earnedTitles(account, { npc: seat.kind === 'npc' });
+    const fresh = gainedTitles(game.titles?.[id] ?? [], now);
+    game.titles = { ...(game.titles ?? {}), [id]: now.map((t) => t.key) };
+    if (!fresh.length) continue;
+
+    const lines = fresh.map((t) => `🏅 **${t.name}** · _${t.desc}_`);
+    await game.message.channel.send({ content: [`**${seat.name}** 새 칭호`, ...lines].join('\n') })
+      .catch((err) => console.warn('[카지노] 칭호 알림 실패:', err.message));
+  }
 }
 
 async function settleAndShow(game) {
@@ -560,8 +593,10 @@ async function settleAndShow(game) {
   await draw(game);
   // **성공했을 때만** 기준점을 옮긴다. 실패하면 밀린 몫이 장부에 남아 있다가
   // 다음 커밋이 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
-  game.saveFailed = !(await commit(game.guildId, game.chips.deltas(), handStats(game)));
-  if (!game.saveFailed) game.chips.rebase();
+  const saved = await commit(game.guildId, game.chips.deltas(), handStats(game));
+  game.saveFailed = !saved.ok;
+  if (saved.ok) game.chips.rebase();
+  await announceTitles(game, saved.accounts);
 
   const dealerBust = handValue(game.dealer).bust;
   const dealerBj = isBlackjack(game.dealer);
@@ -804,7 +839,7 @@ async function handleLobby(interaction, game, action, arg) {
 
     let account;
     try {
-      account = await load(game.guildId, game.seats.map((s) => s.id));
+      account = await loadAccounts(game.guildId, game.seats.map((s) => s.id));
     } catch (err) {
       // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 칩이 복제된다 — 실제 잔액이
       // 200인 사람이 1000으로 놀고, 다음 커밋이 성공할 때 그 차액이 서버에 얹힌다.
@@ -817,15 +852,23 @@ async function handleLobby(interaction, game, action, arg) {
     // NPC 는 이제 자동으로 안 채워지므로, 모자라면 어떻게 채우는지 같이 알려 준다.
     const poor = game.seats
       .map((s) => {
-        const why = tooPoor(game.stakes, account[s.id], s.name);
+        const why = tooPoor(game.stakes, account[s.id].chips, s.name);
         if (!why) return null;
         return s.kind === 'npc' ? `${why} \`/급여\` 로 일당을 줄 수 있어요.` : why;
       })
       .filter(Boolean);
     if (poor.length) { await denyLate(interaction, poor.join('\n')); return true; }
 
+    // 지금 가진 칭호를 적어 둔다. 칭호는 저장하지 않고 전적에서 계산해 내므로,
+    // **무엇이 새것인지 알려면 판을 열 때의 목록과 견줘야 한다**(announceTitles).
+    game.titles = Object.fromEntries(game.seats.map((s) => [
+      s.id, earnedTitles(account[s.id], { npc: s.kind === 'npc' }).map((t) => t.key),
+    ]));
+
     // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
-    const err = state.start(game, buyIn(account, game.stakes.stack));
+    const err = state.start(game, buyIn(
+      Object.fromEntries(game.seats.map((s) => [s.id, account[s.id].chips])), game.stakes.stack,
+    ));
     if (err) { await denyLate(interaction, err); return true; }
 
     await draw(game);

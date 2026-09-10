@@ -19,7 +19,7 @@ import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import * as state from '../holdem/state.js';
 import { chooseAction, readRange } from '../holdem/ai.js';
 import { live } from '../holdem/rules.js';
-import { load, commit, buyIn } from '../casino/wallet.js';
+import { loadAccounts, commit, buyIn } from '../casino/wallet.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor } from '../casino/stakes.js';
 import { drawMobs } from '../holdem/mobs.js';
@@ -29,6 +29,9 @@ import {
 } from '../holdem/render.js';
 import { handText, isJumboable } from '../casino/cards.js';
 import { CATEGORIES } from '../casino/poker.js';
+import {
+  earned as earnedTitles, gained as gainedTitles, counterForHand, isHighCard,
+} from '../casino/titles.js';
 import {
   line, sometimes, memo, handName, spoilerVeto,
 } from '../holdem/lines.js';
@@ -383,14 +386,57 @@ function handStats(game, results) {
     const c = { hands: 1, holdemHands: 1 };
     if (r.net > 0) { c.won = 1; c.holdemWon = 1; c.earned = r.net; } else if (r.net < 0) c.lost = -r.net;
     if (r.won > 0) c.bestPot = r.won;
-    // CATEGORIES 는 센 것부터라 그대로 쓰면 큰 수가 약한 손이 된다. 뒤집는다 —
-    // 스트레이트 플러시 9 … 하이카드 1, 0 은 "기록 없음".
-    const at = CATEGORIES.indexOf(shown.get(i)?.category);
-    if (at >= 0) c.bestHand = CATEGORIES.length - at;
+
+    if (r.seat.allIn) {
+      if (r.net > 0) c.allInWon = 1; else if (r.net < 0) c.allInLost = 1;
+    }
+
+    const category = shown.get(i)?.category;
+    if (category) {
+      // CATEGORIES 는 센 것부터라 그대로 쓰면 큰 수가 약한 손이 된다. 뒤집는다 —
+      // 스트레이트 플러시 9 … 하이카드 1, 0 은 "기록 없음".
+      c.bestHand = CATEGORIES.length - CATEGORIES.indexOf(category);
+
+      // 족보는 **최댓값과 별개로 하나씩 따로** 센다. 칭호가 묻는 것이 "그 족보를 직접
+      // 만들어 봤나" 라서, 최댓값만 두면 풀하우스 한 번에 아래가 전부 딸려 온다.
+      const counter = counterForHand(category);
+      if (counter) c[counter] = 1;
+
+      // 야수의 심장 — 하이카드로 전부 밀었다. **깐 경우에만** 센다: 전원이 접으면
+      // 패를 안 까고, 프리플랍 올인은 두 장뿐이라 거의 다 하이카드로 나온다.
+      if (r.seat.allIn && isHighCard(category)) c.allInHigh = 1;
+    }
+
     bump[r.seat.id] = c;
   });
 
   return bump;
+}
+
+/**
+ * 이번 정산으로 **새로 생긴 칭호**를 알린다.
+ *
+ * 칭호는 저장하지 않고 전적에서 계산해 내므로, 무엇이 새것인지 알려면 **판을 열 때의
+ * 목록**과 견줘야 한다(game.titles). 커밋 응답이 쓰고 난 뒤의 계정을 주니 그걸로 잰다.
+ *
+ * 커밋이 실패하면 응답이 비어 있어 아무 말도 안 한다 — 저장이 안 된 칭호를 announce
+ * 하면 다음에 또 새것으로 나온다.
+ */
+async function announceTitles(game, accounts) {
+  if (!game.message?.channel) return;
+  for (const [id, account] of Object.entries(accounts)) {
+    const seat = game.seats.find((s) => s.id === id);
+    if (!seat) continue;
+    const now = earnedTitles(account, { npc: seat.kind === 'npc' });
+    const fresh = gainedTitles(game.titles?.[id] ?? [], now);
+    game.titles = { ...(game.titles ?? {}), [id]: now.map((t) => t.key) };
+    if (!fresh.length) continue;
+
+    const lines = fresh.map((t) => `🏅 **${t.name}** · _${t.desc}_`);
+    game.boardBottom = false;
+    await game.message.channel.send({ content: [`**${seat.name}** 새 칭호`, ...lines].join('\n') })
+      .catch((err) => console.warn('[카지노] 칭호 알림 실패:', err.message));
+  }
 }
 
 async function settleAndShow(game) {
@@ -403,8 +449,10 @@ async function settleAndShow(game) {
   await repost(game);
   // **성공했을 때만** 기준점을 옮긴다. 실패하면 밀린 몫이 장부에 남아 있다가
   // 다음 커밋이 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
-  game.saveFailed = !(await commit(game.guildId, game.chips.deltas(), handStats(game, results)));
-  if (!game.saveFailed) game.chips.rebase();
+  const saved = await commit(game.guildId, game.chips.deltas(), handStats(game, results));
+  game.saveFailed = !saved.ok;
+  if (saved.ok) game.chips.rebase();
+  await announceTitles(game, saved.accounts);
 
   // 결과에 반응한다. 이긴 사람은 늘, 진 사람은 가끔.
   const shown = new Map((results.shown ?? []).map((x) => [x.seatIndex, x.hand]));
@@ -636,7 +684,7 @@ async function handleLobby(interaction, game, action, arg) {
 
     let account;
     try {
-      account = await load(game.guildId, walled.map((s) => s.id));
+      account = await loadAccounts(game.guildId, walled.map((s) => s.id));
     } catch (err) {
       // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 칩이 복제된다 — 실제 잔액이
       // 200인 사람이 1000으로 놀고, 다음 커밋이 성공할 때 그 차액이 서버에 얹힌다.
@@ -649,16 +697,22 @@ async function handleLobby(interaction, game, action, arg) {
     // NPC 는 이제 자동으로 안 채워지므로, 모자라면 어떻게 채우는지 같이 알려 준다.
     const poor = walled
       .map((s) => {
-        const why = tooPoor(game.stakes, account[s.id], s.name);
+        const why = tooPoor(game.stakes, account[s.id].chips, s.name);
         if (!why) return null;
         return s.kind === 'npc' ? `${why} \`/급여\` 로 일당을 줄 수 있어요.` : why;
       })
       .filter(Boolean);
     if (poor.length) { await denyLate(interaction, poor.join('\n')); return true; }
 
+    // 지금 가진 칭호를 적어 둔다. 칭호는 저장하지 않고 전적에서 계산해 내므로,
+    // **무엇이 새것인지 알려면 판을 열 때의 목록과 견줘야 한다**(announceTitles).
+    game.titles = Object.fromEntries(walled.map((s) => [
+      s.id, earnedTitles(account[s.id], { npc: s.kind === 'npc' }).map((t) => t.key),
+    ]));
+
     // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다. 모브 몫은 그 위에 얹는다.
     const err = state.start(game, {
-      ...buyIn(account, game.stakes.stack),
+      ...buyIn(Object.fromEntries(walled.map((s) => [s.id, account[s.id].chips])), game.stakes.stack),
       ...Object.fromEntries(mobs.map((s) => [s.id, s.buyIn])),
     });
     if (err) { await denyLate(interaction, err); return true; }

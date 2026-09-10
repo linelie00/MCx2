@@ -14,9 +14,10 @@
  *   heal   먹었을 때 HP 증감. 숫자 하나면 그만큼, `[a, b]` 면 a~b 사이에서 무작위.
  *          **음수는 깎인다** — 원석이나 열쇠를 먹으면 아픈 게 당연하다
  *
- * 회복력이 날짜꼴로 깨져 있던 셋(아이스크림·고고고·따꼼약)과 값이 1.111111111 이던
- * 하나는 시트에서 값을 잃은 것이라 옮기지 않았다. 설명 끝에 붙어 있던 트위터 핸들도
- * 뺐다 — 남의 계정을 아이템 설명에 박아 둘 이유가 없다.
+ * 시트에서 여덟을 뺐다. 회복력이 날짜꼴로 깨져 있던 셋(아이스크림·고고고·따꼼약)과
+ * 값이 1.111111111 이던 하나는 시트가 값을 잃은 것이고, 값이 없던 요리 넷(전사의 스튜·
+ * 바다 루비·지네 담금주·투명 드래곤 스튜)은 `/요리` 가 생길 때 다시 들인다.
+ * 설명 끝에 붙어 있던 트위터 핸들도 뺐다 — 남의 계정을 아이템 설명에 박아 둘 이유가 없다.
  */
 
 /** 모두의 HP 최대치. 아직 HP 를 쓰는 곳이 없다 — heal 을 읽을 때가 오면 이 값이 천장이다. */
@@ -54,9 +55,6 @@ export const ITEMS = [
   { key: 'brokenBracelet',  name: '끊어진 팔찌',              kind: '잡화', price:    3, sell: true,  heal: 0,          desc: '낡고 끊어진 은 팔찌. 수리하면 다시 사용할 수 있을 것 같다.' },
   { key: 'softFig',         name: '무른 무화과',              kind: '잡화', price:    1, sell: true,  heal: 2,          desc: '땅에 떨어진 지 오래되었는지 과육이 흐물거리고 단향이 진동한다. 아직 먹을 수 있다.' },
   { key: 'spicyBerry',      name: '맵싹한 열매',              kind: '잡화', price:    3, sell: true,  heal: 10,         desc: '새빨간 열매. 매운 향기가 멀리서부터 진동해온다! 눈물을 쏙 빼놓기에 딱인 열매.' },
-  { key: 'stewWarrior',     name: '전사의 스튜',              kind: '소비', price:    0, sell: false, heal: [30, 35],   desc: '목을 턱 막히게 하는 용맹함이 재료! 물론, 질긴 고기 덕분이기도 하다.' },
-  { key: 'seaRuby',         name: '바다 루비',                kind: '소비', price:    0, sell: false, heal: [15, 20],   desc: '맛있는 해물탕! ...어라, 뭔가 딱딱한 게 씹힌다.' },
-  { key: 'centipedeLiquor', name: '지네 담금주',              kind: '소비', price:    0, sell: false, heal: -1,         desc: '이 담금주는 하는 것에 따라 천사가 될 수도 있고 악마가 될 수도 있다.' },
   { key: 'fallenBread',     name: '떨어져 있던 빵',           kind: '잡화', price:    0, sell: false, heal: 2,          desc: '축축하면서도 동시에 딱딱하다. 완벽한 조화.' },
   { key: 'silverCoin',      name: '은화',                     kind: '잡화', price:    5, sell: true,  heal: -5,         desc: '앗, 골드! ...가 아니고 실버. 상점에서 5 골드로 바꿀 수 있다.' },
   { key: 'copperCoin',      name: '동화',                     kind: '잡화', price:    1, sell: true,  heal: -10,        desc: '앗, 골드! ...가 아니고 코퍼. 상점에서 1 골드로 바꿀 수 있다.' },
@@ -88,7 +86,6 @@ export const ITEMS = [
   { key: 'driedMeat',       name: '말린 고기 조각',           kind: '잡화', price:    3, sell: true,  heal: 10,         desc: '짭짤한 향이 도는 말린 고기. 씹을수록 감칠맛이 살아난다.' },
   { key: 'honeyWalnut',     name: '꿀절임 호두',              kind: '잡화', price:    4, sell: true,  heal: 5,          desc: '달콤한 꿀에 절인 호두. 한 입 베어물면 고소한 향이 퍼진다.' },
   { key: 'teaLeaf',         name: '찻잎',                     kind: '잡화', price:    6, sell: true,  heal: 5,          desc: '향긋한 찻잎. 따뜻한 물에 우려내면 피로를 풀어준다.' },
-  { key: 'stewDragon',      name: '투명 드래곤 스튜',         kind: '소비', price:    0, sell: false, heal: [60, 67],   desc: '풀네임은 굉장나 엄청해 투명 드래곤 전사의 아침 스튜! 크와아앙 짱쎈 투명드래곤스튜가 울부짖었다.' },
   { key: 'banditPoster',    name: '도적단의 수배지',          kind: '잡화', price:    0, sell: false, heal: -5,         desc: '이걸 왜 가지고 싶었는진 잘 모르겠다. 팔 수도 없다.' },
   { key: 'scratchedGem',    name: '흠집난 빨간 보석',         kind: '잡화', price:   30, sell: true,  heal: 0,          desc: '원석을 가공한 것. 다만 험하게 다뤘는지, 흠집이 나 가치가 떨어졌다.' },
   { key: 'bugPile',         name: '벌레 더미',                kind: '잡화', price:    0, sell: false, heal: 3,          desc: '우글우글. 매우 많은 벌레입니다.' },

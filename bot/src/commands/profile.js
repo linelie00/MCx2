@@ -298,9 +298,19 @@ function cardFor(who, account, tab, page) {
  */
 const cid = (id, tab, page) => [PREFIX, tab, page, id].join(':');
 
+/**
+ * 탭 버튼의 쪽 자리에 넣는 값.
+ *
+ * **0 을 넣으면 안 된다.** 2쪽에서 `◀` 가 가리키는 곳이 1쪽인데, 그게 곧 탭 버튼과
+ * 같은 customId 가 되어 디스코드가 한 메시지를 통째로 거절한다(50035
+ * COMPONENT_CUSTOM_ID_DUPLICATED). 눌렀을 때는 `Number('t') || 0` 이라 0쪽으로 간다.
+ */
+const TAB_PAGE = 't';
+
+
 function rows(who, tab, page, pages, held) {
   const tabs = new ActionRowBuilder().addComponents(...TABS.map((t) => new ButtonBuilder()
-    .setCustomId(cid(who.id, t.key, 0))
+    .setCustomId(cid(who.id, t.key, TAB_PAGE))
     .setLabel(t.label)
     .setStyle(t.key === tab ? ButtonStyle.Primary : ButtonStyle.Secondary)
     .setDisabled(t.key === tab)));

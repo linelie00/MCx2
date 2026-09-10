@@ -69,6 +69,15 @@ function tradeText(item) {
 
 // ---------------------------------------------------------------- 화면
 
+/**
+ * 탭 버튼의 쪽 자리에 넣는 값.
+ *
+ * **0 을 넣으면 안 된다.** 2쪽에서 `◀` 가 가리키는 곳이 1쪽인데, 그게 곧 탭 버튼과
+ * 같은 customId 가 되어 디스코드가 한 메시지를 통째로 거절한다(50035
+ * COMPONENT_CUSTOM_ID_DUPLICATED). 눌렀을 때는 `Number('t') || 0` 이라 0쪽으로 간다.
+ */
+const TAB_PAGE = 't';
+
 /** `item:<무엇>:<갈래>:<쪽>[:<키>]` — 라우터가 첫 토막으로 찾으므로 구분자는 콜론이다. */
 const cid = (what, kind, page, key) =>
   [PREFIX, what, kind, page, ...(key ? [key] : [])].join(':');
@@ -99,7 +108,7 @@ function listPayload(kindKey, page) {
   );
 
   const tabs = new ActionRowBuilder().addComponents(...KINDS.map((k) => new ButtonBuilder()
-    .setCustomId(cid('list', k.key, 0))
+    .setCustomId(cid('list', k.key, TAB_PAGE))
     .setLabel(k.label)
     .setEmoji(k.icon)
     .setStyle(k.key === kind.key ? ButtonStyle.Primary : ButtonStyle.Secondary)

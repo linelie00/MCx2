@@ -183,7 +183,8 @@ function titlesTab(account, page, npc) {
 
     lines.push('', `**■ ${group}**　\`${mine.length}/${all.length}\``);
     for (const t of mine) {
-      const mark = t === worn ? '▸ ' : '　';
+      // 달고 있는 것 표시. `▸` 는 너무 작아서 화면에서 안 보였다.
+      const mark = t === worn ? '📌' : '　';
       lines.push(`${mark}${stampMd(t)} · _${t.desc}_`);
     }
     const locked = all.length - mine.length;

@@ -51,15 +51,15 @@ export const TITLES = [
   { key: 'wealthy', name: '만석꾼', tier: 2, cond: '최고 잔액 20,000', group: '칩', desc: '하이 자리 한 스택을 통째로 들고 있다.', npc: false, when: (s) => n(s, 'peak') >= 20000 },
   { key: 'vaultKeeper', name: '금고지기', tier: 3, cond: '최고 잔액 100,000', group: '칩', desc: '이쯤 되면 맡아 두는 쪽이다.', npc: false, when: (s) => n(s, 'peak') >= 100000 },
 
-  // ---------------------------------------------------------------- 자학
-  { key: 'tuition', name: '수업료', tier: 1, cond: '누적 손실 1,000', group: '자학', desc: '천 칩쯤은 배우는 값으로 치자.', when: (s) => n(s, 'lost') >= 1000 },
-  { key: 'donor', name: '기부천사', tier: 2, cond: '누적 손실 10,000', group: '자학', desc: 'bard 의 살림에 크게 보탰다.', when: (s) => n(s, 'lost') >= 10000 },
-  { key: 'rockBottom', name: '바닥을 본 자', tier: 3, cond: '누적 손실 50,000', group: '자학', desc: '그래도 아직 앉아 있다.', when: (s) => n(s, 'lost') >= 50000 },
-  { key: 'doubleDown', name: '두 배로 잃다', tier: 2, cond: '100핸드 이상에서 잃은 것이 딴 것의 두 배', group: '자학', desc: '딴 것의 두 배를 잃었다. 계산은 맞다.', when: (s) => n(s, 'hands') >= 100 && n(s, 'lost') >= n(s, 'earned') * 2 },
-  { key: 'shoved', name: '전부 걸었다가', tier: 1, cond: '올인해서 잃은 판 1회', group: '자학', desc: '가진 것을 전부 걸었다. 이제 가진 것이 없다.', when: (s) => n(s, 'allInLost') >= 1 },
-  { key: 'neverLearns', name: '못 배우는 사람', tier: 2, cond: '올인해서 잃은 판 10회', group: '자학', desc: '열 번이면 배울 만도 한데.', when: (s) => n(s, 'allInLost') >= 10 },
-  { key: 'smallChange', name: '잔돈', tier: 2, cond: '홀덤 50핸드 이상, 최대 팟 500 미만', group: '자학', desc: '쉰 판을 했는데 제일 큰 팟이 잔돈이었다.', when: (s) => n(s, 'holdemHands') >= 50 && n(s, 'bestPot') < 500 },
-  { key: 'timidHand', name: '소심한 손', tier: 2, cond: '블랙잭 100핸드 이상, 최대 베팅 100 이하', group: '자학', desc: '백 판 내내 최소 베팅. 안전한 건 맞다.', when: (s) => n(s, 'blackjackHands') >= 100 && n(s, 'bestBet') <= 100 },
+  // ---------------------------------------------------------------- 빈 주머니
+  { key: 'tuition', name: '수업료', tier: 1, cond: '누적 손실 1,000', group: '빈 주머니', desc: '천 칩쯤은 배우는 값으로 치자.', when: (s) => n(s, 'lost') >= 1000 },
+  { key: 'donor', name: '기부천사', tier: 2, cond: '누적 손실 10,000', group: '빈 주머니', desc: 'bard 의 살림에 크게 보탰다.', when: (s) => n(s, 'lost') >= 10000 },
+  { key: 'rockBottom', name: '바닥을 본 자', tier: 3, cond: '누적 손실 50,000', group: '빈 주머니', desc: '그래도 아직 앉아 있다.', when: (s) => n(s, 'lost') >= 50000 },
+  { key: 'doubleDown', name: '두 배로 잃다', tier: 2, cond: '100핸드 이상에서 잃은 것이 딴 것의 두 배', group: '빈 주머니', desc: '딴 것의 두 배를 잃었다. 계산은 맞다.', when: (s) => n(s, 'hands') >= 100 && n(s, 'lost') >= n(s, 'earned') * 2 },
+  { key: 'shoved', name: '전부 걸었다가', tier: 1, cond: '올인해서 잃은 판 1회', group: '빈 주머니', desc: '가진 것을 전부 걸었다. 이제 가진 것이 없다.', when: (s) => n(s, 'allInLost') >= 1 },
+  { key: 'neverLearns', name: '못 배우는 사람', tier: 2, cond: '올인해서 잃은 판 10회', group: '빈 주머니', desc: '열 번이면 배울 만도 한데.', when: (s) => n(s, 'allInLost') >= 10 },
+  { key: 'smallChange', name: '잔돈', tier: 2, cond: '홀덤 50핸드 이상, 최대 팟 500 미만', group: '빈 주머니', desc: '쉰 판을 했는데 제일 큰 팟이 잔돈이었다.', when: (s) => n(s, 'holdemHands') >= 50 && n(s, 'bestPot') < 500 },
+  { key: 'timidHand', name: '소심한 손', tier: 2, cond: '블랙잭 100핸드 이상, 최대 베팅 100 이하', group: '빈 주머니', desc: '백 판 내내 최소 베팅. 안전한 건 맞다.', when: (s) => n(s, 'blackjackHands') >= 100 && n(s, 'bestBet') <= 100 },
 
   // ---------------------------------------------------------------- 홀덤
   { key: 'reader', name: '판을 읽는 눈', tier: 1, cond: '홀덤 누적 100핸드', group: '홀덤', desc: '홀덤만 백 판. 이제 보이는 게 있다.', when: (s) => n(s, 'holdemHands') >= 100 },

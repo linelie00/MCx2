@@ -185,13 +185,12 @@ function cardFor(who, account, tab, page) {
       ? '/급여 로 일당을 받습니다 (자동으로 늘지 않아요)'
       : '/출첵 으로 하루 한 번 받을 수 있어요',
   })
-    // **초상화는 author 아이콘 자리다.** 임베드에서 왼쪽에 그림이 오는 자리는 여기
-    // 하나뿐이다 — thumbnail 은 오른쪽 위 고정이라 옮길 수가 없다. 대신 작다(원형 24px).
-    .setAuthor({
-      name: account.title ? `〈 ${account.title} 〉` : '칭호 없음',
-      ...(who.avatar ? { iconURL: who.avatar } : {}),
-    })
+    .setAuthor({ name: account.title ? `〈 ${account.title} 〉` : '칭호 없음' })
     .addFields(body.fields);
+
+  // **초상화는 오른쪽 위다.** 임베드에서 thumbnail 은 자리를 못 옮긴다 — 왼쪽에
+  // 걸 수 있는 곳은 author 아이콘뿐인데 그건 24px 라 얼굴이 안 보인다. 크기를 골랐다.
+  if (who.avatar) embed.setThumbnail(who.avatar);
 
   return { embed, pages: body.pages ?? 1, page: body.page ?? 0 };
 }

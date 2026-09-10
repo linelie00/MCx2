@@ -217,11 +217,7 @@ export async function updatePlaylist({ owner, playlistId, patch }) {
 export const getAccounts = (ids) =>
   request(`/api/accounts?ids=${encodeURIComponent(ids.join(','))}`, { bot: true });
 
-/** 판을 열 때. due 한 NPC 를 채우고 전원 잔액을 준다. */
-export const openAccounts = (ids) =>
-  request('/api/accounts/open', { method: 'POST', bot: true, json: { ids } });
-
-/** 정산. **잔액이 아니라 증감**을 보낸다 — 락이 없는 스토어에서 안전한 유일한 방식이다. */
+/** 정산·급여. **잔액이 아니라 증감**을 보낸다 — 락이 없는 스토어에서 안전한 유일한 방식이다. */
 export const postAccountDeltas = (deltas) =>
   request('/api/accounts/deltas', { method: 'POST', bot: true, json: { deltas } });
 
@@ -274,5 +270,5 @@ export async function checkBotKey() {
 
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
-  getAccounts, openAccounts, postAccountDeltas, claimDaily, checkBotKey,
+  getAccounts, postAccountDeltas, claimDaily, checkBotKey,
 };

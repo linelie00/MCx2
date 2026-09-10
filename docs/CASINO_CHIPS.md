@@ -17,7 +17,8 @@
 | 키 | 디스코드 `userId`, 그리고 `npc:migel`·`npc:matiam`. 길드로 나누지 않는다 |
 | NPC 칩 | **저장한다.** 미겔·마티암이 **손님으로 앉으면 자기 돈**을 쓴다 |
 | 딜러 | 자기 돈을 안 쓴다. 블랙잭 딜러는 자리가 아니고 하우스는 무한이다 |
-| 일일 규칙 | **하루 한 번, 기준선 미만이면 기준선까지.** 사람 1000(`/출첵`) · NPC 5000(판 열 때 자동) |
+| 사람 칩 | **`/출첵`** — 하루 한 번, 1000 미만이면 1000까지 |
+| NPC 칩 | **`/급여`** — 부를 때마다 1000. 자동으로는 안 는다 |
 | 모브 | 홀덤에만. **지갑이 없다** — 판마다 새로 생기고 사라진다 |
 | 한 판 스택 | **등급이 정한다**(`casino/stakes.js`). 나머지는 계정에 남는다 |
 | 겹쳐 앉기 | **금지.** 한 계정은 한 번에 한 판에만 |
@@ -27,8 +28,8 @@
 ### NPC 도 저장하는 이유 (예전 결정을 뒤집었다)
 
 처음에는 저장하지 않기로 했었다. **미겔이 영구 파산해서 판에 못 앉는 날이 온다**는 게
-이유였는데, **일일 자동 충전**이 정확히 그 문제를 없앤다. 그래서 뒤집었다 —
-미겔·마티암이 손님으로 앉을 때 자기 돈을 쓰는 편이 훨씬 그럴듯하다.
+이유였는데, 그건 채워 줄 길만 있으면 되는 문제였다(`/급여`). 미겔·마티암이 손님으로
+앉을 때 자기 돈을 쓰는 편이 훨씬 그럴듯하다.
 
 딜러일 때는 여전히 자기 돈을 안 쓴다. 이건 따로 만든 게 아니라 원래 그렇다:
 블랙잭 딜러는 `game.seats` 에 없고 화자 id 일 뿐이라 장부에 키가 없다.
@@ -52,10 +53,16 @@
 `/블랙잭 시작 판돈:` · `/홀덤 시작 판돈:` 으로 고르고, 안 고르면 로우다. **판을 연 뒤에는
 안 바뀐다** — 도중에 바뀌면 이미 건 돈의 뜻이 달라진다.
 
-미겔·마티암의 충전선은 **5000** 이다(사람은 1000). 미들의 한 스택이라 미들에 제대로
-앉을 수 있고 하이에도 숏스택으로 앉는다. 사람보다 높은 이유는 **어느 자리에 앉을 수
-있느냐를 이 값이 정하기 때문**이다 — 1000이면 미들에 10BB 로만 앉아 판이 재미없다.
-대가는 파밍 속도다(0으로 만들어 두면 다음 날 5000이 새로 생긴다).
+미겔·마티암은 **자동으로 칩이 늘지 않는다.** 한동안 판을 열 때 하루 한 번 자동으로
+채웠는데, 그러면 시간이 지나서 생긴 돈이 된다. 일해서 번 돈이라는 설정에는 **누가
+줘야** 맞다. 그래서 자동 충전을 걷어내고 `/급여` 를 뒀다 — 부를 때마다 1000이고,
+`배수` 로 며칠치를 한 번에 줄 수도 있다.
+
+하루 한 번 같은 제한은 없다. 얼마나 일했는지는 사람이 정하는 것이라 규칙으로 묶을 게
+없고, 대신 **누가 언제 줬는지가 채널에 남는다**(공개 응답). 그게 사실상의 기록이다.
+
+그래서 미겔이 미들·하이에 앉으려면 **급여를 모아야 한다**(미들 최소 1000, 하이 4000).
+파산한 채로 부르면 판이 안 열리고, 거절 문구가 `/급여` 를 알려 준다.
 
 ### 모브 — 엘리트 에너미
 
@@ -120,16 +127,15 @@
 | `services/accountStore.js` | 읽기·쓰기. 아래 두 가지가 다른 스토어와 다르다 |
 | `services/dayKey.js` | KST `YYYY-MM-DD` |
 | `middleware/requireBot.js` | `X-Bot-Key`. `BOT_KEY` 가 비면 전부 401(fail closed) |
-| `controllers/accountController.js` | `list` · `open` · `applyDeltas` · `claim` |
+| `controllers/accountController.js` | `list` · `applyDeltas` · `claim` |
 | `routes/accounts.js` | `express.json()` 은 **POST 마다 따로** |
 | `data/accounts.seed.json` | `{ "accounts": {} }` |
 | `scripts/check-accounts.js` | `npm run check-accounts` — 28건 |
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
-| `GET` | `/api/accounts?ids=a,b` | 순수 조회 (`/프로필`) |
-| `POST` | `/api/accounts/open` | `{ids}` → due 한 NPC 만 채우고 전원 잔액 (`wallet.load`) |
-| `POST` | `/api/accounts/deltas` | `{deltas}` 적용 (`wallet.commit`) |
+| `GET` | `/api/accounts?ids=a,b` | 순수 조회 (`/프로필` · `wallet.load`) |
+| `POST` | `/api/accounts/deltas` | `{deltas}` 적용 (`wallet.commit` · `/급여`) |
 | `POST` | `/api/accounts/claim` | `{id}` → 일일 규칙 (`/출첵`) |
 
 `accountStore` 가 다른 스토어와 다른 두 가지. 둘 다 **이 파일이 유일본**이라서다.
@@ -155,7 +161,8 @@ src/casino/stakes.js       판돈 등급 (마이크로·로우·미들·하이)
 src/casino/accounts.js     id 해석과 표기 (/프로필·/출첵·나중의 양도가 같이 쓴다)
 src/holdem/mobs.js         엘리트 에너미 35종과 성향
 src/casino/tables.js       다른 채널 판에 앉아 있는지
-src/commands/checkin.js    /출첵
+src/commands/checkin.js    /출첵 (사람)
+src/commands/wage.js       /급여 (미겔·마티암)
 src/commands/profile.js    /프로필
 scripts/check-wallet.mjs   회귀 검사
 ```

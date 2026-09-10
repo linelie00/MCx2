@@ -17,7 +17,7 @@ process.env.DATA_DIR = DIR;
 process.env.BOT_KEY = 'test-key';
 
 const app = require('../src/app');
-const { DAILY_FLOOR, NPC_FLOOR } = require('../src/controllers/accountController');
+const { DAILY_FLOOR } = require('../src/controllers/accountController');
 const FILE = path.join(DIR, 'accounts.json');
 
 let ok = 0; let bad = 0;
@@ -76,17 +76,13 @@ const server = app.listen(0, async () => {
   await post('/deltas', { deltas: { 1000003: -1000 } });
   eq('그날 파산하면 받을 수 있다', (await post('/claim', { id: '1000003' })).body.refilled, true);
 
-  // --- open (NPC 자동 충전). 사람보다 기준선이 높다 — 미들 자리에 앉을 수 있어야 해서.
-  await post('/deltas', { deltas: { 'npc:migel': -900, 'npc:matiam': -100 } });
-  const o1 = await post('/open', { ids: ['1000002', 'npc:migel', 'npc:matiam'] });
-  eq('미겔은 NPC 기준선까지 채워짐', o1.body.accounts['npc:migel'].chips, NPC_FLOOR);
-  eq('마티암도 마찬가지', o1.body.accounts['npc:matiam'].chips, NPC_FLOOR);
-  eq('사람은 open 에서 안 채운다', o1.body.accounts['1000002'].chips, DAILY_FLOOR);
-  eq('사람 기준선보다 높다 (미들 자리에 앉을 수 있어야 한다)', NPC_FLOOR > DAILY_FLOOR, true);
-  await post('/deltas', { deltas: { 'npc:migel': -900 } });
-  const o2 = await post('/open', { ids: ['npc:migel'] });
-  eq('같은 날 두 번째 open 은 안 채운다', o2.body.accounts['npc:migel'].chips, NPC_FLOOR - 900);
-
+  // --- NPC 는 자동으로 안 채워진다. `/급여` 가 delta 로 넣어 준다.
+  await post('/deltas', { deltas: { 'npc:migel': -1000 } });
+  eq('미겔 파산', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].chips, 0);
+  eq('조회해도 안 채워진다', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].chips, 0);
+  eq('급여는 그냥 delta 다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].chips, 1000);
+  eq('부를 때마다 는다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].chips, 2000);
+  eq('NPC 는 출첵 규칙을 안 탄다(사람 기준선 그대로)', DAILY_FLOOR, 1000);
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

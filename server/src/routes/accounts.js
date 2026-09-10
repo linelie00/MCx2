@@ -14,7 +14,6 @@ const { requireBot } = require('../middleware/requireBot');
 const router = express.Router();
 
 router.get('/', requireBot, ctrl.list);
-router.post('/open', requireBot, express.json(), ctrl.open);
 router.post('/deltas', requireBot, express.json(), ctrl.applyDeltas);
 router.post('/claim', requireBot, express.json(), ctrl.claim);
 

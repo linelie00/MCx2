@@ -18,20 +18,8 @@ const { dayKey } = require('../services/dayKey');
 /** 처음 보는 id 의 잔액. 등록 절차가 없다 — 없는 사람은 이 값으로 친다. */
 const START_CHIPS = 1000;
 
-/** 사람의 일일 규칙: 이 아래면 여기까지 채운다. 더 주지는 않는다. */
+/** 일일 규칙(`/출첵`): 이 아래면 여기까지 채운다. 더 주지는 않는다. **사람만 쓴다.** */
 const DAILY_FLOOR = 1000;
-
-/**
- * 미겔·마티암의 충전선. 사람보다 높다.
- *
- * 파산 방지선이자 **어느 자리에 앉을 수 있느냐**를 정하는 값이다. 1000이면 미들
- * 자리(최소 입장 1000)에 딱 10BB 숏스택으로만 앉을 수 있어서 판이 재미없다.
- * 미들의 한 스택(5000)까지 올려 두면 제대로 앉는다.
- *
- * 대가는 파밍 속도다 — 미겔을 0으로 만들어 두면 다음 날 5000이 새로 생긴다.
- * 두 사람이 쓰는 팬 사이트라 문제가 아니지만, 올릴 때 같이 오르는 값이다.
- */
-const NPC_FLOOR = 5000;
 
 /**
  * 잔액이 여기 아래로 내려가는 delta 배치는 거절한다.
@@ -70,16 +58,17 @@ const publicView = (acct) => ({
 });
 
 /**
- * 하루 한 번, 기준선 미만이면 기준선까지 채운다.
+ * 하루 한 번, 기준선 미만이면 기준선까지 채운다. **사람 전용이다.**
  *
- * 사람(`/출첵`)과 NPC(판을 열 때 자동)가 **같은 규칙**을 쓰되 기준선만 다르다 —
- * NPC 는 더 높은 자리에 앉을 수 있어야 해서 NPC_FLOOR 를 쓴다.
+ * 미겔·마티암은 자동으로 안 채운다 — 사람이 `/급여` 로 일당을 줄 때만 늘어난다.
+ * 일해서 번 돈이라는 설정이라 시간이 준다기보다 누가 줘야 하는 것이다.
  *
  * `refilledAt` 은 **실제로 채웠을 때만** 찍는다. 1200 가진 사람이 출첵하면 도장을
  * 안 찍으므로, 그날 파산한 뒤에 받을 수 있다. "하루 한 번 시도" 가 아니라
  * "하루 한 번, 진짜로 모자랐을 때" 다.
  */
-function dailyRule(acct, today, floor = DAILY_FLOOR) {
+function dailyRule(acct, today) {
+  const floor = DAILY_FLOOR;
   if (acct.refilledAt === today) return { refilled: false, reason: 'claimed', chips: acct.chips };
   if (acct.chips >= floor) return { refilled: false, reason: 'enough', chips: acct.chips };
 
@@ -126,45 +115,6 @@ exports.list = (req, res) => {
   const accounts = {};
   for (const id of ids) accounts[id] = publicView(normalize(data.accounts[id]));
   return res.json({ accounts, today: dayKey() });
-};
-
-// ---------------------------------------------------------------- 판 열기
-
-/**
- * POST /api/accounts/open — `{ ids }`
- *
- * 판을 열 때 봇이 부른다. **due 한 NPC 만** 일일 규칙을 적용하고 전원 잔액을 준다.
- * 사람은 여기서 안 채운다 — 사람은 `/출첵` 으로 직접 받는다.
- */
-exports.open = (req, res) => {
-  const ids = parseIds(req.body && req.body.ids);
-  if (typeof ids === 'string') return res.status(400).json({ error: ids });
-
-  const data = readOr503(res);
-  if (!data) return undefined;
-
-  const today = dayKey();
-  const refilled = [];
-  for (const id of ids) {
-    if (!isNpc(id)) continue;
-    const acct = normalize(data.accounts[id]);
-    const out = dailyRule(acct, today, NPC_FLOOR);
-    data.accounts[id] = acct;
-    if (out.refilled) refilled.push({ id, before: out.before, chips: out.chips });
-  }
-
-  // 채운 게 없으면 굳이 쓰지 않는다. 판을 열 때마다 파일을 건드릴 이유가 없다.
-  if (refilled.length) {
-    try {
-      store.write(data);
-    } catch (e) {
-      return res.status(503).json({ error: `계정 데이터를 쓰지 못했습니다: ${e.message}` });
-    }
-  }
-
-  const accounts = {};
-  for (const id of ids) accounts[id] = publicView(normalize(data.accounts[id]));
-  return res.json({ accounts, refilled, today });
 };
 
 // ---------------------------------------------------------------- 정산
@@ -244,4 +194,3 @@ exports.claim = (req, res) => {
 
 module.exports.START_CHIPS = START_CHIPS;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;
-module.exports.NPC_FLOOR = NPC_FLOOR;

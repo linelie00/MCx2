@@ -617,7 +617,14 @@ async function handleLobby(interaction, game, action, arg) {
 
     // 이 등급에 앉을 만큼 없는 사람이 있으면 판을 안 연다. 잔액은 여기서 처음 알 수
     // 있어서(참가 버튼에서 매번 HTTP 를 칠 수는 없다) 검사도 여기 있다.
-    const poor = walled.map((s) => tooPoor(game.stakes, account[s.id], s.name)).filter(Boolean);
+    // NPC 는 이제 자동으로 안 채워지므로, 모자라면 어떻게 채우는지 같이 알려 준다.
+    const poor = walled
+      .map((s) => {
+        const why = tooPoor(game.stakes, account[s.id], s.name);
+        if (!why) return null;
+        return s.kind === 'npc' ? `${why} \`/급여\` 로 일당을 줄 수 있어요.` : why;
+      })
+      .filter(Boolean);
     if (poor.length) { await denyLate(interaction, poor.join('\n')); return true; }
 
     // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다. 모브 몫은 그 위에 얹는다.

@@ -22,7 +22,7 @@
  * 상수를 돌려주던 동안에는 티가 안 났지만, HTTP 가 들어간 지금은 콜드 스타트 한 번에
  * 클릭이 통째로 날아간다(10062). `commit` 은 드라이버 안이라 시한과 무관하다.
  */
-import { openAccounts, postAccountDeltas } from '../api.js';
+import { getAccounts, postAccountDeltas } from '../api.js';
 
 /** 처음 보는 사람의 잔액. 등록 절차가 없다 — 저장소에 없으면 이 값으로 친다. */
 export const START_CHIPS = 1000;
@@ -74,14 +74,14 @@ export const roundToUnit = (amount, unit) => Math.max(0, Math.floor(amount / uni
  * 못 읽었다고 START_CHIPS 로 진행하면 칩이 복제된다 — 실제 잔액이 200인 사람이
  * 1000으로 놀고, 나중에 커밋이 성공하면 그 차액이 그대로 서버에 얹힌다.
  *
- * 여는 김에 서버가 미겔·마티암의 일일 충전도 처리한다(하루 한 번, 1000 미만이면
- * 1000으로). 판정을 서버에 둔 이유는 봇이 재시작해도 잊지 않아야 하고, 잔액과 같은
- * 파일에 있어야 한 번의 쓰기로 끝나기 때문이다.
+ * **아무것도 쓰지 않는다.** 한동안 여기서 미겔·마티암을 자동으로 채웠는데, 지금은
+ * 사람이 `/급여` 로 일당을 줄 때만 늘어난다 — 일해서 번 돈이라는 설정이라 시간이
+ * 주는 것이 아니라 누가 줘야 하는 것이다.
  *
  * 길드는 안 본다 — 계정은 디스코드 유저 하나에 하나다.
  */
 export async function load(guildId, userIds) {
-  const { accounts } = await openAccounts(userIds);
+  const { accounts } = await getAccounts(userIds);
   return Object.fromEntries(userIds.map((id) => [id, accounts?.[id]?.chips ?? START_CHIPS]));
 }
 

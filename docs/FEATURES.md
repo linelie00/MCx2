@@ -399,6 +399,7 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/블랙잭 시작 · 판 · 그만` | 누구나 | `POST /api/accounts/open`·`/deltas` |
 | `/홀덤 시작 · 판 · 족보 · 그만` | 누구나 | `POST /api/accounts/open`·`/deltas` |
 | `/출첵` | 누구나 | `POST /api/accounts/claim` |
+| `/급여` | 누구나 | `POST /api/accounts/deltas` |
 | `/프로필` | 누구나 | `GET /api/accounts` |
 | `/주사위` `/뽑기` | 누구나 | 없음 |
 

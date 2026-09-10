@@ -71,7 +71,7 @@ async function execute(interaction) {
       title: who.name,
       description: lines.join('\n'),
       color: who.color,
-      footer: who.npc ? '판을 열 때 하루 한 번 채워집니다' : '/출첵 으로 하루 한 번 받을 수 있어요',
+      footer: who.npc ? '/급여 로 일당을 받습니다 (자동으로 늘지 않아요)' : '/출첵 으로 하루 한 번 받을 수 있어요',
     })],
   });
 }

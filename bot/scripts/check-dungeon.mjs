@@ -20,7 +20,8 @@ import * as hold from '../src/holdem/state.js';
 import { ledger } from '../src/casino/wallet.js';
 import { DUNGEON, STAKES, atLevel } from '../src/casino/stakes.js';
 import { MAX_HP } from '../src/casino/items.js';
-import { POOL, roll, LEAST, MOST } from '../src/casino/loot.js';
+import { POOL, TIER, roll, listText } from '../src/casino/loot.js';
+import { ITEM_BY_KEY } from '../src/casino/items.js';
 import { MOBS, NORMALS, drawEnemy, hpOf, ELITE_CHANCE } from '../src/holdem/mobs.js';
 
 const ROUNDS = Number(process.argv[2]) || 120;
@@ -233,16 +234,19 @@ check('잡화만, 막은 것은 안 나온다', () => {
   }
   assert.ok(POOL.some((i) => i.key === 'oreBlue'), '원석이 빠졌다');
 });
-check('한 번에 2~5개', () => {
-  for (let i = 0; i < 2000; i += 1) {
-    const n = Object.values(roll()).reduce((a, b) => a + b, 0);
-    assert.ok(n >= LEAST && n <= MOST, `${n}개가 나왔다`);
+check('가짓수가 등급대로', () => {
+  for (const [key, t] of Object.entries(TIER)) {
+    for (let i = 0; i < 2000; i += 1) {
+      const n = Object.values(roll(Math.random, { elite: key === 'elite' }).items)
+        .reduce((a, b) => a + b, 0);
+      assert.ok(n >= t.least && n <= t.most, `${key}: ${n}개가 나왔다`);
+    }
   }
 });
 check('싼 것이 비싼 것보다 흔하다', () => {
   const tally = {};
   for (let i = 0; i < 60_000; i += 1) {
-    for (const [k, n] of Object.entries(roll())) tally[k] = (tally[k] ?? 0) + n;
+    for (const [k, n] of Object.entries(roll().items)) tally[k] = (tally[k] ?? 0) + n;
   }
   const cheap = tally.twig ?? 0;             // 1골드
   const dear = tally.oddFossil ?? 0;         // 100골드
@@ -250,6 +254,51 @@ check('싼 것이 비싼 것보다 흔하다', () => {
   // 값 0 짜리가 1골드짜리보다 크게 흔하면 안 된다 — 그 무리에 센 것이 섞여 있다.
   const free = tally.wetMoss ?? 0;           // 0골드
   assert.ok(free < cheap * 1.5, `값 0 짜리가 너무 흔하다: ${free} vs ${cheap}`);
+});
+
+/** 한 판 보상의 값어치(아이템 값 + 골드). */
+function haul(elite, n = 20_000) {
+  let worth = 0; let gold = 0; let mt = 0;
+  for (let i = 0; i < n; i += 1) {
+    const r = roll(Math.random, { elite });
+    for (const [k, c] of Object.entries(r.items)) worth += (ITEM_BY_KEY[k]?.price ?? 0) * c;
+    gold += r.gold;
+    mt += r.mt;
+  }
+  return { worth: worth / n, gold: gold / n, mt: mt / n };
+}
+
+check('엘리트가 더 좋은 것을 준다', () => {
+  const a = haul(false);
+  const b = haul(true);
+  assert.ok(b.worth > a.worth * 1.5, `값어치 일반 ${a.worth.toFixed(0)} vs 엘리트 ${b.worth.toFixed(0)}`);
+  assert.ok(b.gold > a.gold * 1.5, `골드 일반 ${a.gold.toFixed(0)} vs 엘리트 ${b.gold.toFixed(0)}`);
+  assert.ok(b.mt > a.mt * 3, `MT 일반 ${(a.mt * 100).toFixed(1)}% vs 엘리트 ${(b.mt * 100).toFixed(1)}%`);
+});
+
+check('골드는 범위 안에서 10 단위로', () => {
+  for (const [key, t] of Object.entries(TIER)) {
+    for (let i = 0; i < 3000; i += 1) {
+      const { gold } = roll(Math.random, { elite: key === 'elite' });
+      assert.equal(gold % 10, 0, `${key}: ${gold} 은 10 단위가 아니다`);
+      assert.ok(gold >= t.gold[0] - 5 && gold <= t.gold[1] + 5, `${key}: ${gold} 이 범위 밖`);
+    }
+  }
+});
+
+check('MT 는 0 아니면 1', () => {
+  for (let i = 0; i < 5000; i += 1) {
+    assert.ok([0, 1].includes(roll(Math.random, { elite: i % 2 === 0 }).mt));
+  }
+});
+
+check('보상 한 줄에 셋이 다 보인다', () => {
+  const text = listText({ items: { twig: 2 }, gold: 480, mt: 1 }, ITEM_BY_KEY);
+  assert.ok(/나뭇가지.*×2/.test(text), text);
+  assert.ok(/480골드/.test(text), text);
+  assert.ok(/MT ×1/.test(text), text);
+  // 없는 것은 안 적는다
+  assert.equal(/골드|MT/.test(listText({ items: { twig: 1 }, gold: 0, mt: 0 }, ITEM_BY_KEY)), false);
 });
 
 // ---------------------------------------------------------------- 토너먼트

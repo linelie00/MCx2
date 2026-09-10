@@ -90,9 +90,17 @@ export async function finishTourney(game, winnerId) {
   return saved;
 }
 
-/** 던전을 깼다. 떨군 것을 창고에 넣고 전적을 적는다. */
-export const dungeonWon = (id, drops) =>
-  apply({ items: { [id]: drops }, bump: { [id]: { dungeonWon: 1 } } });
+/**
+ * 던전을 깼다. 떨군 것을 **한 번의 쓰기로** 넣는다 — 아이템·골드·MT·전적이 같이 간다.
+ *
+ * 체력은 이미 핸드마다 저장돼 있으므로 여기서 안 건드린다.
+ */
+export const dungeonWon = (id, drops) => apply({
+  items: { [id]: drops.items },
+  deltas: drops.gold ? { [id]: drops.gold } : {},
+  mt: drops.mt ? { [id]: drops.mt } : {},
+  bump: { [id]: { dungeonWon: 1 } },
+});
 
 /** 던전에서 졌다. 체력은 이미 저장돼 있으므로 전적만. */
 export const dungeonLost = (id) => apply({ bump: { [id]: { dungeonLost: 1 } } });

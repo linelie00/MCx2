@@ -21,7 +21,7 @@ import { chooseAction, readRange } from '../holdem/ai.js';
 import { live } from '../holdem/rules.js';
 import { loadAccounts, buyIn } from '../casino/wallet.js';
 import * as payout from '../holdem/payout.js';
-import { roll, listText, LEAST as LOOT_LEAST, MOST as LOOT_MOST } from '../casino/loot.js';
+import { roll, listText, TIER as LOOT } from '../casino/loot.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
 import { forget, deadEmbed } from '../casino/alive.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
@@ -561,15 +561,16 @@ async function finishDungeon(game) {
 
   const id = game.owner;
   if (won) {
-    const drops = roll();
+    // 엘리트를 눕히면 가짓수도 값도 MT 확률도 오른다(casino/loot.js).
+    const drops = roll(Math.random, { elite: Boolean(mob?.elite) });
     const saved = await payout.dungeonWon(id, drops);
     await game.message?.channel?.send({
       embeds: [base({
-        title: '⚔️ 쓰러뜨렸어요',
+        title: mob?.elite ? '⚔️ 엘리트를 쓰러뜨렸어요' : '⚔️ 쓰러뜨렸어요',
         description: `**${mob?.name}** 을(를) 눕혔어요. ${game.handNo}핸드.`
           + `\n\n**주운 것** — ${listText(drops, ITEM_BY_KEY)}`
           + (saved.ok ? '' : '\n\n_저장하지 못했어요._'),
-        color: THEME_COLOR,
+        color: mob?.elite ? 0xc9a227 : THEME_COLOR,
         footer: `남은 체력 ${me?.gold ?? 0} · /사용 으로 회복약을 먹을 수 있어요`,
       })],
     }).catch(() => {});
@@ -719,6 +720,8 @@ async function openDungeon(interaction) {
 
   state.addSeat(game, state.humanSeat(interaction.user, interaction.member?.displayName));
   const enemy = state.mobSeat(mob, 0, DUNGEON);
+  // 등급을 자리에 남긴다. 판이 끝날 때 `finishDungeon` 이 볼 수 있는 것은 자리뿐이다.
+  enemy.elite = mob.elite;
   enemy.buyIn = hpOf(mob);
   state.addSeat(game, enemy);
 
@@ -747,7 +750,7 @@ async function openDungeon(interaction) {
 }
 
 /** 던전 안내. 규칙이 현금 판과 달라서 따로 쓴다. */
-const dungeonHowto = (game, mob, hp) => base({
+const dungeonHowto = (game, mob, hp) => ((tier) => base({
   title: `${mob.elite ? '⚔️ 엘리트 · ' : '⚔️ '}${mob.name}`,
   description: [
     `_${mob.note}_`,
@@ -762,12 +765,13 @@ const dungeonHowto = (game, mob, hp) => base({
     '**던전 안에서는 회복약을 못 먹어요.** 체력이 판 안에만 있는 동안 계정을 고치면',
     '정산 때 어긋나거든요. 도망쳐서 고치고 다시 들어오는 것이 이 판의 선택지예요.',
     '',
-    `이기면 잡화를 **${LOOT_LEAST}~${LOOT_MOST}개** 주워 옵니다.`,
+    `이기면 잡화 **${tier.least}~${tier.most}개**와 **${tier.gold[0]}~${tier.gold[1]}골드**를 주워 옵니다.`,
+    mob.elite ? '엘리트라 더 좋은 것이 나오고, 🪙 **MT** 가 붙을 수도 있어요.' : '드물게 🪙 **MT** 가 붙기도 해요.',
   ].join('\n'),
   color: mob.elite ? 0xc9a227 : THEME_COLOR,
   footer: `${mob.elite ? '엘리트 에너미' : '일반 에너미'}`
     + ` · 블라인드 ${game.stakes.sb}/${game.stakes.bb} · 10분 동안 아무도 안 누르면 저절로 닫혀요`,
-});
+}))(mob.elite ? LOOT.elite : LOOT.normal);
 
 // ---------------------------------------------------------------- 명령
 

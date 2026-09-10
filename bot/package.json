@@ -15,7 +15,8 @@
     "check-wallet": "node scripts/check-wallet.mjs",
     "check-reads": "node scripts/check-reads.mjs",
     "check-items": "node scripts/check-items.mjs",
-    "check-dungeon": "node scripts/check-dungeon.mjs"
+    "check-dungeon": "node scripts/check-dungeon.mjs",
+    "check-load": "node scripts/check-load.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

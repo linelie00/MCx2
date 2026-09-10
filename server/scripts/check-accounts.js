@@ -4,7 +4,7 @@
  *   node scripts/check-accounts.js
  *
  * 임시 DATA_DIR 에 진짜 앱을 띄워 두들긴다. 실제 데이터는 건드리지 않는다.
- * 칩은 유일본이라 손으로 curl 하며 확인할 만한 것이 아니다 — 특히 손상된 파일을
+ * 골드는 유일본이라 손으로 curl 하며 확인할 만한 것이 아니다 — 특히 손상된 파일을
  * 0 으로 읽지 않는지, 같은 delta 를 두 번 보내면 두 번 적용되는지(멱등이 아니라서
  * 봇 쪽 ledger 에 rebase 가 필요하다)는 매번 확인해야 한다.
  */
@@ -43,23 +43,23 @@ const server = app.listen(0, async () => {
 
   // --- 조회
   const r1 = await hit('?ids=1000001,npc:migel');
-  eq('없는 id 는 1000', r1.body.accounts['1000001'].chips, 1000);
-  eq('NPC 도 1000', r1.body.accounts['npc:migel'].chips, 1000);
+  eq('없는 id 는 1000', r1.body.accounts['1000001'].gold, 1000);
+  eq('NPC 도 1000', r1.body.accounts['npc:migel'].gold, 1000);
   eq('아이템 틀 있음', r1.body.accounts['1000001'].items, {});
   eq('칭호 없음', r1.body.accounts['1000001'].title, null);
   eq('이상한 id 는 400', (await hit('?ids=drop-table')).status, 400);
   eq('빈 ids 400', (await hit('?ids=')).status, 400);
 
   // --- delta
-  eq('delta 적용', (await post('/deltas', { deltas: { 1000001: -400 } })).body.accounts['1000001'].chips, 600);
+  eq('delta 적용', (await post('/deltas', { deltas: { 1000001: -400 } })).body.accounts['1000001'].gold, 600);
   eq('같은 delta 또 보내면 또 적용(멱등 아님)',
-    (await post('/deltas', { deltas: { 1000001: -400 } })).body.accounts['1000001'].chips, 200);
+    (await post('/deltas', { deltas: { 1000001: -400 } })).body.accounts['1000001'].gold, 200);
   eq('소수 400', (await post('/deltas', { deltas: { 1000001: 1.5 } })).status, 400);
   eq('-1000 아래로 가면 409', (await post('/deltas', { deltas: { 1000001: -5000 } })).status, 409);
-  eq('409 뒤에도 잔액 그대로', (await hit('?ids=1000001')).body.accounts['1000001'].chips, 200);
+  eq('409 뒤에도 잔액 그대로', (await hit('?ids=1000001')).body.accounts['1000001'].gold, 200);
   eq('본문 없으면 400', (await hit('/deltas', { method: 'POST' })).status, 400);
 
-  // --- 전적 카운터. 칩과 같은 쓰기로 들어간다.
+  // --- 전적 카운터. 골드와 같은 쓰기로 들어간다.
   const st1 = await post('/deltas', { deltas: { 1000004: 100 }, bump: { 1000004: { hands: 1, won: 1 } } });
   eq('카운터가 쌓인다', st1.body.accounts['1000004'].stats.hands, 1);
   const st2 = await post('/deltas', { deltas: { 1000004: -50 }, bump: { 1000004: { hands: 1 } } });
@@ -75,7 +75,7 @@ const server = app.listen(0, async () => {
   eq('deltas 에 없는 id 는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000005: { hands: 1 } } })).status, 400);
   // --- 출첵
   const c1 = await post('/claim', { id: '1000001' });
-  eq('출첵으로 1000', c1.body.chips, 1000);
+  eq('출첵으로 1000', c1.body.gold, 1000);
   eq('채웠다고 표시', c1.body.refilled, true);
   const c2 = await post('/claim', { id: '1000001' });
   eq('하루 한 번', c2.body.refilled, false);
@@ -92,10 +92,10 @@ const server = app.listen(0, async () => {
 
   // --- NPC 는 자동으로 안 채워진다. `/급여` 가 delta 로 넣어 준다.
   await post('/deltas', { deltas: { 'npc:migel': -1000 } });
-  eq('미겔 파산', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].chips, 0);
-  eq('조회해도 안 채워진다', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].chips, 0);
-  eq('급여는 그냥 delta 다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].chips, 1000);
-  eq('부를 때마다 는다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].chips, 2000);
+  eq('미겔 파산', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].gold, 0);
+  eq('조회해도 안 채워진다', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].gold, 0);
+  eq('급여는 그냥 delta 다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].gold, 1000);
+  eq('부를 때마다 는다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].gold, 2000);
   eq('NPC 는 출첵 규칙을 안 탄다(사람 기준선 그대로)', DAILY_FLOOR, 1000);
   // --- 칭호. **이름이 아니라 키를 저장한다** — 나중에 이름을 고쳐도 달고 있던 게 안 날아간다.
   const t1 = await post('/title', { id: '1000004', title: 'puyo' });
@@ -125,6 +125,26 @@ const server = app.listen(0, async () => {
   eq('최대 베팅은 큰 쪽만', bb.body.accounts['1000004'].stats.bestBet, 1000);
   eq('최고 족보도 큰 쪽만',
     (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { bestHand: 2 } } })).body.accounts['1000004'].stats.bestHand, 5);
+
+  // --- 옛 기록(chips)이 gold 로 넘어오는지. 돈 이름을 바꾸기 전에 저장된 계정이다.
+  fs.writeFileSync(FILE, JSON.stringify({
+    accounts: {
+      1000009: { chips: 7777, title: 'crown', items: { twig: 2 }, stats: { hands: 5 }, refilledAt: null },
+      1000010: { chips: 100, gold: 200 },
+    },
+  }), 'utf-8');
+  const old = await hit('?ids=1000009,1000010');
+  eq('옛 chips 를 gold 로 읽는다', old.body.accounts['1000009'].gold, 7777);
+  eq('나머지 필드는 그대로', old.body.accounts['1000009'].title, 'crown');
+  eq('전적도 그대로', old.body.accounts['1000009'].stats.hands, 5);
+  eq('chips 는 응답에 안 나온다', old.body.accounts['1000009'].chips, undefined);
+  eq('둘 다 있으면 gold 가 이긴다', old.body.accounts['1000010'].gold, 200);
+
+  // 한 번 쓰면 파일에서도 넘어간다
+  eq('옛 계정에 delta 적용', (await post('/deltas', { deltas: { 1000009: -777 } })).body.accounts['1000009'].gold, 7000);
+  const saved = JSON.parse(fs.readFileSync(FILE, 'utf-8')).accounts['1000009'];
+  eq('파일에 gold 로 적힌다', saved.gold, 7000);
+  eq('파일에서 chips 가 사라진다', saved.chips, undefined);
 
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');

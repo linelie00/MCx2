@@ -37,7 +37,7 @@ app.use('/api/gallery', galleryRoutes);
 app.use('/api/guestbook', guestbookRoutes);
 app.use('/api/playlist', playlistRoutes);
 app.use('/api/movie', movieRoutes);
-// 카지노 계정(칩·칭호·아이템) — 디스코드 봇 전용
+// 카지노 계정(골드·칭호·아이템) — 디스코드 봇 전용
 app.use('/api/accounts', accountRoutes);
 
 app.get('/', (req, res) => res.send('MIHEARTI API'));

@@ -1,7 +1,7 @@
 /**
- * /출첵 — 하루 한 번 칩을 받는다
+ * /출첵 — 하루 한 번 골드를 받는다
  *
- * 칩이 영구 저장이 되면서 생긴 명령이다. 안 그러면 파산한 사람이 **영영** 못 논다.
+ * 골드가 영구 저장이 되면서 생긴 명령이다. 안 그러면 파산한 사람이 **영영** 못 논다.
  *
  * 규칙은 하나뿐이다 — **하루 한 번, 1000 미만이면 1000으로.** 미겔·마티암이 판을 열
  * 때 자동으로 받는 것과 같은 규칙이고, 서버의 `dailyRule` 한 곳에만 적혀 있다.
@@ -25,7 +25,7 @@ import { seatedAt } from '../casino/tables.js';
 
 const data = new SlashCommandBuilder()
   .setName('출첵')
-  .setDescription('하루 한 번, 칩이 모자라면 채워 받습니다.');
+  .setDescription('하루 한 번, 골드가 모자라면 채워 받습니다.');
 
 async function execute(interaction) {
   // 서버 왕복이라 3초를 넘길 수 있다. 먼저 응답을 잡아 둔다.
@@ -39,21 +39,21 @@ async function execute(interaction) {
   try {
     res = await claimDaily(interaction.user.id);
   } catch (err) {
-    await interaction.editReply({ embeds: [fail(`칩을 받지 못했어요. ${err.message}`)] });
+    await interaction.editReply({ embeds: [fail(`골드를 받지 못했어요. ${err.message}`)] });
     return;
   }
 
   const seated = seatedAt(interaction.user.id);
   const note = seated
     ? `\n\n_지금 <#${seated.channelId}> 의 ${seated.game} 판에 앉아 있어요 —_`
-      + ' _그 판에 들고 간 칩은 그대로고, 받은 몫은 판이 끝난 뒤에 합쳐져요._'
+      + ' _그 판에 들고 간 골드는 그대로고, 받은 몫은 판이 끝난 뒤에 합쳐져요._'
     : '';
 
   if (res.refilled) {
     await interaction.editReply({
       embeds: [base({
-        title: `${res.chips}칩`,
-        description: `${me.name}님, 오늘 몫이에요. **${res.before}칩 → ${res.chips}칩**${note}`,
+        title: `${res.gold}골드`,
+        description: `${me.name}님, 오늘 몫이에요. **${res.before}골드 → ${res.gold}골드**${note}`,
         color: me.color,
         footer: '내일 또 오세요 (한국 시간 0시 기준)',
       })],
@@ -63,9 +63,9 @@ async function execute(interaction) {
 
   // 못 받은 것도 오류가 아니다. 사유가 둘이고, 뜻이 서로 다르다.
   const body = res.reason === 'enough'
-    ? `${me.name}님은 아직 **${res.chips}칩**이나 있어요. ${res.floor}칩 아래로 내려가면 그때 채워 드릴게요.`
+    ? `${me.name}님은 아직 **${res.gold}골드**나 있어요. ${res.floor}골드 아래로 내려가면 그때 채워 드릴게요.`
       + '\n_오늘 몫은 아직 안 쓴 거예요._'
-    : `오늘 몫은 이미 받으셨어요. 지금 **${res.chips}칩**이고, 다음은 한국 시간 0시에요.`;
+    : `오늘 몫은 이미 받으셨어요. 지금 **${res.gold}골드**고, 다음은 한국 시간 0시에요.`;
 
   await interaction.editReply({
     embeds: [base({ title: '출첵', description: body + note, color: me.color })],

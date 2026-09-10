@@ -86,7 +86,7 @@ const MOMENT = {
   check: () => '걸린 돈이 없어 그냥 넘긴다. Check 다.',
   call: (v) => `상대가 건 만큼(${v.amount}) 맞춘다. Call 이다.`,
   raise: (v) => `${v.amount}까지 올린다. Raise 다.`,
-  allin: (v) => `가진 칩 전부(${v.amount})를 민다. All-in 이다.`,
+  allin: (v) => `가진 골드 전부(${v.amount})를 민다. All-in 이다.`,
   win: (v) => `이번 판을 이겨 ${v.amount}을 가져간다.${v.hand ? ` 내 손은 ${v.hand}.` : ''}`,
   lose: (v) => `이번 판에서 ${v.amount}을 잃었다.`,
   chop: (v) => `똑같은 손이 나와 팟을 나눠 가졌다. 내 몫은 ${v.amount}.`,
@@ -185,7 +185,7 @@ function table(game, speaker, event) {
       s.bet ? `이번 ${s.bet}` : null,
       s.lastAction ? `방금 ${s.lastAction}` : null,
     ].filter(Boolean).join(' · ');
-    rows.push(`${s.name}: 칩 ${s.chips}${tag ? ` · ${tag}` : ''}`
+    rows.push(`${s.name}: 골드 ${s.gold}${tag ? ` · ${tag}` : ''}`
       + (s.character === speaker ? ' ← 나' : ''));
   }
 
@@ -218,9 +218,9 @@ function table(game, speaker, event) {
  * 자랑했다. 끝난 판의 카드는 말할 거리가 아니라 **군더더기**라 아예 안 넣는다.
  */
 function closing(game, speaker, vars) {
-  const rows = (vars.table ?? []).map(({ name, chips, delta }) => {
+  const rows = (vars.table ?? []).map(({ name, gold, delta }) => {
     const sign = delta > 0 ? `+${delta}` : String(delta);
-    return `${name}: ${chips}칩 (${sign})${name === vars.me ? ' ← 나' : ''}`;
+    return `${name}: ${gold}골드 (${sign})${name === vars.me ? ' ← 나' : ''}`;
   });
   return [
     '## 오늘의 결산',
@@ -251,7 +251,7 @@ export function memo(game, key, vars = {}, speaker = null) {
 
 // ---------------------------------------------------------------- 스포 검사
 
-/** 그 끗을 부르는 글자말. 숫자꼴(10, 7 …)은 아래에서 따로 — 칩 액수와 생김새가 같다. */
+/** 그 끗을 부르는 글자말. 숫자꼴(10, 7 …)은 아래에서 따로 — 골드 액수와 생김새가 같다. */
 const RANK_WORDS = {
   a: ['A', '에이스'], k: ['K', '킹'], q: ['Q', '퀸'], j: ['J', '잭'], t: ['T', '텐'],
 };
@@ -260,7 +260,7 @@ const SUIT_WORDS = {
   d: ['♦', '다이아몬드', '다이아'], c: ['♣', '클로버', '클럽'],
 };
 /** 숫자 뒤에 이런 말이 붙으면 카드가 아니라 세는 말이다. */
-const COUNTER = '장|명|번|판|칩|개|배|초|분|점|원|씩|째|년|살|위|등|퍼';
+const COUNTER = '장|명|번|판|골드|개|배|초|분|점|원|씩|째|년|살|위|등|퍼';
 
 /**
  * 그 낱말이 **낱말로서** 나오는지 보는 정규식.
@@ -269,7 +269,7 @@ const COUNTER = '장|명|번|판|칩|개|배|초|분|점|원|씩|째|년|살|위
  * 가 전부 걸리고, K 는 "Chec**k**" 에 걸린다. NPC 가 매 줄 쓰는 낱말들이라 검사가
  * 사실상 전부를 버리게 된다(실제로 그랬다). 그래서 앞뒤가 글자면 카드가 아니라고 본다.
  *
- * 숫자는 한 겹 더 — "3**장**", "60**칩**" 처럼 세는 말이 붙으면 카드가 아니다.
+ * 숫자는 한 겹 더 — "3**장**", "60**골드**" 처럼 세는 말이 붙으면 카드가 아니다.
  */
 function token(word) {
   const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -286,7 +286,7 @@ function token(word) {
  * "내 손에만 있는 것" 뿐이다. 그래서 K♦ 를 들고 보드에 ♦ 가 없는데 "다이아몬드" 를
  * 말하면 걸리고, 보드에 ♦ 가 있으면 안 걸린다.
  *
- * 숫자 끗은 칩 액수와 생김새가 같아서(스몰블라인드가 10 이다) 오검출이 난다.
+ * 숫자 끗은 골드 액수와 생김새가 같아서(스몰블라인드가 10 이다) 오검출이 난다.
  * 그때 잃는 것은 **그 한 줄뿐**이고 캔드 대사가 대신 나가므로, 놓치는 쪽보다
  * 지나치게 잡는 쪽으로 기울여 둔다.
  */

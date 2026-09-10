@@ -158,11 +158,11 @@ function playTable(kind, hands, { dropEvery = 0 } = {}) {
       played += 1;
 
       if (!(dropEvery && played % dropEvery === 0)) {
-        server.apply(game.chips.deltas());
-        game.chips.rebase();
+        server.apply(game.gold.deltas());
+        game.gold.rebase();
 
         // 서버 잔액 = 판에 들고 온 몫 + 남겨 둔 몫. **id 별로** 같아야 한다.
-        const want = Object.fromEntries(Object.entries(game.chips.snapshot())
+        const want = Object.fromEntries(Object.entries(game.gold.snapshot())
           .map(([id, n]) => [id, n + parked[id]]));
         assert.deepStrictEqual(
           Object.fromEntries(Object.entries(server.bal).filter(([id]) => id in want)),
@@ -175,9 +175,9 @@ function playTable(kind, hands, { dropEvery = 0 } = {}) {
       if (kind === 'bj') { if (!bj.nextHand(game)) break; } else if (!hold.beginHand(game)) break;
     }
 
-    // 판을 접을 때 밀린 몫이 있으면 마저 보낸다. 여기서 흘리면 칩이 사라진다.
-    server.apply(game.chips.deltas());
-    game.chips.rebase();
+    // 판을 접을 때 밀린 몫이 있으면 마저 보낸다. 여기서 흘리면 골드가 사라진다.
+    server.apply(game.gold.deltas());
+    game.gold.rebase();
     mod.remove(game.channelId);
   }
   return { server, played, tables };

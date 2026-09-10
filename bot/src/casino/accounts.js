@@ -1,7 +1,7 @@
 /**
  * accounts — 계정 하나를 어떻게 가리키고 어떻게 부를지
  *
- * 칩·칭호·아이템은 **계정 id 하나**로 묶인다. 사람은 디스코드 유저 id, NPC 는
+ * 골드·칭호·아이템은 **계정 id 하나**로 묶인다. 사람은 디스코드 유저 id, NPC 는
  * `npc:migel` / `npc:matiam`. 게임의 자리 id 와 같은 규약이라(blackjack/holdem 의
  * `humanSeat`·`npcSeat`) 판에서 쓰던 id 를 그대로 계정 키로 쓸 수 있다.
  *

@@ -1,12 +1,12 @@
 /**
  * accountStore — accounts.json 읽기/쓰기
  *
- * 카지노 계정. 칩과, 나중에 붙을 칭호·아이템이 여기 산다.
- * shape: { accounts: { "<id>": { chips, title, items, refilledAt, updatedAt } } }
+ * 카지노 계정. 골드와, 나중에 붙을 칭호·아이템이 여기 산다.
+ * shape: { accounts: { "<id>": { gold, title, items, refilledAt, updatedAt } } }
  * `<id>` 는 디스코드 유저 id, 또는 `npc:migel` / `npc:matiam`.
  *
  * 다른 스토어(movieStore·playlistStore)와 **두 곳이 다르다.** 둘 다 이 파일이
- * **유일본**이기 때문이다 — 영화·플리는 시드가 받쳐 주지만 칩은 잃으면 끝이다.
+ * **유일본**이기 때문이다 — 영화·플리는 시드가 받쳐 주지만 골드는 잃으면 끝이다.
  *
  *   1. 파싱에 실패하면 **던진다.** 다른 스토어는 빈 컬렉션을 돌려준다. 그렇게 하면
  *      반쪽 난 파일이 "전원 잔액 0" 으로 조용히 읽히고, 그 위에 한 번만 더 쓰면

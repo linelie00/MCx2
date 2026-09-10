@@ -1,5 +1,5 @@
 /**
- * accountController — 카지노 계정 (칩 · 칭호 · 아이템)
+ * accountController — 카지노 계정 (골드 · 칭호 · 아이템)
  *
  * 봇만 쓴다(라우트에서 requireBot). 사람은 사이트에서 이걸 만질 일이 없다.
  *
@@ -10,13 +10,13 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { chips, title, items, stats, refilledAt, updatedAt }
+ * account shape: { gold, title, items, stats, refilledAt, updatedAt }
  *
  * `title` 은 **달고 있는 칭호의 키**다. 이름이 아니라 키를 두는 이유는 나중에 칭호
  * 이름을 고쳐도 달고 있던 게 안 날아가게 하려는 것이고, 무엇이 유효한 키인지는
  * 서버가 모른다 — 칭호 규칙은 봇에 있다(`casino/titles.js`).
  *
- * `stats` 는 전적 카운터다. **칩과 똑같이 더하기만 한다** — 그래서 락 없는 이 스토어에
+ * `stats` 는 전적 카운터다. **골드와 똑같이 더하기만 한다** — 그래서 락 없는 이 스토어에
  * 안전하게 쓸 수 있는 유일한 방식(증감)을 그대로 탄다. 최댓값(최고 팟 같은 것)도
  * 순서를 안 타므로 같이 실어도 된다.
  */
@@ -24,7 +24,7 @@ const store = require('../services/accountStore');
 const { dayKey } = require('../services/dayKey');
 
 /** 처음 보는 id 의 잔액. 등록 절차가 없다 — 없는 사람은 이 값으로 친다. */
-const START_CHIPS = 1000;
+const START_GOLD = 1000;
 
 /** 일일 규칙(`/출첵`): 이 아래면 여기까지 채운다. 더 주지는 않는다. **사람만 쓴다.** */
 const DAILY_FLOOR = 1000;
@@ -33,10 +33,10 @@ const DAILY_FLOOR = 1000;
  * 잔액이 여기 아래로 내려가는 delta 배치는 거절한다.
  *
  * 정상적으로는 **0 아래로 안 내려간다** — 판에 들고 앉는 스택이 이미 잔액 이하라
- * 그보다 더 잃을 수가 없다. 그러니 크게 마이너스로 가는 배치는 **같은 칩을 두 판에서
+ * 그보다 더 잃을 수가 없다. 그러니 크게 마이너스로 가는 배치는 **같은 골드를 두 판에서
  * 겹쳐 걸었다**는 뜻이다(봇이 막지만 여기서 한 번 더 본다).
  *
- * **0 으로 깎지는 않는다** — 깎으면 없던 칩이 생기고, 총합 보존으로 버그를 잡는 길이
+ * **0 으로 깎지는 않는다** — 깎으면 없던 골드가 생기고, 총합 보존으로 버그를 잡는 길이
  * 막힌다. 거절하고 로그에 남기는 편이 낫다.
  */
 const MIN_BALANCE = -1000;
@@ -51,15 +51,26 @@ const now = () => new Date().toISOString();
 const isNpc = (id) => id.startsWith('npc:');
 
 const blank = () => ({
-  chips: START_CHIPS, title: null, items: {}, stats: {}, refilledAt: null, updatedAt: null,
+  gold: START_GOLD, title: null, items: {}, stats: {}, refilledAt: null, updatedAt: null,
 });
 
-/** 저장된 계정을 빠진 필드까지 채워서 준다. 뒤에 필드가 늘어도 옛 기록이 안 깨진다. */
-const normalize = (raw) => ({ ...blank(), ...(raw || {}) });
+/**
+ * 저장된 계정을 빠진 필드까지 채워서 준다. 뒤에 필드가 늘어도 옛 기록이 안 깨진다.
+ *
+ * **`chips` 를 받아 준다.** 돈 이름을 칩에서 골드로 바꾸기 전에 저장된 기록이라,
+ * 그냥 읽으면 잔액이 통째로 0 이 된다. 쓸 때는 늘 `gold` 로 쓰므로 계정마다 **처음
+ * 저장되는 순간 넘어간다** — 전부 넘어간 뒤에는 이 줄을 지워도 된다.
+ */
+const normalize = (raw) => {
+  const acct = { ...blank(), ...(raw || {}) };
+  if (raw && raw.gold === undefined && Number.isFinite(raw.chips)) acct.gold = raw.chips;
+  delete acct.chips;
+  return acct;
+};
 
 /** 밖으로 내보내는 모양. 내부 필드가 늘어도 응답이 저절로 새지 않게 골라 담는다. */
 const publicView = (acct) => ({
-  chips: acct.chips,
+  gold: acct.gold,
   title: acct.title,
   items: acct.items,
   stats: acct.stats,
@@ -78,14 +89,14 @@ const publicView = (acct) => ({
  */
 function dailyRule(acct, today) {
   const floor = DAILY_FLOOR;
-  if (acct.refilledAt === today) return { refilled: false, reason: 'claimed', chips: acct.chips };
-  if (acct.chips >= floor) return { refilled: false, reason: 'enough', chips: acct.chips };
+  if (acct.refilledAt === today) return { refilled: false, reason: 'claimed', gold: acct.gold };
+  if (acct.gold >= floor) return { refilled: false, reason: 'enough', gold: acct.gold };
 
-  const before = acct.chips;
-  acct.chips = floor;
+  const before = acct.gold;
+  acct.gold = floor;
   acct.refilledAt = today;
   acct.updatedAt = now();
-  return { refilled: true, before, chips: acct.chips };
+  return { refilled: true, before, gold: acct.gold };
 }
 
 /** `?ids=a,b,c` 또는 본문의 배열을 검사해서 준다. 이상하면 문자열(사유)을 돌려준다. */
@@ -147,7 +158,7 @@ exports.applyDeltas = (req, res) => {
   if (!deltas || typeof deltas !== 'object' || Array.isArray(deltas)) {
     return res.status(400).json({ error: 'deltas 객체가 필요합니다' });
   }
-  // 전적 카운터. 없어도 된다 — 칩만 옮기는 호출(`/급여`)이 대부분이다.
+  // 전적 카운터. 없어도 된다 — 골드만 옮기는 호출(`/급여`)이 대부분이다.
   const bump = (req.body && req.body.bump) || {};
   if (typeof bump !== 'object' || Array.isArray(bump)) {
     return res.status(400).json({ error: 'bump 는 객체여야 합니다' });
@@ -177,11 +188,11 @@ exports.applyDeltas = (req, res) => {
   const next = {};
   for (const id of ids) {
     const acct = normalize(data.accounts[id]);
-    const after = acct.chips + deltas[id];
+    const after = acct.gold + deltas[id];
     if (after < MIN_BALANCE) {
       return res.status(409).json({
-        error: `잔액이 너무 내려갑니다: ${id} ${acct.chips} → ${after}`
-          + ' (같은 칩을 두 판에서 겹쳐 걸었을 수 있습니다)',
+        error: `잔액이 너무 내려갑니다: ${id} ${acct.gold} → ${after}`
+          + ' (같은 골드를 두 판에서 겹쳐 걸었을 수 있습니다)',
       });
     }
 
@@ -192,7 +203,7 @@ exports.applyDeltas = (req, res) => {
       stats[k] = MAX_KEYS.has(k) ? Math.max(stats[k] ?? 0, v) : (stats[k] ?? 0) + v;
     }
 
-    next[id] = { ...acct, chips: after, stats, updatedAt: now() };
+    next[id] = { ...acct, gold: after, stats, updatedAt: now() };
   }
 
   Object.assign(data.accounts, next);
@@ -266,5 +277,5 @@ exports.claim = (req, res) => {
   return res.json({ ...out, floor: DAILY_FLOOR, today });
 };
 
-module.exports.START_CHIPS = START_CHIPS;
+module.exports.START_GOLD = START_GOLD;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;

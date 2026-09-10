@@ -4,7 +4,7 @@
  * 블랙잭도 홀덤도 값만 다르고 구조가 같다. 판을 열 때 하나 고르면 그 판이 끝날 때까지
  * 안 바뀐다(`game.stakes`). 판 도중에 판돈이 바뀌면 이미 건 돈의 뜻이 달라진다.
  *
- * **홀덤 기준으로 등급마다 비율이 같다** — 앉는 칩은 50BB, 최소 입장은 10BB.
+ * **홀덤 기준으로 등급마다 비율이 같다** — 앉는 골드는 50BB, 최소 입장은 10BB.
  * 그래서 어느 자리에 앉든 게임의 느낌이 같고, 배수만 달라진다. `holdem/ai.js` 가
  * 50BB 를 전제로 맞춰져 있는 것도 이 덕에 등급마다 다시 손볼 필요가 없다.
  *
@@ -45,15 +45,15 @@ export const stakesOf = (key) => STAKES[key] ?? STAKES[DEFAULT_STAKES];
 
 /** 슬래시 명령 선택지. 고를 때 숫자가 보여야 무엇을 고르는지 안다. */
 export const STAKES_CHOICES = Object.values(STAKES).map((s) => ({
-  name: `${s.name} — 블라인드 ${s.sb}/${s.bb} · 앉으면 ${s.stack}칩`,
+  name: `${s.name} — 블라인드 ${s.sb}/${s.bb} · 앉으면 ${s.stack}골드`,
   value: s.key,
 }));
 
 /** 그 자리에 앉을 만큼 있는지. 없으면 사유, 되면 null. */
-export function tooPoor(stakes, chips, who = '그쪽') {
-  if (chips >= stakes.minBuyIn) return null;
-  return `${who}은(는) ${stakes.name} 자리에 앉기엔 칩이 모자라요.`
-    + ` **${stakes.minBuyIn}칩**은 있어야 하는데 지금 ${chips}칩이에요.`;
+export function tooPoor(stakes, gold, who = '그쪽') {
+  if (gold >= stakes.minBuyIn) return null;
+  return `${who}은(는) ${stakes.name} 자리에 앉기엔 골드가 모자라요.`
+    + ` **${stakes.minBuyIn}골드**는 있어야 하는데 지금 ${gold}골드예요.`;
 }
 
 export default { STAKES, DEFAULT_STAKES, stakesOf, STAKES_CHOICES, tooPoor };

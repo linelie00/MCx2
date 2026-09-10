@@ -1,7 +1,7 @@
 /**
- * wallet — 칩
+ * wallet — 골드
  *
- * 칩은 **서버에 영구 저장된다.** 세 게임이 한 잔액을 나눠 쓰고, 판이 끝나도 남는다.
+ * 골드는 **서버에 영구 저장된다.** 세 게임이 한 잔액을 나눠 쓰고, 판이 끝나도 남는다.
  * 저장소는 사이트 서버의 `/api/accounts` 다 — 봇 서비스에는 볼륨이 없어서 봇이 직접
  * 파일에 쓸 데가 없고, 있더라도 재배포마다 날아간다.
  *
@@ -10,7 +10,7 @@
  *   1. **잔액이 아니라 증감(delta)을 보낸다.** 서버의 JSON 스토어에는 락이 없다.
  *      잔액을 통째로 보내면 두 판이 동시에 정산할 때 나중 것이 앞의 것을 지운다.
  *      증감은 더하기라 순서가 섞여도 결과가 같다.
- *   2. **load 는 던지고 commit 은 안 던진다.** 잔액을 못 읽었는데 진행하면 칩이
+ *   2. **load 는 던지고 commit 은 안 던진다.** 잔액을 못 읽었는데 진행하면 골드가
  *      복제되므로 판을 열면 안 되고, 못 썼을 때는 인메모리 장부에서만 움직인 것이라
  *      판을 막을 이유가 없다. 밀린 몫은 다음 커밋이 만회한다(ledger.rebase 참고).
  *
@@ -25,7 +25,7 @@
 import { getAccounts, postAccountDeltas } from '../api.js';
 
 /** 처음 보는 사람의 잔액. 등록 절차가 없다 — 저장소에 없으면 이 값으로 친다. */
-export const START_CHIPS = 1000;
+export const START_GOLD = 1000;
 
 /**
  * 저장되는 계정인지. `mob:` 으로 시작하는 자리는 **지갑이 없다.**
@@ -44,7 +44,7 @@ export const isPersistent = (id) => typeof id === 'string' && !id.startsWith('mo
  * 미겔은 부자 앞에서 늘 숏스택인데 holdem/ai.js 는 50BB 기준으로 맞춰 놨다.
  *
  * **맡겨 두는 방식(고정 바이인 + 판 끝에 반환)이 아니다.** 판이 정상 종료되지 않는
- * 길이 셋이나 있어서(방치 정리·봇 재시작·재배포) 맡긴 칩이 사라진다. 대신 그냥
+ * 길이 셋이나 있어서(방치 정리·봇 재시작·재배포) 맡긴 골드가 사라진다. 대신 그냥
  * **덜 들고 앉는다** — 나머지는 계정에서 아예 나가지 않으므로, 20000 가진 사람이
  * 한 스택을 다 잃으면 그 몫만 얹힌다. 지금의 증감 모델 그대로다.
  *
@@ -71,7 +71,7 @@ export const roundToUnit = (amount, unit) => Math.max(0, Math.floor(amount / uni
  * 판을 시작할 때 잔액을 불러온다.
  *
  * **실패하면 던진다.** 부르는 쪽은 그걸 받아 **판을 안 여는 것**이 맞다.
- * 못 읽었다고 START_CHIPS 로 진행하면 칩이 복제된다 — 실제 잔액이 200인 사람이
+ * 못 읽었다고 START_GOLD 로 진행하면 골드가 복제된다 — 실제 잔액이 200인 사람이
  * 1000으로 놀고, 나중에 커밋이 성공하면 그 차액이 그대로 서버에 얹힌다.
  *
  * **아무것도 쓰지 않는다.** 한동안 여기서 미겔·마티암을 자동으로 채웠는데, 지금은
@@ -83,14 +83,14 @@ export const roundToUnit = (amount, unit) => Math.max(0, Math.floor(amount / uni
 export async function loadAccounts(guildId, userIds) {
   const { accounts } = await getAccounts(userIds);
   return Object.fromEntries(userIds.map(
-    (id) => [id, accounts?.[id] ?? { chips: START_CHIPS, stats: {}, items: {}, title: null }],
+    (id) => [id, accounts?.[id] ?? { gold: START_GOLD, stats: {}, items: {}, title: null }],
   ));
 }
 
 /** 잔액만 필요할 때. 판을 여는 쪽은 전적도 봐야 해서 loadAccounts 를 쓴다. */
 export async function load(guildId, userIds) {
   const accounts = await loadAccounts(guildId, userIds);
-  return Object.fromEntries(userIds.map((id) => [id, accounts[id].chips ?? START_CHIPS]));
+  return Object.fromEntries(userIds.map((id) => [id, accounts[id].gold ?? START_GOLD]));
 }
 
 /**
@@ -98,15 +98,15 @@ export async function load(guildId, userIds) {
  * `accounts` 는 **쓰고 난 뒤의 계정**이라 부르는 쪽이 새 칭호를 바로 계산할 수 있다.
  *
  * 던지지 않는 이유는 저장이 판을 막을 이유가 아니어서다 — 대사가 그렇듯 있으면 좋은
- * 것이다. 실패하면 부르는 쪽이 판에 "저장 안 됨" 을 띄우고 계속 돈다. 칩은 인메모리
+ * 것이다. 실패하면 부르는 쪽이 판에 "저장 안 됨" 을 띄우고 계속 돈다. 골드는 인메모리
  * 장부에서만 움직였으므로 그 핸드가 없던 일이 될 뿐이고, `ledger.rebase` 를 안 하니
  * 밀린 몫은 다음 커밋이 성공할 때 함께 반영된다.
  *
  * 0인 증감과 **지갑 없는 자리(모브)** 는 빼고 보낸다. 앉기만 하고 아무 일 없던
  * 계정에 updatedAt 을 찍을 이유가 없고, 모브는 애초에 서버가 몰라야 한다.
  *
- * `bump` 는 그 핸드의 전적 카운터다. **칩과 같은 한 번의 쓰기로 나간다** — 따로 보내면
- * 칩만 저장되고 전적은 빠지는 어긋남이 생긴다.
+ * `bump` 는 그 핸드의 전적 카운터다. **골드와 같은 한 번의 쓰기로 나간다** — 따로 보내면
+ * 골드만 저장되고 전적은 빠지는 어긋남이 생긴다.
  */
 export async function commit(guildId, deltas, bump = {}) {
   const moved = Object.fromEntries(
@@ -114,8 +114,8 @@ export async function commit(guildId, deltas, bump = {}) {
   );
   if (!Object.keys(moved).length) return { ok: true, accounts: {} };
 
-  // 전적은 **칩이 움직인 자리 것만** 보낸다. 서버가 deltas 에 없는 id 를 거절하고,
-  // 애초에 칩이 안 움직였으면 그 사람이 그 핸드에 낸 것도 없다.
+  // 전적은 **골드가 움직인 자리 것만** 보낸다. 서버가 deltas 에 없는 id 를 거절하고,
+  // 애초에 골드가 안 움직였으면 그 사람이 그 핸드에 낸 것도 없다.
   const counters = Object.fromEntries(
     Object.entries(bump).filter(([id, c]) => moved[id] !== undefined && Object.keys(c).length),
   );
@@ -124,7 +124,7 @@ export async function commit(guildId, deltas, bump = {}) {
     const res = await postAccountDeltas(moved, counters);
     return { ok: true, accounts: res?.accounts ?? {} };
   } catch (err) {
-    console.warn('[카지노] 칩 저장 실패 — 다음 정산에서 다시 시도합니다:', err.message);
+    console.warn('[카지노] 골드 저장 실패 — 다음 정산에서 다시 시도합니다:', err.message);
     return { ok: false, accounts: {} };
   }
 }
@@ -132,8 +132,8 @@ export async function commit(guildId, deltas, bump = {}) {
 /**
  * 판 안에서 쓰는 동기 장부.
  *
- * 칩은 **걸 때 바로 깎는다.** 정산 때만 깎으면 판 도중의 잔액이 거짓이 되어
- * Double·Split 을 낼 수 있는지 판단이 틀린다(100칩으로 세 번 쪼개진다).
+ * 골드는 **걸 때 바로 깎는다.** 정산 때만 깎으면 판 도중의 잔액이 거짓이 되어
+ * Double·Split 을 낼 수 있는지 판단이 틀린다(100골드로 세 번 쪼개진다).
  * 그래서 take 는 걸 때, give 는 정산 때만 부른다.
  *
  * **기준점이 둘이다.** 견주는 곳이 둘인데 묻는 것이 다르기 때문이다.
@@ -144,31 +144,31 @@ export async function commit(guildId, deltas, bump = {}) {
  *           오는데 누적값을 매번 보내면 앞 핸드 몫이 겹쳐 얹힌다.
  *
  * 하나로 두면 반드시 한쪽이 틀린다. 실제로 그렇게 돼 있었고, 그대로 저장을 붙이면
- * 핸드마다 칩이 복제되거나(base 로 안 쓸 때) 결산이 전부 +0 으로 뜬다(origin 으로 안 쓸 때).
+ * 핸드마다 골드가 복제되거나(base 로 안 쓸 때) 결산이 전부 +0 으로 뜬다(origin 으로 안 쓸 때).
  */
 export function ledger(initial) {
-  const chips = { ...initial };
+  const gold = { ...initial };
   const origin = { ...initial };
   let base = { ...initial };
 
   const diff = (from) => Object.fromEntries(
-    Object.keys(chips).map((id) => [id, chips[id] - (from[id] ?? 0)]),
+    Object.keys(gold).map((id) => [id, gold[id] - (from[id] ?? 0)]),
   );
 
   return {
-    get: (id) => chips[id] ?? 0,
-    has: (id, amount) => (chips[id] ?? 0) >= amount,
+    get: (id) => gold[id] ?? 0,
+    has: (id, amount) => (gold[id] ?? 0) >= amount,
 
     /** 걸었다. 모자라면 false 를 주고 아무것도 안 한다. */
     take(id, amount) {
-      if ((chips[id] ?? 0) < amount) return false;
-      chips[id] -= amount;
+      if ((gold[id] ?? 0) < amount) return false;
+      gold[id] -= amount;
       return true;
     },
 
     /** 돌려줬다. 정산에서만 부른다. */
     give(id, amount) {
-      chips[id] = (chips[id] ?? 0) + amount;
+      gold[id] = (gold[id] ?? 0) + amount;
     },
 
     /** 마지막 커밋 이후의 증감. **commit 만 쓴다.** */
@@ -183,12 +183,12 @@ export function ledger(initial) {
      * **실패하면 부르지 않는다.** 그러면 밀린 몫이 base 에 남아 있다가 다음 커밋이
      * 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
      */
-    rebase() { base = { ...chips }; },
+    rebase() { base = { ...gold }; },
 
-    snapshot: () => ({ ...chips }),
+    snapshot: () => ({ ...gold }),
   };
 }
 
 export default {
-  START_CHIPS, isPersistent, buyIn, roundToUnit, load, loadAccounts, commit, ledger,
+  START_GOLD, isPersistent, buyIn, roundToUnit, load, loadAccounts, commit, ledger,
 };

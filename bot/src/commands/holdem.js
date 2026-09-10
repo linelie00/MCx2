@@ -255,13 +255,13 @@ async function banter(game, actor, key, vars = {}, p = 0.4) {
 async function closeTable(game) {
   game.aiHandNo = -1;
   const final = state.standings(game);
-  const rows = final.map(({ seat, chips, delta }) => ({ name: seat.name, chips, delta }));
+  const rows = final.map(({ seat, gold, delta }) => ({ name: seat.name, gold, delta }));
 
   for (const { seat, delta } of final) {
     if (seat.kind !== 'npc') continue;
     // 결산 전체를 넘긴다 — 누가 얼마를 벌고 잃었는지 알아야 남에게 말을 걸 수 있다.
     await seatSays(game, seat, 'close',
-      { amount: `${Math.abs(delta)}칩`, delta, table: rows, me: seat.name },
+      { amount: `${Math.abs(delta)}골드`, delta, table: rows, me: seat.name },
       { always: true, live: 0.8 });
   }
   await repost(game);
@@ -346,7 +346,7 @@ async function runDriver(game) {
 
       const big = move.action === 'allin' || move.action === 'raise';
       const speaks = big || move.action === 'fold';
-      const amount = move.action === 'allin' ? seat.bet + seat.chips : move.to;
+      const amount = move.action === 'allin' ? seat.bet + seat.gold : move.to;
       if (seat.kind === 'mob') await mobSays(game, seat, move.action, amount, speaks);
       else {
         await seatSays(game, seat, move.action, { amount },
@@ -369,9 +369,9 @@ async function runDriver(game) {
   }
 }
 
-/** 팟을 나누고 결과를 보여준다. 칩 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다. */
+/** 팟을 나누고 결과를 보여준다. 골드 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다. */
 /**
- * 이 핸드의 전적. 칩 증감과 **같은 쓰기**로 나간다(wallet.commit).
+ * 이 핸드의 전적. 골드 증감과 **같은 쓰기**로 나간다(wallet.commit).
  *
  * 정산 시점에는 이미 다 알고 있는 값들이라 따로 재는 게 없다. 카운터는 전부 더하기라
  * 락 없는 스토어에 안전하고, 최댓값(최고 팟·최고 족보)도 순서를 안 탄다.
@@ -455,9 +455,9 @@ async function settleAndShow(game) {
   await repost(game);
   // **성공했을 때만** 기준점을 옮긴다. 실패하면 밀린 몫이 장부에 남아 있다가
   // 다음 커밋이 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
-  const saved = await commit(game.guildId, game.chips.deltas(), handStats(game, results));
+  const saved = await commit(game.guildId, game.gold.deltas(), handStats(game, results));
   game.saveFailed = !saved.ok;
-  if (saved.ok) game.chips.rebase();
+  if (saved.ok) game.gold.rebase();
   await announceTitles(game, saved.accounts);
 
   // 결과에 반응한다. 이긴 사람은 늘, 진 사람은 가끔.
@@ -470,7 +470,7 @@ async function settleAndShow(game) {
     if (r.seat.kind !== 'npc' || (r.put === 0 && r.won === 0)) continue;
     const key = r.won > 0 ? (winners.length > 1 ? 'chop' : 'win') : 'lose';
     spoke = await seatSays(game, r.seat, key, {
-      amount: `${Math.abs(r.net)}칩`,
+      amount: `${Math.abs(r.net)}골드`,
       hand: handName(shown.get(i)),
     }, { always: r.won > 0, live: 0.55 }) || spoke;
   }
@@ -643,7 +643,7 @@ async function component(interaction) {
 
 async function handleLobby(interaction, game, action, arg) {
   if (action === 'join') {
-    // 칩이 영구 저장이라 **한 계정은 한 판에만** 앉는다. 두 판에 앉으면 같은 칩을
+    // 골드가 영구 저장이라 **한 계정은 한 판에만** 앉는다. 두 판에 앉으면 같은 골드를
     // 겹쳐 걸게 되고, 판마다 자기 장부를 들고 시작하니 서로를 볼 수가 없다.
     const at = seatedAt(interaction.user.id, { except: game.channelId });
     if (at) { await deny(interaction, seatedMessage('그쪽', at)); return true; }
@@ -692,9 +692,9 @@ async function handleLobby(interaction, game, action, arg) {
     try {
       account = await loadAccounts(game.guildId, walled.map((s) => s.id));
     } catch (err) {
-      // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 칩이 복제된다 — 실제 잔액이
+      // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 골드가 복제된다 — 실제 잔액이
       // 200인 사람이 1000으로 놀고, 다음 커밋이 성공할 때 그 차액이 서버에 얹힌다.
-      await denyLate(interaction, `칩 잔액을 읽지 못해 판을 열 수 없어요. ${err.message}`);
+      await denyLate(interaction, `골드 잔액을 읽지 못해 판을 열 수 없어요. ${err.message}`);
       return true;
     }
 
@@ -703,7 +703,7 @@ async function handleLobby(interaction, game, action, arg) {
     // NPC 는 이제 자동으로 안 채워지므로, 모자라면 어떻게 채우는지 같이 알려 준다.
     const poor = walled
       .map((s) => {
-        const why = tooPoor(game.stakes, account[s.id].chips, s.name);
+        const why = tooPoor(game.stakes, account[s.id].gold, s.name);
         if (!why) return null;
         return s.kind === 'npc' ? `${why} \`/급여\` 로 일당을 줄 수 있어요.` : why;
       })
@@ -718,7 +718,7 @@ async function handleLobby(interaction, game, action, arg) {
 
     // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다. 모브 몫은 그 위에 얹는다.
     const err = state.start(game, {
-      ...buyIn(Object.fromEntries(walled.map((s) => [s.id, account[s.id].chips])), game.stakes.stack),
+      ...buyIn(Object.fromEntries(walled.map((s) => [s.id, account[s.id].gold])), game.stakes.stack),
       ...Object.fromEntries(mobs.map((s) => [s.id, s.buyIn])),
     });
     if (err) { await denyLate(interaction, err); return true; }

@@ -66,7 +66,7 @@ for (const owner of OWNERS) {
   const label = '봇 키 (카지노)'.padEnd(18);
 
   if (!key) {
-    console.log(`${label} 값이 비어 있음  ← 칩을 못 읽어 카지노 판이 안 열립니다`);
+    console.log(`${label} 값이 비어 있음  ← 골드를 못 읽어 카지노 판이 안 열립니다`);
     allOk = false;
   } else {
     let verdict;

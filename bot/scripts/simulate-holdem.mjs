@@ -3,7 +3,7 @@
  *
  * 이 게임에서 제일 틀리기 쉬운 곳 둘을 잡는 장치다.
  *
- *   1. **칩 총합 보존** — 사이드팟이나 찹에서 칩을 만들거나 없애면 여기서 어긋난다.
+ *   1. **골드 총합 보존** — 사이드팟이나 찹에서 골드를 만들거나 없애면 여기서 어긋난다.
  *      팟을 나눌 때 내림으로 버리는 실수가 대표적이다.
  *   2. **베팅 라운드가 안 닫히는 것** — 반복 상한에 걸리면 무한 루프다.
  *
@@ -87,14 +87,14 @@ let sidePots = 0;
 let allInHands = 0;
 const wins = Object.fromEntries(ids.map((id) => [id, 0]));
 const net = Object.fromEntries(ids.map((id) => [id, 0]));
-// 성향은 **행동 분포**로 본다. 칩 증감은 판마다 흔들림이 커서 2만 핸드로도 부호가 뒤집힌다.
+// 성향은 **행동 분포**로 본다. 골드 증감은 판마다 흔들림이 커서 2만 핸드로도 부호가 뒤집힌다.
 const mix = {};
 
 for (let h = 0; h < hands; h += 1) {
   if (game.phase === 'done') break;
 
   // beginHand 가 이미 블라인드를 걷었다. committed 를 더해야 이 핸드의 총합이다.
-  const before = game.seats.reduce((a, s) => a + s.chips + s.committed, 0);
+  const before = game.seats.reduce((a, s) => a + s.gold + s.committed, 0);
   let guard = 0;
 
   while (game.phase !== 'showdown' && game.phase !== 'done') {
@@ -115,9 +115,9 @@ for (let h = 0; h < hands; h += 1) {
   if (game.phase === 'done') continue;
   if (guard > 400) continue;
 
-  // 팟에 들어간 칩 + 남은 스택 = 시작 총합. 정산 전에 한 번 본다.
+  // 팟에 들어간 골드 + 남은 스택 = 시작 총합. 정산 전에 한 번 본다.
   const inPot = potTotal(game.seats);
-  const onTable = game.seats.reduce((a, s) => a + s.chips, 0);
+  const onTable = game.seats.reduce((a, s) => a + s.gold, 0);
   if (inPot + onTable !== before) {
     leaks += 1;
     console.error(`핸드 ${h}: 정산 전 총합이 어긋남 — 팟 ${inPot} + 스택 ${onTable} ≠ ${before}`);
@@ -126,7 +126,7 @@ for (let h = 0; h < hands; h += 1) {
   if (game.seats.some((s) => s.allIn)) allInHands += 1;
   st.settle(game);
 
-  const after = game.seats.reduce((a, s) => a + s.chips, 0);
+  const after = game.seats.reduce((a, s) => a + s.gold, 0);
   if (after !== before) {
     leaks += 1;
     console.error(`핸드 ${h}: 정산 후 총합이 ${before} → ${after}`);
@@ -138,7 +138,7 @@ for (let h = 0; h < hands; h += 1) {
 
   const r = game.results;
 
-  // 팟에 들어간 칩과 나눠 준 칩이 같아야 한다. 총합 검사보다 날카롭다 —
+  // 팟에 들어간 골드와 나눠 준 골드가 같아야 한다. 총합 검사보다 날카롭다 —
   // 자격자가 없는 층이 생기면 그 층이 통째로 사라지는데 여기서 바로 잡힌다.
   const paidOut = r.rows.reduce((a, x) => a + x.won, 0);
   if (paidOut !== inPot) {
@@ -173,8 +173,8 @@ for (let h = 0; h < hands; h += 1) {
 console.log(`홀덤 시뮬레이션 — ${seatCount}자리 · ${played.toLocaleString()}핸드\n`);
 console.table([{
   '판 총합': TOTAL,
-  '지금 총합': game.seats.reduce((a, s) => a + s.chips, 0),
-  '칩 누수': leaks,
+  '지금 총합': game.seats.reduce((a, s) => a + s.gold, 0),
+  '골드 누수': leaks,
   '무한루프 의심': stuck,
   '쇼다운': showdowns,
   '찹': chops,
@@ -201,7 +201,7 @@ if (mode === 'ai') {
   console.log('성향별 팟 획득:', Object.entries(byStyle)
     .map(([k, v]) => `${k} ${v}회`).join(' · '));
 
-  // **이게 진짜 지표다.** 팟을 자주 가져가는 것과 칩을 버는 것은 다르다 —
+  // **이게 진짜 지표다.** 팟을 자주 가져가는 것과 골드를 버는 것은 다르다 —
   // 넓게 보는 쪽이 팟은 더 많이 가져가면서 돈은 잃을 수 있다.
   const netByStyle = {};
   const handsByStyle = {};
@@ -211,7 +211,7 @@ if (mode === 'ai') {
     handsByStyle[k] = (handsByStyle[k] || 0) + played;
   }
   console.log('성향별 순증감 (핸드당):', Object.entries(netByStyle)
-    .map(([k, v]) => `${k} ${v > 0 ? '+' : ''}${(v / handsByStyle[k]).toFixed(2)}칩`).join(' · '));
+    .map(([k, v]) => `${k} ${v > 0 ? '+' : ''}${(v / handsByStyle[k]).toFixed(2)}골드`).join(' · '));
   console.log('  ↑ 이 숫자는 흔들림이 커서 2만 핸드로도 부호가 뒤집힌다. 아래 분포로 본다.');
 
   console.log('\n성향별 행동 분포 — 이쪽이 빨리 수렴한다');
@@ -226,7 +226,7 @@ if (mode === 'ai') {
 
 const ok = leaks === 0 && stuck === 0;
 console.log(ok
-  ? '\n칩 누수 0건 · 무한루프 0건 — 총합 보존됨'
+  ? '\n골드 누수 0건 · 무한루프 0건 — 총합 보존됨'
   : `\n실패 — 누수 ${leaks}건 · 멈춤 ${stuck}건`);
 
 process.exit(ok ? 0 : 1);

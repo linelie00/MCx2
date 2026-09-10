@@ -6,7 +6,7 @@
  *
  * **여기서 지켜야 할 것이 하나 더 있다 — 홀 카드를 그리지 않는다.**
  * 판은 모두가 보는 메시지다. 남의 두 장이 여기 보이면 게임이 끝난다. 자리 줄에는
- * 칩·베팅·직전 행동만 적고, 카드는 쇼다운에서 끝까지 간 사람만 깐다.
+ * 골드·베팅·직전 행동만 적고, 카드는 쇼다운에서 끝까지 간 사람만 깐다.
  * 자기 카드는 `[내 패]` 버튼이 나만 보이는 메시지로 보여 준다(commands/holdem.js).
  */
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
@@ -31,8 +31,8 @@ const btn = (game, action, label, style = ButtonStyle.Secondary, arg) =>
 const holeBtn = (game) => btn(game, 'hole', '내 패', ButtonStyle.Primary)
   .setDisabled(!game.seats.some((s) => s.hole.length));
 
-/** 칩을 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
-const savedMark = (game) => (game.saveFailed ? ' · ⚠ 칩 저장 안 됨' : '');
+/** 골드를 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
+const savedMark = (game) => (game.saveFailed ? ' · ⚠ 골드 저장 안 됨' : '');
 
 // ---------------------------------------------------------------- 자리 표
 
@@ -43,10 +43,10 @@ const COL_W = 7;
 const ACT_W = 12;
 
 /**
- * 칩·베팅·**방금 한 행동**을 코드블록 표로.
+ * 골드·베팅·**방금 한 행동**을 코드블록 표로.
  *
  * 방금 한 행동을 안 보여 주면 NPC 가 무엇을 했는지 알 길이 없다. 사람은 자기가 누른
- * 것을 알지만 남의 수는 판에만 남기 때문이다. 칩 변화로 유추하게 두면 폴드와 체크를
+ * 것을 알지만 남의 수는 판에만 남기 때문이다. 골드 변화로 유추하게 두면 폴드와 체크를
  * 구분할 수 없다.
  *
  * **카드는 여기 안 넣는다** — 코드블록 안에서는 이모지가 글자 크기로 쪼그라든다
@@ -59,12 +59,12 @@ function seatTable(game) {
     const act = s.out ? '자리 비움' : (s.lastAction ?? '');
     return `${here}${dealer} `
       + padEndW(clipW(s.name, NAME_W - 1), NAME_W)
-      + padStartW(String(s.chips), COL_W)
+      + padStartW(String(s.gold), COL_W)
       + padStartW(s.bet ? String(s.bet) : '·', COL_W)
       + `  ${padEndW(clipW(act, ACT_W), ACT_W)}`;
   });
 
-  const head = '   ' + padEndW('', NAME_W) + padStartW('칩', COL_W) + padStartW('이번', COL_W)
+  const head = '   ' + padEndW('', NAME_W) + padStartW('골드', COL_W) + padStartW('이번', COL_W)
     + '  방금';
   return ['```', head, '-'.repeat(NAME_W + COL_W * 2 + ACT_W + 5), ...rows, '```'].join('\n');
 }
@@ -104,15 +104,15 @@ export const howto = (game) => ((s) => base({
     '**Check** 그냥 넘기기 — 걸린 돈이 없을 때만',
     '**Call** 맞추기 — 상대가 건 만큼 냅니다',
     '**Raise** 올리기 — 금액은 최소·½팟·팟·올인 버튼으로 고릅니다',
-    '**All-in** 가진 칩 전부 — 모자라도 그만큼만 걸고 끝까지 갈 수 있어요',
+    '**All-in** 가진 골드 전부 — 모자라도 그만큼만 걸고 끝까지 갈 수 있어요',
     '',
     '**■ 블라인드와 버튼**',
     `매 판 **강제로 거는 돈**이 있습니다 — 스몰블라인드 **${s.sb}**, 빅블라인드 **${s.bb}**.`,
     '판마다 한 칸씩 돌아서 아무도 손해 보지 않습니다.',
     '자리 표의 **`D`** 가 버튼(딜러 자리)이고, 그 다음 둘이 블라인드를 냅니다.',
     '',
-    `이 자리는 **${s.name}** 입니다. 앉으면 **최대 ${s.stack}칩**`
-      + ` — 가진 게 적으면 있는 만큼이지만, **${s.minBuyIn}칩**은 있어야 앉을 수 있어요.`,
+    `이 자리는 **${s.name}** 입니다. 앉으면 **최대 ${s.stack}골드**`
+      + ` — 가진 게 적으면 있는 만큼이지만, **${s.minBuyIn}골드**는 있어야 앉을 수 있어요.`,
     '손의 순서가 헷갈리면 **`/홀덤 족보`** 를 쳐 보세요.',
   ].join('\n'),
   footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
@@ -177,7 +177,7 @@ export function lobbyEmbed(game) {
       `${game.seats.length}/${MAX_SEATS}자리 · 두 자리부터 시작할 수 있어요.`,
     ].join('\n'),
     footer: `${game.stakes.name} · 블라인드 ${game.stakes.sb}/${game.stakes.bb}`
-      + ` · 앉으면 최대 ${game.stakes.stack}칩 (최소 ${game.stakes.minBuyIn})`,
+      + ` · 앉으면 최대 ${game.stakes.stack}골드 (최소 ${game.stakes.minBuyIn})`,
   });
 }
 
@@ -306,7 +306,7 @@ export function boardRows(game) {
  *
  * **이모지만 있는 메시지여야 디스코드가 카드를 크게 그린다.** 글자가 하나라도 섞이거나
  * 임베드 안에 들어가면 무조건 글자 크기로 쪼그라든다. 그래서 이모지가 올라가 있으면
- * 임베드를 버리고 카드만 보낸다 — 칩·팟은 어차피 판에 있고, 본인이 누른 것이라
+ * 임베드를 버리고 카드만 보낸다 — 골드·팟은 어차피 판에 있고, 본인이 누른 것이라
  * 무슨 메시지인지 설명할 필요도 없다.
  *
  * 이모지가 없을 때(부팅 때 못 찾았을 때)는 어차피 글자라 커질 수가 없으므로 임베드로 간다.
@@ -322,7 +322,7 @@ export function holeMessage(game, seat) {
       title: `${seat.name}의 패`,
       description: lines.join('\n'),
       color: seat.color,
-      footer: `칩 ${seat.chips} · 이번 라운드 ${seat.bet} · 팟 ${pot(game)}`,
+      footer: `골드 ${seat.gold} · 이번 라운드 ${seat.bet} · 팟 ${pot(game)}`,
     })],
   };
 }
@@ -332,7 +332,7 @@ export function holeMessage(game, seat) {
 export function resultEmbed(game) {
   const rows = standings(game).map((r, i) => {
     const sign = r.delta > 0 ? `+${r.delta}` : String(r.delta);
-    return `${['🥇', '🥈', '🥉'][i] ?? '　'} **${r.seat.name}** ${r.chips}칩 \`${sign}\``;
+    return `${['🥇', '🥈', '🥉'][i] ?? '　'} **${r.seat.name}** ${r.gold}골드 \`${sign}\``;
   });
   return base({
     title: '홀덤 — 판이 끝났어요',

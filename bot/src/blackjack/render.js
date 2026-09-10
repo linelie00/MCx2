@@ -29,16 +29,16 @@ const cid = (game, action, arg) =>
 const btn = (game, action, label, style = ButtonStyle.Secondary, arg) =>
   new ButtonBuilder().setCustomId(cid(game, action, arg)).setLabel(label).setStyle(style);
 
-/** 칩을 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
-const savedMark = (game) => (game.saveFailed ? ' · ⚠ 칩 저장 안 됨' : '');
+/** 골드를 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
+const savedMark = (game) => (game.saveFailed ? ' · ⚠ 골드 저장 안 됨' : '');
 
-// ---------------------------------------------------------------- 칩 표
+// ---------------------------------------------------------------- 골드 표
 
 const NAME_W = 10;
 const COL_W = 9;
 
 /**
- * 칩과 베팅을 코드블록 표로. **카드는 여기 안 넣는다** — 코드블록 안에서는 이모지가
+ * 골드와 베팅을 코드블록 표로. **카드는 여기 안 넣는다** — 코드블록 안에서는 이모지가
  * 글자 크기로 쪼그라든다(요트에서 겪은 그 문제다).
  */
 function chipTable(game) {
@@ -47,12 +47,12 @@ function chipTable(game) {
       : (s.bet ? String(s.bet) : (s.staged ? `${s.staged}…` : '·'));
     const ins = s.insurance ? `+${s.insurance}` : '';
     return padEndW(clipW(s.name, NAME_W - 1), NAME_W)
-      + padStartW(String(s.chips), COL_W)
+      + padStartW(String(s.gold), COL_W)
       + padStartW(bet, COL_W)
       + (ins ? `  ${ins}` : '');
   });
 
-  const head = padEndW('', NAME_W) + padStartW('칩', COL_W) + padStartW('베팅', COL_W);
+  const head = padEndW('', NAME_W) + padStartW('골드', COL_W) + padStartW('베팅', COL_W);
   return ['```', head, '-'.repeat(NAME_W + COL_W * 2), ...rows, '```'].join('\n');
 }
 
@@ -76,7 +76,7 @@ function handLine(game, hand) {
   const mine = game.hands.filter((h) => h.seatIndex === hand.seatIndex);
   const who = mine.length > 1 ? `${seat.name} #${mine.indexOf(hand) + 1}` : seat.name;
 
-  return `${mark}**${who}** · ${hand.bet}칩\n　${handText(hand.cards)}　**${total}**`
+  return `${mark}**${who}** · ${hand.bet}골드\n　${handText(hand.cards)}　**${total}**`
     + (tags.length ? `　_${tags.join(' · ')}_` : '');
 }
 
@@ -99,7 +99,7 @@ export const howto = (game) => ((s) => base({
     `${example('Ah Ks')} → **21** (A 를 11로) · ${example('Ah 9d 5c')} → **15** (A 를 1로)`,
     '',
     '**■ 한 판의 흐름**',
-    '1. 칩을 겁니다',
+    '1. 골드를 겁니다',
     `2. 각자 두 장씩, 딜러도 두 장 — 그중 한 장만 보여 줍니다 ${example('Ks')} + 엎어 둔 한 장`,
     '3. 손님부터 차례로 더 받을지 정합니다',
     '4. 다 끝나면 딜러가 자기 카드를 까고 **17 이상이 될 때까지** 받습니다',
@@ -120,10 +120,10 @@ export const howto = (game) => ((s) => base({
     '',
     '**■ 이 테이블의 규칙**',
     `카드는 6벌을 섞어 씁니다. 딜러는 **17 이상이면 무조건 섭니다** — A 가 섞인 17에서도요.`,
-    `이 자리는 **${s.name}** 입니다. 칩은 **최대 ${s.stack}개**까지 들고 앉고`
+    `이 자리는 **${s.name}** 입니다. **최대 ${s.stack}골드**까지 들고 앉고`
       + ` (가진 게 적으면 있는 만큼, **${s.minBuyIn}개**는 있어야 앉을 수 있어요),`
       + ` 베팅은 ${s.betUnits.join(' · ')} 또는 All-in.`,
-    `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있고, ${s.minBet}칩도 못 걸면 자동으로 빠집니다.`,
+    `한 판이 끝날 때마다 이어서 하거나 그만둘 수 있고, ${s.minBet}골드도 못 걸면 자동으로 빠집니다.`,
   ].join('\n'),
   footer: '10분 동안 아무도 안 누르면 판이 저절로 닫혀요.',
 }))(game.stakes);
@@ -142,7 +142,7 @@ export function lobbyEmbed(game) {
     title: '블랙잭 — bard 에 자리 맡는 중',
     description: [seats, '', `${game.seats.length}/${MAX_SEATS}자리`].join('\n'),
     footer: `딜러: ${dealer} · ${game.stakes.name} · 최소 ${game.stakes.minBet}`
-      + ` · 앉으면 최대 ${game.stakes.stack}칩 (최소 ${game.stakes.minBuyIn})`,
+      + ` · 앉으면 최대 ${game.stakes.stack}골드 (최소 ${game.stakes.minBuyIn})`,
   });
 }
 
@@ -284,7 +284,7 @@ export function resultEmbed(game) {
   const rows = standings(game);
   const head = rows.map((r, i) => {
     const sign = r.delta > 0 ? `+${r.delta}` : String(r.delta);
-    return `${MEDAL[i] ?? `${i + 1}위`} **${r.seat.name}** — ${r.chips}칩 (\`${sign}\`)`;
+    return `${MEDAL[i] ?? `${i + 1}위`} **${r.seat.name}** — ${r.gold}골드 (\`${sign}\`)`;
   }).join('\n');
 
   const note = {
@@ -313,7 +313,7 @@ export function resultEmbed(game) {
  */
 export const cardsOnly = (cards) => handText(cards);
 
-export const insuranceHint = (seat) => `Insurance 는 ${insuranceCost(seat.bet)}칩입니다.`;
+export const insuranceHint = (seat) => `Insurance 는 ${insuranceCost(seat.bet)}골드입니다.`;
 export const allInAmount = allIn;
 export const activeSeats = active;
 export const handInPlay = currentHand;

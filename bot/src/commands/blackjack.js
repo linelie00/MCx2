@@ -7,7 +7,7 @@
  * 블랙잭에서 새로 지켜야 할 것 셋.
  *
  *   1. **정산은 드라이버에서만 한다.** component() 는 turn 을 넘기고 phase 를 바꿀 뿐,
- *      딜러 카드를 뽑거나 칩을 만지지 않는다. 딜러가 항상 마지막에 두므로 이건 규칙이
+ *      딜러 카드를 뽑거나 골드를 만지지 않는다. 딜러가 항상 마지막에 두므로 이건 규칙이
  *      아니라 구조다 — 정산에는 async 저장과 여러 줄의 알림이 붙어 3초 시한을 넘긴다.
  *   2. **베팅·인슈어런스 단계에서는 버튼을 끄지 않는다.** 여럿이 동시에 누르는 단계라
  *      "너는 이미 답했다" 를 버튼 상태로 표현할 수 없다. 사람마다 deny() 로 거절한다.
@@ -290,13 +290,13 @@ async function closeTable(game) {
 
   await dealerSays(game, broke ? 'broke' : 'close', {
     name: top?.seat.name,
-    amount: top ? `+${top.delta}칩` : null,
+    amount: top ? `+${top.delta}골드` : null,
   }, { always: true, live: 0.9 });
 
   for (const { seat, delta } of rows) {
     if (seat.kind !== 'npc') continue;
     const key = delta > 0 ? 'closeWin' : (delta < 0 ? 'closeLose' : 'closeEven');
-    await playerSays(game, seat, key, { amount: `${Math.abs(delta)}칩` },
+    await playerSays(game, seat, key, { amount: `${Math.abs(delta)}골드` },
       { always: true, live: 0.8 });
   }
 
@@ -319,7 +319,7 @@ async function openTable(game) {
 // ---------------------------------------------------------------- 드라이버
 //
 // NPC 차례와 딜러 진행, 정산이 전부 여기서 돈다. 인터랙션 응답 경로 밖이라
-// 느린 일(칩 저장, 여러 줄 알림, 일부러 두는 간격)을 마음껏 할 수 있다.
+// 느린 일(골드 저장, 여러 줄 알림, 일부러 두는 간격)을 마음껏 할 수 있다.
 
 async function playNpcHand(game) {
   const seat = state.currentSeat(game);
@@ -388,7 +388,7 @@ async function runDriver(game) {
         for (const seat of state.active(game)) {
           if (seat.kind !== 'npc' || seat.bet) continue;
           const amount = chooseBet(seat.character, {
-            chips: seat.chips,
+            gold: seat.gold,
             betUnits: game.stakes.betUnits,
             lastBet: seat.bet,
             lastWon: seat.lastWon,
@@ -503,11 +503,11 @@ async function reactToBets(game) {
     game.said.add(mark);
 
     // 걸 때 이미 깎였으므로, 최소 베팅도 못 남겼으면 사실상 전부 건 것이다.
-    const allIn = seat.chips < game.stakes.minBet;
+    const allIn = seat.gold < game.stakes.minBet;
     const key = game.dealerCharacter === 'npc'
       ? (allIn ? 'bet.allin' : 'bet')
       : `bet.${allIn ? 'allin' : betKey(seat)}`;
-    const vars = { name: seat.name, amount: `${seat.bet}칩` };
+    const vars = { name: seat.name, amount: `${seat.bet}골드` };
     spoke = await dealerSays(game, key, vars, { always: allIn }) || spoke;
   }
   return spoke;
@@ -522,7 +522,7 @@ async function announceTurn(game, seat) {
 }
 
 /**
- * 정산하고 결과를 보여준다. 칩 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다.
+ * 정산하고 결과를 보여준다. 골드 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다.
  *
  * 대사가 제일 몰리는 자리다. 네 자리가 각자 손을 둘씩 가지면 결과만 여덟 줄이고 거기
  * 플레이어 반응까지 붙는다. 그래서 **꼭 말해야 하는 것**(딜러 버스트·블랙잭, 플레이어
@@ -531,7 +531,7 @@ async function announceTurn(game, seat) {
 const RESULT_BUDGET = 4;
 
 /**
- * 이 핸드의 전적. 칩 증감과 **같은 쓰기**로 나간다(wallet.commit).
+ * 이 핸드의 전적. 골드 증감과 **같은 쓰기**로 나간다(wallet.commit).
  *
  * **자리 단위로 센다.** 결과는 손 단위로 나오는데(스플릿하면 한 사람이 여럿), 한 사람이
  * 한 판에 두 핸드를 둔 것으로 세면 전적이 부풀고 승률도 이상해진다. 그 자리의 순증감을
@@ -555,7 +555,7 @@ function handStats(game) {
     c.bestBet = Math.max(...mine.map((r) => r.hand.bet));
 
     // 올인은 **걸 때** 표시해 둔다(state.placeBet). 정산 시점에는 이미 돌려받은 뒤라
-    // 칩만 봐서는 다 밀었는지 알 수가 없다.
+    // 골드만 봐서는 다 밀었는지 알 수가 없다.
     if (seat.wentAllIn) {
       if (net > 0) c.allInWon = 1; else if (net < 0) c.allInLost = 1;
     }
@@ -599,9 +599,9 @@ async function settleAndShow(game) {
   await draw(game);
   // **성공했을 때만** 기준점을 옮긴다. 실패하면 밀린 몫이 장부에 남아 있다가
   // 다음 커밋이 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
-  const saved = await commit(game.guildId, game.chips.deltas(), handStats(game));
+  const saved = await commit(game.guildId, game.gold.deltas(), handStats(game));
   game.saveFailed = !saved.ok;
-  if (saved.ok) game.chips.rebase();
+  if (saved.ok) game.gold.rebase();
   await announceTitles(game, saved.accounts);
 
   const dealerBust = handValue(game.dealer).bust;
@@ -622,7 +622,7 @@ async function settleAndShow(game) {
       || r.outcome === 'bust' || r.outcome === 'surrender';
     if (!big && budget <= 0) continue;
 
-    const vars = { name: r.seat.name, amount: `${Math.abs(r.net)}칩` };
+    const vars = { name: r.seat.name, amount: `${Math.abs(r.net)}골드` };
     if (await dealerSays(game, `result.${RESULT_KEY[r.outcome]}`, vars,
       { always: big, live: big ? 0.8 : 0.25 })) {
       budget -= 1;
@@ -802,7 +802,7 @@ async function component(interaction) {
 
 async function handleLobby(interaction, game, action, arg) {
   if (action === 'join') {
-    // 칩이 영구 저장이라 **한 계정은 한 판에만** 앉는다. 두 판에 앉으면 같은 칩을
+    // 골드가 영구 저장이라 **한 계정은 한 판에만** 앉는다. 두 판에 앉으면 같은 골드를
     // 겹쳐 걸게 되고, 판마다 자기 장부를 들고 시작하니 서로를 볼 수가 없다.
     const at = seatedAt(interaction.user.id, { except: game.channelId });
     if (at) { await deny(interaction, seatedMessage('그쪽', at)); return true; }
@@ -847,9 +847,9 @@ async function handleLobby(interaction, game, action, arg) {
     try {
       account = await loadAccounts(game.guildId, game.seats.map((s) => s.id));
     } catch (err) {
-      // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 칩이 복제된다 — 실제 잔액이
+      // 못 읽었으면 **판을 안 연다.** 기본값으로 진행하면 골드가 복제된다 — 실제 잔액이
       // 200인 사람이 1000으로 놀고, 다음 커밋이 성공할 때 그 차액이 서버에 얹힌다.
-      await denyLate(interaction, `칩 잔액을 읽지 못해 판을 열 수 없어요. ${err.message}`);
+      await denyLate(interaction, `골드 잔액을 읽지 못해 판을 열 수 없어요. ${err.message}`);
       return true;
     }
 
@@ -858,7 +858,7 @@ async function handleLobby(interaction, game, action, arg) {
     // NPC 는 이제 자동으로 안 채워지므로, 모자라면 어떻게 채우는지 같이 알려 준다.
     const poor = game.seats
       .map((s) => {
-        const why = tooPoor(game.stakes, account[s.id].chips, s.name);
+        const why = tooPoor(game.stakes, account[s.id].gold, s.name);
         if (!why) return null;
         return s.kind === 'npc' ? `${why} \`/급여\` 로 일당을 줄 수 있어요.` : why;
       })
@@ -873,7 +873,7 @@ async function handleLobby(interaction, game, action, arg) {
 
     // buyIn 으로 한 판 몫만 떼어 온다 — 나머지는 계정에 남는다.
     const err = state.start(game, buyIn(
-      Object.fromEntries(game.seats.map((s) => [s.id, account[s.id].chips])), game.stakes.stack,
+      Object.fromEntries(game.seats.map((s) => [s.id, account[s.id].gold])), game.stakes.stack,
     ));
     if (err) { await denyLate(interaction, err); return true; }
 
@@ -903,7 +903,7 @@ async function handleLobby(interaction, game, action, arg) {
 async function handleBetting(interaction, game, action, arg) {
   const seat = state.seatOf(game, interaction.user.id);
   if (!seat) { await deny(interaction, '이 판에 앉아 있지 않아요.'); return true; }
-  if (seat.out) { await deny(interaction, '칩이 모자라 이번 판은 쉬어요.'); return true; }
+  if (seat.out) { await deny(interaction, '골드가 모자라 이번 판은 쉬어요.'); return true; }
 
   if (action === 'bet') {
     const err = state.stageBet(game, seat, Number(arg));
@@ -922,7 +922,7 @@ async function handleBetting(interaction, game, action, arg) {
     return false;
   }
   if (action === 'confirm') {
-    if (!seat.staged) { await deny(interaction, '먼저 칩을 올려 주세요.'); return true; }
+    if (!seat.staged) { await deny(interaction, '먼저 골드를 올려 주세요.'); return true; }
     const err = state.placeBet(game, seat);
     if (err) { await deny(interaction, err); return true; }
     return false;

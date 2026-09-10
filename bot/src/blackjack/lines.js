@@ -125,7 +125,7 @@ const DEALER_MOMENT = {
   made21: (v) => `${v.name}이(가) 카드를 더 받아 합이 딱 21이 됐다.`
     + ' Blackjack 은 아니지만 넘지 않고 맞춘 것이다. 아직 정산 전이다.',
   bet: (v) => `${v.name}이(가) ${v.amount}을 걸었다.`,
-  'bet.allin': (v) => `${v.name}이(가) 가진 칩을 전부(${v.amount}) 걸었다. 올인이다.`,
+  'bet.allin': (v) => `${v.name}이(가) 가진 골드를 전부(${v.amount}) 걸었다. 올인이다.`,
   'result.win': (v) => `${v.name}이(가) 나를 이겼다. ${v.amount}을 내준다.`,
   'result.lose': (v) => `${v.name}이(가) 졌다. ${v.amount}을 내가 가져간다.`,
   'result.push': (v) => `${v.name}과(와) 비겼다. 건 돈을 그대로 돌려준다.`,
@@ -135,7 +135,7 @@ const DEALER_MOMENT = {
   close: (v) => ['판이 끝나 테이블을 닫는다. 오늘 밤은 여기까지다.',
     v.name ? `가장 많이 딴 사람은 ${v.name}(${v.amount}).` : null,
   ].filter(Boolean).join(' '),
-  broke: () => '손님들 칩이 다 떨어져서 더 이상 베팅할 수가 없다. 그래서 판을 닫는다.',
+  broke: () => '손님들 골드가 다 떨어져서 더 이상 베팅할 수가 없다. 그래서 판을 닫는다.',
 };
 
 const PLAYER_MOMENT = {
@@ -191,15 +191,15 @@ function table(game, speaker) {
     const hands = game.hands.filter((h) => h.seatIndex === game.seats.indexOf(seat));
     const me = seat.character === speaker ? ' ← 나' : '';
     if (!hands.length) {
-      rows.push(`${seat.name}: ${seat.bet ? `${seat.bet}칩 걺` : '아직 안 걺'}`
-        + ` · 남은 칩 ${seat.chips}${me}`);
+      rows.push(`${seat.name}: ${seat.bet ? `${seat.bet}골드 걺` : '아직 안 걺'}`
+        + ` · 남은 골드 ${seat.gold}${me}`);
       continue;
     }
     for (const hand of hands) {
       const { total, bust } = handValue(hand.cards);
       const tag = bust ? ' Bust' : '';
       rows.push(`${seat.name}: ${plainHand(hand.cards)} (${total}${tag})`
-        + ` · ${hand.bet}칩 걺 · 남은 칩 ${seat.chips}${me}`);
+        + ` · ${hand.bet}골드 걺 · 남은 골드 ${seat.gold}${me}`);
     }
   }
   return rows.length ? ['## 판', ...rows].join('\n') : '';
@@ -212,11 +212,11 @@ function table(game, speaker) {
  * 방금 터진 패 이야기를 했다. 끝난 자리에서는 끝난 것만 보여 준다.
  */
 function closing(game, speaker) {
-  const deltas = game.chips?.net() ?? {};
+  const deltas = game.gold?.net() ?? {};
   const rows = game.seats.map((s) => {
     const d = deltas[s.id] ?? 0;
     const me = s.character === speaker ? ' ← 나' : '';
-    return `${s.name}: ${d > 0 ? `+${d}` : d}칩 (남은 칩 ${s.chips})${me}`;
+    return `${s.name}: ${d > 0 ? `+${d}` : d}골드 (남은 골드 ${s.gold})${me}`;
   });
   return ['## 오늘의 결산', ...rows].join('\n');
 }

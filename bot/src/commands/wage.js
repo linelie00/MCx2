@@ -1,7 +1,7 @@
 /**
  * /급여 — 미겔·마티암에게 일당을 준다
  *
- * 두 사람은 **자동으로 칩이 늘지 않는다.** 한동안 판을 열 때 하루 한 번 자동으로
+ * 두 사람은 **자동으로 골드가 늘지 않는다.** 한동안 판을 열 때 하루 한 번 자동으로
  * 채웠는데, 그러면 시간이 지나서 생긴 돈이 된다. 일해서 번 돈이라는 설정에는
  * **누가 줘야** 맞다. 그래서 자동 충전을 걷어내고 이 명령을 뒀다.
  *
@@ -17,7 +17,7 @@ import { base, fail } from '../embeds.js';
 import { NPC_CHOICES, displayOf, characterOf } from '../casino/accounts.js';
 import { seatedAt } from '../casino/tables.js';
 
-/** 한 번 부를 때 주는 칩. */
+/** 한 번 부를 때 주는 골드. */
 export const WAGE = 1000;
 
 const data = new SlashCommandBuilder()
@@ -26,7 +26,7 @@ const data = new SlashCommandBuilder()
   .addStringOption((o) => o.setName('캐릭터').setDescription('누구에게 줄지')
     .setRequired(true)
     .addChoices(...NPC_CHOICES))
-  .addIntegerOption((o) => o.setName('배수').setDescription(`며칠치인지 (기본 1 = ${WAGE}칩)`)
+  .addIntegerOption((o) => o.setName('배수').setDescription(`며칠치인지 (기본 1 = ${WAGE}골드)`)
     .setMinValue(1).setMaxValue(10));
 
 async function execute(interaction) {
@@ -43,27 +43,27 @@ async function execute(interaction) {
   await interaction.deferReply();
 
   const who = displayOf(id);
-  let chips;
+  let gold;
   try {
     const res = await postAccountDeltas({ [id]: amount });
-    chips = res.accounts[id].chips;
+    gold = res.accounts[id].gold;
   } catch (err) {
     await interaction.editReply({ embeds: [fail(`일당을 주지 못했어요. ${err.message}`)] });
     return;
   }
 
-  // 판에 앉아 있으면 그 판의 스택은 안 바뀐다 — 칩은 정산 전까지 인메모리 장부에만
+  // 판에 앉아 있으면 그 판의 스택은 안 바뀐다 — 골드는 정산 전까지 인메모리 장부에만
   // 있다. 물어보기 전에 미리 말해 둔다(`/출첵` 과 같은 이유).
   const seated = seatedAt(id);
   const note = seated
     ? `\n\n_지금 <#${seated.channelId}> 의 ${seated.game} 판에 앉아 있어요 —_`
-      + ' _그 판에 들고 간 칩은 그대로고, 받은 몫은 판이 끝난 뒤에 합쳐져요._'
+      + ' _그 판에 들고 간 골드는 그대로고, 받은 몫은 판이 끝난 뒤에 합쳐져요._'
     : '';
 
   await interaction.editReply({
     embeds: [base({
-      title: `${who.name} · ${chips}칩`,
-      description: `${days > 1 ? `${days}일치 ` : ''}일당 **${amount}칩**을 받았어요.${note}`,
+      title: `${who.name} · ${gold}골드`,
+      description: `${days > 1 ? `${days}일치 ` : ''}일당 **${amount}골드**를 받았어요.${note}`,
       color: who.color,
       footer: '부를 때마다 받습니다 — 얼마나 일했는지는 사람이 정해요',
     })],

@@ -13,7 +13,7 @@
  * 대상을 옵션 둘로 받는다 — 사람은 유저 옵션, 미겔·마티암은 선택지. 하나로 못 합친다:
  * 길드 멤버를 자동완성으로 뒤지려면 GuildMembers 인텐트가 필요한데 봇은 Guilds 만 켠다.
  *
- * 응답은 **공개**다. 서로 칩을 견주는 재미가 이 명령의 절반이다. 그래서 탭 버튼도
+ * 응답은 **공개**다. 서로 골드를 견주는 재미가 이 명령의 절반이다. 그래서 탭 버튼도
  * 아무나 누를 수 있게 뒀다 — 판을 여는 버튼과 달리 **아무것도 안 바꾸는 조회**라,
  * 남이 눌렀다고 거절 메시지를 띄울 이유가 없다.
  *
@@ -40,7 +40,7 @@ export const PREFIX = 'prof';
 
 const data = new SlashCommandBuilder()
   .setName('프로필')
-  .setDescription('칭호와 칩, 전적, 아이템을 봅니다.')
+  .setDescription('칭호와 골드, 전적, 아이템을 봅니다.')
   .addUserOption((o) => o.setName('사람').setDescription('기본값은 본인'))
   .addStringOption((o) => o.setName('캐릭터').setDescription('미겔·마티암의 지갑')
     .addChoices(...NPC_CHOICES));
@@ -95,8 +95,8 @@ function cardTab(account, seated) {
   const s = account.stats ?? {};
 
   const fields = [
-    { name: '💰 칩', value: `**${num(account.chips)}**`, inline: true },
-    { name: '📈 최고', value: `**${num(s.peak ?? account.chips)}**`, inline: true },
+    { name: '💰 골드', value: `**${num(account.gold)}**`, inline: true },
+    { name: '📈 최고', value: `**${num(s.peak ?? account.gold)}**`, inline: true },
     {
       name: '🎲 전적',
       value: s.hands ? `**${num(s.won)}** / ${num(s.hands)}핸드` : '_아직 없어요_',

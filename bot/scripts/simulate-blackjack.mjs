@@ -3,8 +3,8 @@
  *
  * 두 가지를 본다.
  *
- *   1) 규칙이 맞는지 — 그중에서도 **칩 총합이 보존되는지**가 핵심이다. 플레이어가 잃은
- *      만큼 하우스가 벌어야 하고 그 반대도 마찬가지다. 어긋나면 어딘가에서 칩을
+ *   1) 규칙이 맞는지 — 그중에서도 **골드 총합이 보존되는지**가 핵심이다. 플레이어가 잃은
+ *      만큼 하우스가 벌어야 하고 그 반대도 마찬가지다. 어긋나면 어딘가에서 골드를
  *      만들거나 없앤 것이고, Split·Double·Insurance 정산이 제일 틀리기 쉽다.
  *   2) 성향이 실제로 다른지 — 표대로 두는 마티암은 하우스 엣지(1% 안팎)만큼만 잃고,
  *      미겔은 눈에 띄게 더 빨리 잃어야 한다.
@@ -27,31 +27,31 @@ const TABLE = STAKES.low;
 
 const fastRand = (n) => Math.floor(Math.random() * n);
 
-/** 한 핸드. 자리 하나(그 성향)와 딜러가 붙는다. 결과는 칩 증감이다. */
-function playHand(styleKey, chips, lastWon) {
+/** 한 핸드. 자리 하나(그 성향)와 딜러가 붙는다. 결과는 골드 증감이다. */
+function playHand(styleKey, gold, lastWon) {
   const shoe = playHand.shoe;
   if (needsShuffle(shoe)) { playHand.shoe = shuffle(newShoe(6), fastRand); }
 
-  const bet = chooseBet(styleKey, { chips, betUnits: TABLE.betUnits, lastWon });
+  const bet = chooseBet(styleKey, { gold, betUnits: TABLE.betUnits, lastWon });
   if (!bet) return null;                       // 걸 돈이 없다
 
-  const seat = { chips: chips - bet };         // 걸 때 바로 깎는다
-  let staked = bet;                            // 이번 핸드에 건 칩 전부
-  let returned = 0;                            // 돌아온 칩 전부
+  const seat = { gold: gold - bet };         // 걸 때 바로 깎는다
+  let staked = bet;                            // 이번 핸드에 건 골드 전부
+  let returned = 0;                            // 돌아온 골드 전부
   let hands = [newHand({ seatIndex: 0, bet, cards: [draw(shoe), draw(shoe)] })];
   const dealer = [draw(shoe), draw(shoe)];
 
   // 인슈어런스 — 업카드가 A 일 때만
   let ins = 0;
   if (dealer[0].rank === 'a' && chooseInsurance(styleKey)
-    && seat.chips >= insuranceCost(bet)) {
+    && seat.gold >= insuranceCost(bet)) {
     ins = insuranceCost(bet);
-    seat.chips -= ins;
+    seat.gold -= ins;
     staked += ins;
   }
 
   const insResult = settleInsurance(ins, dealer);
-  seat.chips += insResult.returned;
+  seat.gold += insResult.returned;
   returned += insResult.returned;
 
   // 딜러 피크 — 블랙잭이면 손을 더 두지 않고 바로 정산으로 간다
@@ -82,7 +82,7 @@ function playHand(styleKey, chips, lastWon) {
           continue;
         }
         if (act === 'double') {
-          seat.chips -= hand.bet;
+          seat.gold -= hand.bet;
           staked += hand.bet;
           hand.bet *= 2;
           hand.doubled = true;
@@ -91,7 +91,7 @@ function playHand(styleKey, chips, lastWon) {
         }
         if (act === 'split') {
           if (mine >= MAX_HANDS_PER_SEAT) break;
-          seat.chips -= hand.bet;
+          seat.gold -= hand.bet;
           staked += hand.bet;
           const splitAce = hand.cards[0].rank === 'a';
           const moved = hand.cards.pop();
@@ -117,18 +117,18 @@ function playHand(styleKey, chips, lastWon) {
   const outcomes = [];
   for (const hand of hands) {
     const r = settleHand(hand, dealer);
-    seat.chips += r.returned;
+    seat.gold += r.returned;
     returned += r.returned;
     outcomes.push(r.outcome);
   }
 
-  const delta = seat.chips - chips;
-  // 칩 총합 보존 — 증감은 정확히 (돌아온 것 − 건 것) 이어야 한다.
-  // 어긋나면 어딘가에서 칩을 만들거나 없앤 것이다. Split·Double·Insurance 정산이
+  const delta = seat.gold - gold;
+  // 골드 총합 보존 — 증감은 정확히 (돌아온 것 − 건 것) 이어야 한다.
+  // 어긋나면 어딘가에서 골드를 만들거나 없앤 것이다. Split·Double·Insurance 정산이
   // 제일 틀리기 쉬운 자리라, 이 한 줄이 이 시뮬레이터의 존재 이유다.
   const leak = delta !== returned - staked;
 
-  return { chips: seat.chips, delta, outcomes, hands: hands.length, staked, leak };
+  return { gold: seat.gold, delta, outcomes, hands: hands.length, staked, leak };
 }
 playHand.shoe = shuffle(newShoe(6), fastRand);
 
@@ -165,14 +165,14 @@ function run(styleKey, hands) {
   const lost = -net;
   return {
     이름: STYLES[styleKey].name,
-    '건 칩': staked,
-    '잃은 칩': lost,
+    '건 골드': staked,
+    '잃은 골드': lost,
     '하우스 엣지': `${((lost / staked) * 100).toFixed(2)}%`,
     '스플릿한 핸드': splits,
     '서렌더': surrenders,
     '블랙잭': counts.blackjack || 0,
     '버스트': counts.bust || 0,
-    '칩 누수': leaks,
+    '골드 누수': leaks,
   };
 }
 
@@ -184,7 +184,7 @@ const rows = Object.keys(STYLES).map((k) => run(k, hands));
 console.table(rows);
 
 const [migel, matiam] = rows;
-const leaks = rows.reduce((a, r) => a + r['칩 누수'], 0);
+const leaks = rows.reduce((a, r) => a + r['골드 누수'], 0);
 
 // 정산이 정수로만 떨어지는지 — 지갑이 소수를 안고 영구 저장으로 가면 안 된다.
 let frac = 0;
@@ -193,7 +193,7 @@ for (let i = 0; i < 5000; i += 1) {
   if (r && !Number.isInteger(r.delta)) frac += 1;
 }
 
-console.log(`\n칩 누수: ${leaks}건 ${leaks ? '← 정산이 틀렸다' : '(총합 보존됨)'}`);
+console.log(`\n골드 누수: ${leaks}건 ${leaks ? '← 정산이 틀렸다' : '(총합 보존됨)'}`);
 console.log(`정산에 소수가 나온 핸드: ${frac}${frac ? ' ← 지갑이 소수를 안는다' : ''}`);
 console.log(`\n하우스 엣지: 마티암 ${matiam['하우스 엣지']} vs 미겔 ${migel['하우스 엣지']}`);
 console.log(

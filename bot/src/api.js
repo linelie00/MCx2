@@ -209,10 +209,10 @@ export async function updatePlaylist({ owner, playlistId, patch }) {
 // ---------------------------------------------------------------- 카지노 계정
 
 /**
- * 칩·칭호·아이템. 넷 다 **캐시를 쓰지 않는다.**
+ * 골드·칭호·아이템. 넷 다 **캐시를 쓰지 않는다.**
  *
  * 다른 조회는 60초쯤 묵은 값이어도 그만이지만, 잔액은 방금 정산한 값을 봐야 한다.
- * 캐시된 잔액으로 판을 열면 그 차이가 다음 커밋에 그대로 얹혀 **칩이 복제된다.**
+ * 캐시된 잔액으로 판을 열면 그 차이가 다음 커밋에 그대로 얹혀 **골드가 복제된다.**
  */
 export const getAccounts = (ids) =>
   request(`/api/accounts?ids=${encodeURIComponent(ids.join(','))}`, { bot: true });
@@ -265,7 +265,7 @@ export async function checkOwnerKeys() {
  */
 export async function checkBotKey() {
   if (!config.api.botKey) {
-    console.warn('[api] BOT_KEY 미설정 — 칩을 못 읽어 카지노 판이 안 열립니다.');
+    console.warn('[api] BOT_KEY 미설정 — 골드를 못 읽어 카지노 판이 안 열립니다.');
     return;
   }
   try {

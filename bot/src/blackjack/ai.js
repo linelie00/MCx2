@@ -12,7 +12,7 @@
  *           그 신중함이 테이블에서 제일 잘 보이는 지점이다.
  *
  * chooseAction 은 **제안만** 한다. 부르는 쪽이 legalActions 와 교집합을 내고, 못 하는
- * 것이면 물러설 곳을 찾는다(표가 더블을 시켰는데 칩이 모자란 경우 등). 버그가 사는 곳이라
+ * 것이면 물러설 곳을 찾는다(표가 더블을 시켰는데 골드가 모자란 경우 등). 버그가 사는 곳이라
  * 물러서는 순서를 fallback 에 명시해 뒀다.
  *
  * 이 파일도 디스코드를 모른다. simulate-blackjack.mjs 로 검증한다.
@@ -159,15 +159,15 @@ export function chooseAction(styleKey, { cards, dealerUp, legal, rand = Math.ran
 export const chooseInsurance = (styleKey) => Boolean(STYLES[styleKey]?.insurance);
 
 /**
- * 얼마를 걸지. 남은 칩에서 낼 수 있는 것 중에 고른다.
+ * 얼마를 걸지. 남은 골드에서 낼 수 있는 것 중에 고른다.
  *
  * 미겔은 직전에 이겼으면 키우고 졌으면 더 키운다(본전 생각). 마티암은 늘 같은 액수.
  */
 export function chooseBet(styleKey, {
-  chips, betUnits, lastBet = 0, lastWon = null, rand = Math.random,
+  gold, betUnits, lastBet = 0, lastWon = null, rand = Math.random,
 }) {
   const style = STYLES[styleKey];
-  const affordable = betUnits.filter((b) => b <= chips);
+  const affordable = betUnits.filter((b) => b <= gold);
   if (!affordable.length) return 0;
 
   if (!style.betSpread) {

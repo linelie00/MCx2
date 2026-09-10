@@ -41,7 +41,7 @@ export function newHand({ seatIndex, bet, cards = [], fromSplit = false, splitAc
  * 지금 이 손으로 할 수 있는 것.
  *
  * 부르는 쪽이 버튼을 켜고 끄는 데 쓰고, NPC 판단도 이걸로 걸러진다 — 전략표가
- * 더블을 시켰는데 칩이 모자라면 히트로 물러서야 한다.
+ * 더블을 시켰는데 골드가 모자라면 히트로 물러서야 한다.
  */
 export function legalActions(hand, seat, handsOfSeat) {
   const out = new Set();
@@ -53,7 +53,7 @@ export function legalActions(hand, seat, handsOfSeat) {
   out.add('stand');
 
   const first = hand.cards.length === 2;
-  const canAfford = seat.chips >= hand.bet;
+  const canAfford = seat.gold >= hand.bet;
 
   // 스플릿한 에이스는 한 장만 받고 자동으로 선다. 21이어도 더 받을 이유가 없다.
   if (!hand.splitAce && total < 21) out.add('hit');
@@ -73,7 +73,7 @@ export function legalActions(hand, seat, handsOfSeat) {
 /** 인슈어런스는 업카드가 A 일 때만, 베팅의 절반을 낼 수 있을 때만. */
 export const insuranceCost = (bet) => bet / 2;
 export const canInsure = (seat, hand, dealerUp) =>
-  dealerUp?.rank === 'a' && seat.chips >= insuranceCost(hand.bet);
+  dealerUp?.rank === 'a' && seat.gold >= insuranceCost(hand.bet);
 
 /** 딜러는 17 이상에서 선다. 소프트 17도 선다(S17). */
 export const dealerShouldHit = (cards) => handValue(cards).total < 17;
@@ -84,7 +84,7 @@ export const dealerPeeks = (upcard) => rankValue(upcard.rank) >= 10;
 /**
  * 한 손의 정산.
  *
- * returned 는 **플레이어에게 돌아가는 칩**이다. 베팅은 걸 때 이미 깎았으므로
+ * returned 는 **플레이어에게 돌아가는 골드**이다. 베팅은 걸 때 이미 깎았으므로
  * 여기서는 주기만 한다. 그래서 지면 0, 푸시면 원금 그대로다.
  */
 export function settleHand(hand, dealerCards) {

@@ -10,7 +10,7 @@
  *   버튼은 핸드마다 한 칸씩 왼쪽으로. 둘이면 버튼이 스몰블라인드다
  *   레이즈 최소 증분은 직전 증분 이상 (기본은 빅블라인드)
  *   **최소에 못 미치는 올인은 베팅을 다시 열지 않는다** — 안 그러면 판이 안 닫힌다
- *   팟을 나눌 때 남는 칩은 버튼 **왼쪽부터** 한 칩씩
+ *   팟을 나눌 때 남는 골드는 버튼 **왼쪽부터** 한 골드씩
  *
  * **`CHIP_UNIT`(50)을 쓰지 않는다.** 그 상수는 블랙잭의 3:2 배당과 서렌더 절반 반환이
  * 정수로 떨어지게 하려고 있는 것이고, 포커는 정수이기만 하면 된다. 대신 홀덤을 하고 나면
@@ -19,7 +19,7 @@
  * 이 파일에서 제일 틀리기 쉬운 곳은 둘이다.
  *   1. 사이드팟 — buildPots 의 층 자르기
  *   2. 라운드가 언제 닫히는가 — roundClosed
- * 시뮬레이터의 **칩 총합 보존** 검사가 1번을, **반복 상한**이 2번을 잡는다.
+ * 시뮬레이터의 **골드 총합 보존** 검사가 1번을, **반복 상한**이 2번을 잡는다.
  */
 import { best5, winners } from '../casino/poker.js';
 
@@ -45,7 +45,7 @@ export const STREETS = ['preflop', 'flop', 'turn', 'river'];
 /** 그 스트리트에서 보드에 깔린 카드 수. */
 export const BOARD_AT = { preflop: 0, flop: 3, turn: 4, river: 5 };
 
-/** 새 자리. 칩은 부르는 쪽이 지갑에서 받아 채운다. */
+/** 새 자리. 골드는 부르는 쪽이 지갑에서 받아 채운다. */
 export function newSeat({ kind, id, userId = null, character = null, name, color }) {
   return {
     kind,
@@ -54,14 +54,14 @@ export function newSeat({ kind, id, userId = null, character = null, name, color
     character,
     name,
     color,
-    chips: 0,
+    gold: 0,
     hole: [],
     committed: 0,     // 이번 핸드에 낸 총액 — 사이드팟은 이 값으로만 만든다
     bet: 0,           // 이번 라운드에 낸 액수 — 콜 금액은 이 값으로 잰다
     acted: false,     // 마지막 공격 이후에 액션했는지 — 라운드 종료 판정의 전부
     folded: false,
     allIn: false,
-    out: false,       // 칩이 떨어져 판에서 빠짐
+    out: false,       // 골드가 떨어져 판에서 빠짐
     lastAction: null, // 판에 보여 줄 직전 행동
   };
 }
@@ -112,11 +112,11 @@ export function blindSeats(seats, button) {
  * ledger.take 는 모자라면 아무것도 안 하고 false 를 주므로 그대로는 못 쓴다.
  */
 export function put(seat, amount) {
-  const paid = Math.min(amount, seat.chips);
-  seat.chips -= paid;
+  const paid = Math.min(amount, seat.gold);
+  seat.gold -= paid;
   seat.bet += paid;
   seat.committed += paid;
-  if (seat.chips === 0) seat.allIn = true;
+  if (seat.gold === 0) seat.allIn = true;
   return paid;
 }
 
@@ -152,8 +152,8 @@ export function legalActions(seat, { toCall, minRaise }) {
   }
 
   // 올릴 여지가 있으면 레이즈. 스택이 최소 레이즈에 못 미쳐도 올인으로는 갈 수 있다.
-  if (seat.chips > need) {
-    if (seat.bet + seat.chips >= minRaiseTo(toCall, minRaise)) set.add('raise');
+  if (seat.gold > need) {
+    if (seat.bet + seat.gold >= minRaiseTo(toCall, minRaise)) set.add('raise');
     set.add('allin');
   }
   return set;
@@ -164,7 +164,7 @@ export function legalActions(seat, { toCall, minRaise }) {
  * 값은 전부 **to**(이번 라운드 총액)이고, 스택을 넘는 것과 겹치는 것은 뺀다.
  */
 export function raiseOptions(seat, { toCall, minRaise, pot }) {
-  const max = seat.bet + seat.chips;                 // 올인했을 때의 to
+  const max = seat.bet + seat.gold;                 // 올인했을 때의 to
   const min = Math.min(minRaiseTo(toCall, minRaise), max);
   const half = Math.round(toCall + (pot + toCall) * 0.5);
   const full = Math.round(toCall + (pot + toCall));
@@ -213,13 +213,13 @@ export function endStreet(seats) {
  *   → 300 층: (1000→300) + 300 + (1000→300) = 900, 셋 다 자격
  *   → 1000 층: 700 + 700 = 1400, 사백·미겔만
  *
- * **폴드한 사람이 낸 칩도 팟에 들어간다.** 자격만 없다.
+ * **폴드한 사람이 낸 골드도 팟에 들어간다.** 자격만 없다.
  *
  * 그래서 **자격자가 아무도 없는 층이 생길 수 있다.** 아무도 콜하지 않은 초과분을
  * 낸 사람이 접었을 때다 — 예를 들어 빅블라인드 10을 낸 사람이 폴드하고, 남은 사람이
- * 스몰블라인드 8로 이미 올인이면 그 2칩은 아무도 자격이 없다. 그건 **아무도 안 받은
+ * 스몰블라인드 8로 이미 올인이면 그 2골드는 아무도 자격이 없다. 그건 **아무도 안 받은
  * 돈**이므로 낸 사람에게 그대로 돌아가야 한다. 그러려면 층마다 누가 얼마를 넣었는지를
- * 알아야 해서 `by` 를 같이 들고 있는다. (처음엔 이걸 빠뜨려서 칩이 사라졌다.)
+ * 알아야 해서 `by` 를 같이 들고 있는다. (처음엔 이걸 빠뜨려서 골드가 사라졌다.)
  */
 export function buildPots(seats) {
   const levels = [...new Set(seats.filter((s) => s.committed > 0).map((s) => s.committed))]
@@ -247,9 +247,9 @@ export function buildPots(seats) {
 export const potTotal = (seats) => seats.reduce((a, s) => a + s.committed, 0);
 
 /**
- * 팟을 나눠 준다. `{ gain: [자리별 받는 칩], shown: [{seatIndex, hand}] }`.
+ * 팟을 나눠 준다. `{ gain: [자리별 받는 골드], shown: [{seatIndex, hand}] }`.
  *
- * 남는 칩은 **버튼 왼쪽부터 한 칩씩.** 내림으로 버리면 칩이 사라진다 —
+ * 남는 골드는 **버튼 왼쪽부터 한 골드씩.** 내림으로 버리면 골드가 사라진다 —
  * 시뮬레이터의 총합 보존 검사가 바로 잡아낸다.
  */
 export function award(seats, board, button) {

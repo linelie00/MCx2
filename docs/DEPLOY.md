@@ -123,7 +123,7 @@ curl <API_URL>/api/playlist # [] 또는 데이터
   앱에서 받거나, Railway CLI로 서비스에 접속해 `/data`를 아카이브해 내려받는 식.
   (관리형 볼륨은 VM만큼 백업이 간편하진 않으니, 중요 이미지는 원본을 로컬에도 보관.)
 - **`accounts.json` 은 유일본이다.** 갤러리·플리·영화는 시드가 받쳐 주지만 카지노
-  계정(칩·칭호·아이템)은 시드가 비어 있어 잃으면 복구되지 않는다. 백업 대상에 꼭 넣는다.
+  계정(골드·칭호·아이템)은 시드가 비어 있어 잃으면 복구되지 않는다. 백업 대상에 꼭 넣는다.
 
 ---
 
@@ -143,14 +143,14 @@ DISCORD_TOKEN, DISCORD_CLIENT_ID, DISCORD_GUILD_ID
 DISCORD_USER_MIGEL, DISCORD_USER_MATIAM     디스코드 유저 ID (쓰기 권한 판단)
 MIHEARTI_API_BASE                            server 서비스의 공개 도메인
 OWNER_MIGEL_KEY, OWNER_MATIAM_KEY            server 와 같은 값
-BOT_KEY                                      server 와 같은 값 (칩·계정)
+BOT_KEY                                      server 와 같은 값 (골드·계정)
 GEMINI_API_KEY                               캐입 핑퐁용
 SITE_BASE                                    프론트 주소 (선택, 링크 안내용)
 ```
 6. **볼륨·공개 도메인·PORT 모두 불필요.** 워커 서비스로 둔다.
 7. **server 를 먼저 배포하고** `/api/accounts` 가 (키 없이) 401 로 응답하는지 확인한 뒤
    봇을 올린다. 순서가 뒤집히면 봇은 뜨지만 **카지노 판이 전부 거절된다** — 잔액을 못
-   읽으면 판을 여는 것 자체가 실패이고, 그게 설계된 실패 모드다(CASINO_CHIPS.md §5-4).
+   읽으면 판을 여는 것 자체가 실패이고, 그게 설계된 실패 모드다(CASINO_GOLD.md §5-4).
    봇 로그 첫 줄의 `[api] 봇 키 확인: ✔` 로도 알 수 있다.
 8. 첫 배포 후 로컬에서 `cd bot && npm run register` 를 한 번 실행해 슬래시 명령을 등록한다.
    (명령 이름·옵션을 바꿨을 때만 다시 실행)
@@ -172,7 +172,7 @@ SITE_BASE                                    프론트 주소 (선택, 링크 �
 - **방명록 쿨다운이 전체 공유됨**: `TRUST_PROXY=1` 설정 확인.
 - **영상 poster 생성 실패**: 로그에 ffmpeg 오류 시 — 이미지(jpg/png/webp)만 쓰면 영향 없음.
   영상이 필요하면 `ffmpeg-static`/`ffprobe-static`이 빌드 환경에서 동작하는지 로그로 확인.
-- **봇이 판을 못 엶 ("칩 잔액을 읽지 못해…")**: 두 서비스의 `BOT_KEY` 가 같은 값인지.
+- **봇이 판을 못 엶 ("골드 잔액을 읽지 못해…")**: 두 서비스의 `BOT_KEY` 가 같은 값인지.
   `cd bot && npm run check-keys` 로 확인할 수 있다(키 값은 출력하지 않고 지문만 보여준다).
 - **봇이 사이트에 연결 못 함**: `MIHEARTI_API_BASE` 에 `https://` 가 붙어 있는지.
   Railway 대시보드는 도메인을 스킴 없이 보여준다(봇이 보정하긴 하지만 로그로 확인할 것).

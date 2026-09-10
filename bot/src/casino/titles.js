@@ -40,19 +40,19 @@ export const TITLES = [
   { key: 'fixture', name: 'bard의 터줏대감', tier: 3, cond: '누적 5,000핸드', group: '들른 자', desc: '미겔보다 이 가게에 오래 있었을지도 모른다.', when: (s) => n(s, 'hands') >= 5000 },
 
   // ---------------------------------------------------------------- 승부
-  { key: 'firstWin', name: '첫 승', tier: 1, cond: '한 판이라도 이기면', group: '승부', desc: '처음으로 칩을 긁어 왔다.', when: (s) => n(s, 'won') >= 1 },
+  { key: 'firstWin', name: '첫 승', tier: 1, cond: '한 판이라도 이기면', group: '승부', desc: '처음으로 골드를 긁어 왔다.', when: (s) => n(s, 'won') >= 1 },
   { key: 'evenHand', name: '반타작', tier: 2, cond: '100핸드 이상에서 승률 50%', group: '승부', desc: '백 판을 두고도 반은 이겼다.', when: (s) => rate(s, 100) >= 0.5 },
   { key: 'winningHabit', name: '이기는 버릇', tier: 3, cond: '200핸드 이상에서 승률 55%', group: '승부', desc: '운이라고 하기엔 좀 오래됐다.', when: (s) => rate(s, 200) >= 0.55 },
   { key: 'houseFriend', name: '하우스의 친구', tier: 1, cond: '100핸드 이상에서 승률 40% 미만', group: '승부', desc: '카지노가 제일 반기는 손님.', when: (s) => n(s, 'hands') >= 100 && n(s, 'won') / n(s, 'hands') < 0.4 },
   { key: 'gambler', name: '승부사', tier: 2, cond: '올인해서 이긴 판 1회', group: '승부', desc: '전부를 걸 수 있는 사람만 전부를 가져간다.', when: (s) => n(s, 'allInWon') >= 1 },
 
-  // ---------------------------------------------------------------- 칩 (NPC 제외)
-  { key: 'pocketed', name: '주머니가 두둑한', tier: 1, cond: '최고 잔액 5,000', group: '칩', desc: '미들 자리에 앉아도 되겠다.', npc: false, when: (s) => n(s, 'peak') >= 5000 },
-  { key: 'wealthy', name: '만석꾼', tier: 2, cond: '최고 잔액 20,000', group: '칩', desc: '하이 자리 한 스택을 통째로 들고 있다.', npc: false, when: (s) => n(s, 'peak') >= 20000 },
-  { key: 'vaultKeeper', name: '금고지기', tier: 3, cond: '최고 잔액 100,000', group: '칩', desc: '이쯤 되면 맡아 두는 쪽이다.', npc: false, when: (s) => n(s, 'peak') >= 100000 },
+  // ---------------------------------------------------------------- 골드 (NPC 제외)
+  { key: 'pocketed', name: '주머니가 두둑한', tier: 1, cond: '최고 잔액 5,000', group: '골드', desc: '미들 자리에 앉아도 되겠다.', npc: false, when: (s) => n(s, 'peak') >= 5000 },
+  { key: 'wealthy', name: '만석꾼', tier: 2, cond: '최고 잔액 20,000', group: '골드', desc: '하이 자리 한 스택을 통째로 들고 있다.', npc: false, when: (s) => n(s, 'peak') >= 20000 },
+  { key: 'vaultKeeper', name: '금고지기', tier: 3, cond: '최고 잔액 100,000', group: '골드', desc: '이쯤 되면 맡아 두는 쪽이다.', npc: false, when: (s) => n(s, 'peak') >= 100000 },
 
   // ---------------------------------------------------------------- 빈 주머니
-  { key: 'tuition', name: '수업료', tier: 1, cond: '누적 손실 1,000', group: '빈 주머니', desc: '천 칩쯤은 배우는 값으로 치자.', when: (s) => n(s, 'lost') >= 1000 },
+  { key: 'tuition', name: '수업료', tier: 1, cond: '누적 손실 1,000', group: '빈 주머니', desc: '천 골드쯤은 배우는 값으로 치자.', when: (s) => n(s, 'lost') >= 1000 },
   { key: 'donor', name: '기부천사', tier: 2, cond: '누적 손실 10,000', group: '빈 주머니', desc: 'bard 의 살림에 크게 보탰다.', when: (s) => n(s, 'lost') >= 10000 },
   { key: 'rockBottom', name: '바닥을 본 자', tier: 3, cond: '누적 손실 50,000', group: '빈 주머니', desc: '그래도 아직 앉아 있다.', when: (s) => n(s, 'lost') >= 50000 },
   { key: 'doubleDown', name: '두 배로 잃다', tier: 2, cond: '100핸드 이상에서 잃은 것이 딴 것의 두 배', group: '빈 주머니', desc: '딴 것의 두 배를 잃었다. 계산은 맞다.', when: (s) => n(s, 'hands') >= 100 && n(s, 'lost') >= n(s, 'earned') * 2 },
@@ -108,8 +108,8 @@ export const TOTAL = TITLES.length;
 /**
  * 그 계정이 가진 칭호들. 명부 순서를 지킨다.
  *
- * `npc: false` 로 표시된 칭호는 미겔·마티암이 못 받는다 — `/급여` 로 넣은 칩이
- * 최고 잔액을 올려서 칩 계열이 공짜가 되기 때문이다.
+ * `npc: false` 로 표시된 칭호는 미겔·마티암이 못 받는다 — `/급여` 로 넣은 골드가
+ * 최고 잔액을 올려서 골드 계열이 공짜가 되기 때문이다.
  */
 export function earned(account, { npc = false } = {}) {
   const stats = account?.stats ?? {};

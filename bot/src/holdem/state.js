@@ -49,7 +49,7 @@ export function humanSeat(user, displayName) {
   });
 }
 
-/** NPC 자리. id 접두사 `npc:` 는 칩 영구 저장이 NPC 를 걸러 내는 표식이다. */
+/** NPC 자리. id 접두사 `npc:` 는 골드 영구 저장이 NPC 를 걸러 내는 표식이다. */
 /**
  * 모브 자리. 엘리트 에너미 하나가 손님으로 앉는다.
  *
@@ -108,7 +108,7 @@ export function create({ channelId, homeChannelId, guildId, starterId, stakes = 
     handNo: 0,
     hist: [],           // 이번 핸드에 누가 뭘 했는지. 전부 공개 정보 — 대사가 읽는다
     results: null,       // 직전 정산. settled 에서 보여 준다
-    chips: null,         // 동기 장부(wallet.ledger)
+    gold: null,         // 동기 장부(wallet.ledger)
     pendingChat: [],
     lastAt: Date.now(),
     opened: false,
@@ -122,7 +122,7 @@ export function create({ channelId, homeChannelId, guildId, starterId, stakes = 
     driving: false,
     rekick: false,
     closed: false,
-    saveFailed: false,  // 직전 정산에서 칩을 못 저장했는지 (판에 한 줄 띄운다)
+    saveFailed: false,  // 직전 정산에서 골드를 못 저장했는지 (판에 한 줄 띄운다)
     endedReason: null,
   };
   games.set(channelId, game);
@@ -133,7 +133,7 @@ export const get = (channelId) => games.get(channelId) || null;
 
 /**
  * 아직 살아 있는 판들. 다른 게임이 "이 사람이 어디 앉아 있나" 를 볼 때 쓴다
- * (casino/tables.js). 끝난 판은 자리가 남아 있어도 칩을 걸 수 없으니 뺀다.
+ * (casino/tables.js). 끝난 판은 자리가 남아 있어도 골드를 걸 수 없으니 뺀다.
  *
  * 홀덤에는 자리를 거르는 live(seats) 가 따로 있어서 이름을 달리 둔다.
  */
@@ -174,9 +174,9 @@ export function addSeat(game, seat) {
 /** 판을 시작한다. 잔액은 부르는 쪽이 미리 불러와서 넘긴다(load 는 async 라 여기 못 둔다). */
 export function start(game, balances) {
   if (game.seats.length < 2) return '두 자리 이상이어야 시작할 수 있어요.';
-  game.chips = ledger(balances);
-  for (const s of game.seats) s.chips = game.chips.get(s.id);
-  if (game.seats.filter((s) => s.chips >= game.stakes.bb).length < 2) {
+  game.gold = ledger(balances);
+  for (const s of game.seats) s.gold = game.gold.get(s.id);
+  if (game.seats.filter((s) => s.gold >= game.stakes.bb).length < 2) {
     return '빅블라인드를 낼 수 있는 사람이 둘은 있어야 해요.';
   }
   beginHand(game);
@@ -195,7 +195,7 @@ const card = (game) => draw(game.deck);
  */
 export function beginHand(game) {
   for (const s of game.seats) {
-    s.out = s.chips < game.stakes.bb && s.chips <= 0 ? true : s.chips <= 0;
+    s.out = s.gold < game.stakes.bb && s.gold <= 0 ? true : s.gold <= 0;
     s.hole = [];
     s.committed = 0;
     s.bet = 0;
@@ -296,7 +296,7 @@ export function act(game, action, to = 0) {
     seat.lastAction = seat.allIn ? `All-in ${paid}` : `Call ${paid}`;
   } else {
     // raise / allin — 둘 다 "얼마까지 올리느냐" 로 다룬다.
-    const target = action === 'allin' ? seat.bet + seat.chips : to;
+    const target = action === 'allin' ? seat.bet + seat.gold : to;
     const full = target >= minRaiseTo(game.toCall, game.minRaise);
     const before = game.toCall;
 
@@ -371,15 +371,15 @@ function settleIfNoAction(game) {
 
 // ---------------------------------------------------------------- 정산
 
-/** 팟을 나눠 준다. 칩은 여기서만 움직인다. */
+/** 팟을 나눠 준다. 골드는 여기서만 움직인다. */
 export function settle(game) {
   const { gain, pots, shown } = award(game.seats, game.board, game.button);
 
   for (let i = 0; i < game.seats.length; i += 1) {
     const s = game.seats[i];
-    if (s.committed) game.chips.take(s.id, s.committed);
-    if (gain[i]) game.chips.give(s.id, gain[i]);
-    s.chips = game.chips.get(s.id);
+    if (s.committed) game.gold.take(s.id, s.committed);
+    if (gain[i]) game.gold.give(s.id, gain[i]);
+    s.gold = game.gold.get(s.id);
   }
 
   game.results = {
@@ -407,8 +407,8 @@ export function end(game, reason) {
 
 /** 시작할 때와 견준 증감. 결과 화면과 wallet.commit 이 쓴다. */
 export const standings = (game) => game.seats
-  .map((seat) => ({ seat, chips: seat.chips, delta: game.chips?.net()[seat.id] ?? 0 }))
-  .sort((a, b) => b.chips - a.chips);
+  .map((seat) => ({ seat, gold: seat.gold, delta: game.gold?.net()[seat.id] ?? 0 }))
+  .sort((a, b) => b.gold - a.gold);
 
 export function expired(now = Date.now()) {
   const out = [];

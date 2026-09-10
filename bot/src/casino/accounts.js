@@ -11,8 +11,24 @@
  * NPC 미겔은 **미겔**로 뜬다 — 같은 사람이 둘을 다 쓰지만 계정은 별개다. 이름이
  * 겹치면 어느 지갑을 보고 있는지 알 수가 없으므로 표기를 여기서 한 번에 정한다.
  */
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { OWNER_META, ownerFor } from '../owners.js';
 import { THEME_COLOR } from '../embeds.js';
+
+/**
+ * 미겔·마티암 초상화. **웹훅이 아바타로 굽는 그 파일과 같은 것**을 쓴다
+ * (`discord/webhook.js`) — 판에서 말할 때의 얼굴과 프로필의 얼굴이 달라지면 안 된다.
+ *
+ * URL 이 아니라 로컬 파일이다. 사이트 초상화는 번들 해시가 붙어 빌드마다 이름이
+ * 바뀌어서 URL 로 걸 수가 없다. 임베드에는 첨부로 올리고 `attachment://` 로 가리킨다.
+ */
+const ASSETS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
+const npcFace = (character) => {
+  const file = path.join(ASSETS, `${character}.png`);
+  return fs.existsSync(file) ? { file, name: `${character}.png` } : null;
+};
 
 /** NPC 계정 id. 게임의 `npcSeat` 이 만드는 것과 같은 모양이어야 한다. */
 export const NPC_ID = { migel: 'npc:migel', matiam: 'npc:matiam' };
@@ -29,22 +45,24 @@ export const NPC_CHOICES = [
 ];
 
 /**
- * 그 계정을 화면에 어떻게 적을지. `{ id, name, color, npc, avatar }`
+ * 그 계정을 화면에 어떻게 적을지. `{ id, name, color, npc, avatar, avatarFile }`
  *
- * `avatar` 는 카드의 초상화 자리에 쓴다. 사람은 디스코드 아바타가 있고 NPC 는 없다 —
- * 사이트 갤러리에서 끌어올 수도 있지만, 그림이 매번 바뀌면 카드가 아니라 갤러리가 된다.
+ * `avatar` 는 임베드에 그대로 넣을 값이다. 사람은 디스코드 CDN 주소, 미겔·마티암은
+ * `attachment://…` — 그 경우 `avatarFile` 을 같이 첨부해야 그림이 뜬다.
  */
 export function displayOf(id, { user = null, member = null } = {}) {
   const character = characterOf(id);
   if (character) {
     const meta = OWNER_META[character];
     // NPC 라고 붙여 준다. 사람 계정(겨울/사백)과 헷갈리면 안 된다.
+    const face = npcFace(character);
     return {
       id,
       name: `${meta?.character ?? character} (NPC)`,
       color: meta?.color ?? THEME_COLOR,
       npc: true,
-      avatar: null,
+      avatar: face ? `attachment://${face.name}` : null,
+      avatarFile: face,
     };
   }
 
@@ -56,6 +74,7 @@ export function displayOf(id, { user = null, member = null } = {}) {
     color: meta ? meta.color : THEME_COLOR,
     npc: false,
     avatar: user?.displayAvatarURL?.({ size: 256 }) ?? null,
+    avatarFile: null,          // 사람은 디스코드 CDN 에 이미 있다
   };
 }
 

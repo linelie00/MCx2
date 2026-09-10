@@ -18,6 +18,7 @@
  */
 import {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
+  AttachmentBuilder,
 } from 'discord.js';
 import { getAccounts } from '../api.js';
 import { base, fail, THEME_COLOR } from '../embeds.js';
@@ -184,12 +185,13 @@ function cardFor(who, account, tab, page) {
       ? '/급여 로 일당을 받습니다 (자동으로 늘지 않아요)'
       : '/출첵 으로 하루 한 번 받을 수 있어요',
   })
-    .setAuthor({ name: account.title ? `〈 ${account.title} 〉` : '칭호 없음' })
+    // **초상화는 author 아이콘 자리다.** 임베드에서 왼쪽에 그림이 오는 자리는 여기
+    // 하나뿐이다 — thumbnail 은 오른쪽 위 고정이라 옮길 수가 없다. 대신 작다(원형 24px).
+    .setAuthor({
+      name: account.title ? `〈 ${account.title} 〉` : '칭호 없음',
+      ...(who.avatar ? { iconURL: who.avatar } : {}),
+    })
     .addFields(body.fields);
-
-  // 초상화. 사람은 디스코드 아바타, 미겔·마티암은 없다 — 사이트 갤러리에서 끌어올 수도
-  // 있지만 그림이 매번 바뀌면 카드가 아니라 갤러리가 된다.
-  if (who.avatar) embed.setThumbnail(who.avatar);
 
   return { embed, pages: body.pages ?? 1, page: body.page ?? 0 };
 }
@@ -220,12 +222,23 @@ function rows(who, tab, page, pages) {
   )];
 }
 
-/** 카드 한 장을 통째로. 명령과 버튼이 같은 것을 쓴다. */
+/**
+ * 카드 한 장을 통째로. 명령과 버튼이 같은 것을 쓴다.
+ *
+ * 미겔·마티암 초상화는 로컬 파일이라 **매번 같이 올린다.** 탭을 넘길 때도 다시
+ * 붙여야 한다 — `files` 를 빼고 보내면 디스코드가 첨부를 지우고 그림이 사라진다.
+ */
 async function payloadFor(who, tab, page) {
   const { accounts } = await getAccounts([who.id]);
   const account = accounts[who.id];
   const card = cardFor(who, account, tab, page);
-  return { embeds: [card.embed], components: rows(who, tab, card.page, card.pages) };
+  return {
+    embeds: [card.embed],
+    components: rows(who, tab, card.page, card.pages),
+    files: who.avatarFile
+      ? [new AttachmentBuilder(who.avatarFile.file, { name: who.avatarFile.name })]
+      : [],
+  };
 }
 
 // ---------------------------------------------------------------- 명령

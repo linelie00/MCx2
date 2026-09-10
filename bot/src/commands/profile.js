@@ -181,7 +181,13 @@ function titlesTab(account, page, npc) {
     if (!all.length) continue;
     const mine = all.filter((t) => has.has(t.key));
 
-    lines.push('', `**■ ${group}**　\`${mine.length}/${all.length}\``);
+    const head = `**■ ${group}**　\`${mine.length}/${all.length}\``;
+
+    // 하나도 없는 갈래는 **제목 한 줄로 접는다.** 자물쇠를 줄줄이 놓아 봐야 알 것이
+    // 없는데, 아직 아무것도 안 모은 사람은 그 줄이 여섯이라 화면을 통째로 먹는다.
+    if (!mine.length) { lines.push('', `${head}　🔒`); continue; }
+
+    lines.push('', head);
     for (const t of mine) {
       // 달고 있는 것 표시. `▸` 는 너무 작아서 화면에서 안 보였다.
       const mark = t === worn ? '📌' : '　';

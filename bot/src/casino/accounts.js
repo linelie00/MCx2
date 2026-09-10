@@ -28,14 +28,23 @@ export const NPC_CHOICES = [
   { name: '마티암', value: NPC_ID.matiam },
 ];
 
-/** 그 계정을 화면에 어떻게 적을지. `{ id, name, color, npc }` */
+/**
+ * 그 계정을 화면에 어떻게 적을지. `{ id, name, color, npc, avatar }`
+ *
+ * `avatar` 는 카드의 초상화 자리에 쓴다. 사람은 디스코드 아바타가 있고 NPC 는 없다 —
+ * 사이트 갤러리에서 끌어올 수도 있지만, 그림이 매번 바뀌면 카드가 아니라 갤러리가 된다.
+ */
 export function displayOf(id, { user = null, member = null } = {}) {
   const character = characterOf(id);
   if (character) {
     const meta = OWNER_META[character];
     // NPC 라고 붙여 준다. 사람 계정(겨울/사백)과 헷갈리면 안 된다.
     return {
-      id, name: `${meta?.character ?? character} (NPC)`, color: meta?.color ?? THEME_COLOR, npc: true,
+      id,
+      name: `${meta?.character ?? character} (NPC)`,
+      color: meta?.color ?? THEME_COLOR,
+      npc: true,
+      avatar: null,
     };
   }
 
@@ -46,6 +55,7 @@ export function displayOf(id, { user = null, member = null } = {}) {
     name: meta ? meta.label : (member?.displayName || user?.globalName || user?.username || '누군가'),
     color: meta ? meta.color : THEME_COLOR,
     npc: false,
+    avatar: user?.displayAvatarURL?.({ size: 256 }) ?? null,
   };
 }
 

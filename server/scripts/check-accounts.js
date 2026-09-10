@@ -59,6 +59,20 @@ const server = app.listen(0, async () => {
   eq('409 뒤에도 잔액 그대로', (await hit('?ids=1000001')).body.accounts['1000001'].chips, 200);
   eq('본문 없으면 400', (await hit('/deltas', { method: 'POST' })).status, 400);
 
+  // --- 전적 카운터. 칩과 같은 쓰기로 들어간다.
+  const st1 = await post('/deltas', { deltas: { 1000004: 100 }, bump: { 1000004: { hands: 1, won: 1 } } });
+  eq('카운터가 쌓인다', st1.body.accounts['1000004'].stats.hands, 1);
+  const st2 = await post('/deltas', { deltas: { 1000004: -50 }, bump: { 1000004: { hands: 1 } } });
+  eq('더해진다', st2.body.accounts['1000004'].stats.hands, 2);
+  eq('안 보낸 카운터는 그대로', st2.body.accounts['1000004'].stats.won, 1);
+  eq('최고 잔액은 서버가 잰다', st2.body.accounts['1000004'].stats.peak, 1100);
+  const mx = await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { bestPot: 500 } } });
+  eq('최댓값 갱신', mx.body.accounts['1000004'].stats.bestPot, 500);
+  const mx2 = await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { bestPot: 300 } } });
+  eq('작은 값은 안 덮는다', mx2.body.accounts['1000004'].stats.bestPot, 500);
+  eq('모르는 카운터는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { hax: 1 } } })).status, 400);
+  eq('음수 카운터는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { hands: -1 } } })).status, 400);
+  eq('deltas 에 없는 id 는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000005: { hands: 1 } } })).status, 400);
   // --- 출첵
   const c1 = await post('/claim', { id: '1000001' });
   eq('출첵으로 1000', c1.body.chips, 1000);

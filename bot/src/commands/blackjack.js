@@ -527,12 +527,40 @@ async function announceTurn(game, seat) {
  */
 const RESULT_BUDGET = 4;
 
+/**
+ * 이 핸드의 전적. 칩 증감과 **같은 쓰기**로 나간다(wallet.commit).
+ *
+ * **자리 단위로 센다.** 결과는 손 단위로 나오는데(스플릿하면 한 사람이 여럿), 한 사람이
+ * 한 판에 두 핸드를 둔 것으로 세면 전적이 부풀고 승률도 이상해진다. 그 자리의 순증감을
+ * 합쳐 하나로 본다.
+ *
+ * 블랙잭 횟수만은 손 단위다 — 스플릿한 손에서 나온 21은 블랙잭이 아니므로(rules.js)
+ * 손마다 세도 부풀지 않는다.
+ */
+function handStats(game) {
+  const bump = {};
+  for (const seat of state.active(game)) {
+    const mine = game.results.filter((r) => r.seat === seat);
+    if (!mine.length) continue;
+
+    const net = mine.reduce((a, r) => a + r.net, 0);
+    const c = { hands: 1, blackjackHands: 1 };
+    if (net > 0) { c.won = 1; c.blackjackWon = 1; c.earned = net; } else if (net < 0) c.lost = -net;
+
+    const bj = mine.filter((r) => r.outcome === 'blackjack').length;
+    if (bj) c.blackjacks = bj;
+    c.bestBet = Math.max(...mine.map((r) => r.hand.bet));
+    bump[seat.id] = c;
+  }
+  return bump;
+}
+
 async function settleAndShow(game) {
   state.settle(game);
   await draw(game);
   // **성공했을 때만** 기준점을 옮긴다. 실패하면 밀린 몫이 장부에 남아 있다가
   // 다음 커밋이 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
-  game.saveFailed = !(await commit(game.guildId, game.chips.deltas()));
+  game.saveFailed = !(await commit(game.guildId, game.chips.deltas(), handStats(game)));
   if (!game.saveFailed) game.chips.rebase();
 
   const dealerBust = handValue(game.dealer).bust;

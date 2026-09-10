@@ -217,9 +217,13 @@ export async function updatePlaylist({ owner, playlistId, patch }) {
 export const getAccounts = (ids) =>
   request(`/api/accounts?ids=${encodeURIComponent(ids.join(','))}`, { bot: true });
 
-/** 정산·급여. **잔액이 아니라 증감**을 보낸다 — 락이 없는 스토어에서 안전한 유일한 방식이다. */
-export const postAccountDeltas = (deltas) =>
-  request('/api/accounts/deltas', { method: 'POST', bot: true, json: { deltas } });
+/**
+ * 정산·급여. **잔액이 아니라 증감**을 보낸다 — 락이 없는 스토어에서 안전한 유일한 방식이다.
+ *
+ * `bump` 는 전적 카운터(`{ id: { hands: 1, won: 1 } }`). 이것도 더하기라 같은 길을 탄다.
+ */
+export const postAccountDeltas = (deltas, bump) =>
+  request('/api/accounts/deltas', { method: 'POST', bot: true, json: { deltas, bump } });
 
 /** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
 export const claimDaily = (id) =>

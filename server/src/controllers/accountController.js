@@ -10,7 +10,11 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { chips, title, items, refilledAt, updatedAt }
+ * account shape: { chips, title, items, stats, refilledAt, updatedAt }
+ *
+ * `stats` 는 전적 카운터다. **칩과 똑같이 더하기만 한다** — 그래서 락 없는 이 스토어에
+ * 안전하게 쓸 수 있는 유일한 방식(증감)을 그대로 탄다. 최댓값(최고 팟 같은 것)도
+ * 순서를 안 타므로 같이 실어도 된다.
  */
 const store = require('../services/accountStore');
 const { dayKey } = require('../services/dayKey');
@@ -43,7 +47,7 @@ const now = () => new Date().toISOString();
 const isNpc = (id) => id.startsWith('npc:');
 
 const blank = () => ({
-  chips: START_CHIPS, title: null, items: {}, refilledAt: null, updatedAt: null,
+  chips: START_CHIPS, title: null, items: {}, stats: {}, refilledAt: null, updatedAt: null,
 });
 
 /** 저장된 계정을 빠진 필드까지 채워서 준다. 뒤에 필드가 늘어도 옛 기록이 안 깨진다. */
@@ -54,6 +58,7 @@ const publicView = (acct) => ({
   chips: acct.chips,
   title: acct.title,
   items: acct.items,
+  stats: acct.stats,
   refilledAt: acct.refilledAt,
 });
 
@@ -120,10 +125,24 @@ exports.list = (req, res) => {
 // ---------------------------------------------------------------- 정산
 
 /** POST /api/accounts/deltas — `{ deltas: { id: ±n } }` */
+/** 카운터 이름. 여기 없는 키는 안 받는다 — 오타 하나로 전적이 둘로 갈리면 못 고친다. */
+const BUMP_KEYS = new Set([
+  'hands', 'won', 'earned', 'lost',                 // 공통
+  'holdemHands', 'holdemWon', 'blackjackHands', 'blackjackWon', 'blackjacks',
+]);
+
+/** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
+const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet']);
+
 exports.applyDeltas = (req, res) => {
   const deltas = req.body && req.body.deltas;
   if (!deltas || typeof deltas !== 'object' || Array.isArray(deltas)) {
     return res.status(400).json({ error: 'deltas 객체가 필요합니다' });
+  }
+  // 전적 카운터. 없어도 된다 — 칩만 옮기는 호출(`/급여`)이 대부분이다.
+  const bump = (req.body && req.body.bump) || {};
+  if (typeof bump !== 'object' || Array.isArray(bump)) {
+    return res.status(400).json({ error: 'bump 는 객체여야 합니다' });
   }
 
   const ids = parseIds(Object.keys(deltas));
@@ -133,6 +152,14 @@ exports.applyDeltas = (req, res) => {
     const n = deltas[id];
     // 소수가 들어오면 지갑이 영영 소수를 안고 간다. 여기서 막는다.
     if (!Number.isSafeInteger(n)) return res.status(400).json({ error: `정수가 아닙니다: ${id}=${n}` });
+  }
+  for (const [id, counters] of Object.entries(bump)) {
+    if (!ids.includes(id)) return res.status(400).json({ error: `deltas 에 없는 id: ${id}` });
+    if (!counters || typeof counters !== 'object') return res.status(400).json({ error: `bump.${id} 가 객체가 아닙니다` });
+    for (const [k, v] of Object.entries(counters)) {
+      if (!BUMP_KEYS.has(k) && !MAX_KEYS.has(k)) return res.status(400).json({ error: `모르는 카운터: ${k}` });
+      if (!Number.isSafeInteger(v) || v < 0) return res.status(400).json({ error: `카운터가 0 이상 정수가 아닙니다: ${k}=${v}` });
+    }
   }
 
   const data = readOr503(res);
@@ -149,7 +176,15 @@ exports.applyDeltas = (req, res) => {
           + ' (같은 칩을 두 판에서 겹쳐 걸었을 수 있습니다)',
       });
     }
-    next[id] = { ...acct, chips: after, updatedAt: now() };
+
+    // 최고 잔액은 **서버가 알아서** 센다. 봇은 새 잔액을 모르는 채로 증감만 보내므로
+    // (그게 이 설계의 핵심이다) 여기서 재는 것이 유일하게 맞는 자리다.
+    const stats = { ...acct.stats, peak: Math.max(acct.stats?.peak ?? 0, after) };
+    for (const [k, v] of Object.entries(bump[id] ?? {})) {
+      stats[k] = MAX_KEYS.has(k) ? Math.max(stats[k] ?? 0, v) : (stats[k] ?? 0) + v;
+    }
+
+    next[id] = { ...acct, chips: after, stats, updatedAt: now() };
   }
 
   Object.assign(data.accounts, next);

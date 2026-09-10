@@ -28,6 +28,7 @@ import {
   holeMessage, turnCall, resultEmbed,
 } from '../holdem/render.js';
 import { handText, isJumboable } from '../casino/cards.js';
+import { CATEGORIES } from '../casino/poker.js';
 import {
   line, sometimes, memo, handName, spoilerVeto,
 } from '../holdem/lines.js';
@@ -364,6 +365,34 @@ async function runDriver(game) {
 }
 
 /** 팟을 나누고 결과를 보여준다. 칩 저장도 여기서 — 인터랙션 경로 밖이라 await 해도 된다. */
+/**
+ * 이 핸드의 전적. 칩 증감과 **같은 쓰기**로 나간다(wallet.commit).
+ *
+ * 정산 시점에는 이미 다 알고 있는 값들이라 따로 재는 게 없다. 카운터는 전부 더하기라
+ * 락 없는 스토어에 안전하고, 최댓값(최고 팟·최고 족보)도 순서를 안 탄다.
+ *
+ * 최고 족보는 **이름이 아니라 순위 숫자**로 담는다 — 서버가 큰 쪽만 남기려면 견줄 수
+ * 있어야 하고, 이름은 못 견준다. 보여줄 때 다시 이름으로 바꾼다(POKER_ORDER).
+ */
+function handStats(game, results) {
+  const shown = new Map((results.shown ?? []).map((x) => [x.seatIndex, x.hand]));
+  const bump = {};
+
+  results.rows.forEach((r, i) => {
+    if (r.put === 0 && r.won === 0) return;              // 그 핸드에 아무것도 안 한 자리
+    const c = { hands: 1, holdemHands: 1 };
+    if (r.net > 0) { c.won = 1; c.holdemWon = 1; c.earned = r.net; } else if (r.net < 0) c.lost = -r.net;
+    if (r.won > 0) c.bestPot = r.won;
+    // CATEGORIES 는 센 것부터라 그대로 쓰면 큰 수가 약한 손이 된다. 뒤집는다 —
+    // 스트레이트 플러시 9 … 하이카드 1, 0 은 "기록 없음".
+    const at = CATEGORIES.indexOf(shown.get(i)?.category);
+    if (at >= 0) c.bestHand = CATEGORIES.length - at;
+    bump[r.seat.id] = c;
+  });
+
+  return bump;
+}
+
 async function settleAndShow(game) {
   state.settle(game);
 
@@ -374,7 +403,7 @@ async function settleAndShow(game) {
   await repost(game);
   // **성공했을 때만** 기준점을 옮긴다. 실패하면 밀린 몫이 장부에 남아 있다가
   // 다음 커밋이 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
-  game.saveFailed = !(await commit(game.guildId, game.chips.deltas()));
+  game.saveFailed = !(await commit(game.guildId, game.chips.deltas(), handStats(game, results)));
   if (!game.saveFailed) game.chips.rebase();
 
   // 결과에 반응한다. 이긴 사람은 늘, 진 사람은 가끔.

@@ -95,14 +95,24 @@ export async function load(guildId, userIds) {
  *
  * 0인 증감과 **지갑 없는 자리(모브)** 는 빼고 보낸다. 앉기만 하고 아무 일 없던
  * 계정에 updatedAt 을 찍을 이유가 없고, 모브는 애초에 서버가 몰라야 한다.
+ *
+ * `bump` 는 그 핸드의 전적 카운터다. **칩과 같은 한 번의 쓰기로 나간다** — 따로 보내면
+ * 칩만 저장되고 전적은 빠지는 어긋남이 생긴다.
  */
-export async function commit(guildId, deltas) {
+export async function commit(guildId, deltas, bump = {}) {
   const moved = Object.fromEntries(
     Object.entries(deltas).filter(([id, n]) => n !== 0 && isPersistent(id)),
   );
   if (!Object.keys(moved).length) return true;
+
+  // 전적은 **칩이 움직인 자리 것만** 보낸다. 서버가 deltas 에 없는 id 를 거절하고,
+  // 애초에 칩이 안 움직였으면 그 사람이 그 핸드에 낸 것도 없다.
+  const counters = Object.fromEntries(
+    Object.entries(bump).filter(([id, c]) => moved[id] !== undefined && Object.keys(c).length),
+  );
+
   try {
-    await postAccountDeltas(moved);
+    await postAccountDeltas(moved, counters);
     return true;
   } catch (err) {
     console.warn('[카지노] 칩 저장 실패 — 다음 정산에서 다시 시도합니다:', err.message);

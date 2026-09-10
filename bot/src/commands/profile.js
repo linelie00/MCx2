@@ -33,6 +33,7 @@ import {
   TITLES, GROUPS, earned as earnedTitles, TITLE_BY_KEY, TOTAL as TITLE_TOTAL,
 } from '../casino/titles.js';
 import { stamp, stampMd } from '../casino/titleCard.js';
+import { ITEM_BY_KEY } from '../casino/items.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
 export const PREFIX = 'prof';
@@ -209,8 +210,18 @@ function titlesTab(account, page, npc) {
   };
 }
 
+/**
+ * 창고. 계정에는 **키와 개수만** 있고 이름·값·설명은 명부에서 읽는다(casino/items.js).
+ *
+ * 명부에 없는 키가 나올 수 있다 — 아이템을 지웠는데 누가 들고 있는 경우다.
+ * 그때도 개수는 보여 준다. 사라진 것처럼 보이는 편보다 낫다.
+ */
 function itemsTab(account, page) {
-  const owned = Object.entries(account.items ?? {}).filter(([, n]) => n > 0).sort();
+  const owned = Object.entries(account.items ?? {})
+    .filter(([, n]) => n > 0)
+    .map(([key, n]) => [ITEM_BY_KEY[key] ?? { key, name: key, kind: '?', price: 0, sell: false }, n])
+    .sort(([a], [b]) => a.kind.localeCompare(b.kind, 'ko') || a.name.localeCompare(b.name, 'ko'));
+
   if (!owned.length) {
     return {
       fields: [],
@@ -223,6 +234,11 @@ function itemsTab(account, page) {
   const at = Math.min(Math.max(0, page), pages - 1);
   const slice = owned.slice(at * PER_PAGE, (at + 1) * PER_PAGE);
   const total = owned.reduce((a, [, n]) => a + n, 0);
+  // 팔 수 있는 것만 센다. 회복약처럼 값은 있어도 못 파는 물건이 있다.
+  const worth = owned.reduce((a, [item, n]) => a + (item.sell ? item.price * n : 0), 0);
+
+  const lines = [table(slice.map(([item, n]) => [clipW(item.name, 24), `×${num(n)}`]))];
+  if (worth) lines.push(`_다 팔면_ **${num(worth)}골드**`);
 
   return {
     fields: [
@@ -230,7 +246,7 @@ function itemsTab(account, page) {
       { name: '개수', value: `**${num(total)}**`, inline: true },
       { name: '쪽', value: `${at + 1} / ${pages}`, inline: true },
     ],
-    description: table(slice.map(([id, n]) => [clipW(id, 20), `×${num(n)}`])),
+    description: lines.join('\n'),
     pages,
     page: at,
   };

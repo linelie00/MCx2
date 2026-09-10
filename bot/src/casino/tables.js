@@ -38,6 +38,9 @@ export function seatedAt(id, { except = null } = {}) {
       if (game.seats.some((s) => s.kind !== 'mob' && s.id === id)) {
         return { game: name, channelId: game.channelId };
       }
+      // 던전에 데려온 지원군은 자리에 없어도 **체력이 그 판의 장부에 실려 있다.**
+      // 안 보면 미겔이 두 던전에 동시에 불려 가고 체력이 두 번 걸린다.
+      if (game.reserves?.includes(id)) return { game: name, channelId: game.channelId };
     }
   }
   return null;

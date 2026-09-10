@@ -14,7 +14,7 @@
 import { randomBytes } from 'node:crypto';
 import { newShoe, shuffle, draw } from '../casino/cards.js';
 import { ledger } from '../casino/wallet.js';
-import { stakesOf, DEFAULT_STAKES } from '../casino/stakes.js';
+import { stakesOf, DEFAULT_STAKES, atLevel, LEVEL_EVERY } from '../casino/stakes.js';
 import {
   MAX_SEATS, BOARD_AT,
   newSeat, live, actionable, nextActor, blindSeats, put, firstToAct,
@@ -85,11 +85,23 @@ export function npcSeat(character) {
 
 // ---------------------------------------------------------------- 판
 
-export function create({ channelId, homeChannelId, guildId, starterId, stakes = DEFAULT_STAKES }) {
+export function create({
+  channelId, homeChannelId, guildId, starterId, stakes = DEFAULT_STAKES, mode = 'cash',
+}) {
   // 판돈은 판을 열 때 정하고 **끝날 때까지 안 바뀐다.** 도중에 바뀌면 이미 건 돈의 뜻이 달라진다.
   const table = stakesOf(stakes);
+  // 토너먼트가 블라인드를 올릴 때 견줄 원본. 배수를 곱하는 기준이라 안 바뀐다.
+  const base = { ...table, level: 0 };
   const game = {
-    stakes: table,
+    /**
+     * `cash` · `tourney` · `dungeon`.
+     *
+     * **customId 에는 모드가 없다.** 판은 채널로 찾으므로(`forChannel`) 모드는 반드시
+     * 여기 있어야 한다 — 버튼만 보고는 무슨 판인지 알 수가 없다.
+     */
+    mode,
+    stakes: base,
+    base,
     serial: serial(),
     rev: 0,
     channelId,
@@ -108,8 +120,12 @@ export function create({ channelId, homeChannelId, guildId, starterId, stakes = 
     handNo: 0,
     hist: [],           // 이번 핸드에 누가 뭘 했는지. 전부 공개 정보 — 대사가 읽는다
     results: null,       // 직전 정산. settled 에서 보여 준다
+    knocked: [],         // 탈락한 순서(먼저 나간 사람이 앞). 토너먼트 등수가 이걸 쓴다
+    owner: null,         // 던전 주인. 자리를 갈아 끼우면 seatOf 로는 못 알아본다
+    reserves: [],        // 던전에 데려온 지원군 id. 장부에 실려 있고 자리에는 없다
     gold: null,         // 동기 장부(wallet.ledger)
     pendingChat: [],
+    startedAt: Date.now(),   // 토너먼트 벽시계 상한이 본다
     lastAt: Date.now(),
     opened: false,
     said: new Set(),
@@ -158,6 +174,37 @@ export function touch(game) {
 
 export const seatOf = (game, userId) => game.seats.find((s) => s.userId === userId) || null;
 export const seatIndexOf = (game, userId) => game.seats.findIndex((s) => s.userId === userId);
+/**
+ * 던전에서 싸우는 자리의 주인을 갈아 끼운다. **자리를 더하지 않는다.**
+ *
+ * 자리를 하나 더 두고 쉬게 하는 방식은 안 된다 — `beginHand` 가 `out` 을 **매 핸드
+ * 다시** 계산해서 쉬던 자리가 저절로 되살아나고, 그걸 막으려면 `rules.js` 의
+ * `live`·`actionable`·`nextActor`·`nextIn`·`blindSeats`·`roundClosed` 를 다 손봐야 한다.
+ * 그중 둘은 파일 머리말이 "제일 틀리기 쉬운 자리" 라고 적어 둔 곳이다.
+ *
+ * **핸드 사이에만 부른다.** 판이 도는 중에 바꾸면 `seat.committed` 의 주인이 달라져서
+ * `settle` 이 엉뚱한 계정에서 빼 간다.
+ *
+ * `kind: 'npc'` 로 바뀌면 드라이버가 알아서 둔다(`chooseAction(seat.character)`).
+ * **`userId` 를 반드시 비운다** — 안 그러면 사람이 그 자리 버튼을 계속 누를 수 있다.
+ */
+export function swapFighter(game, seat, who) {
+  seat.kind = who.kind;
+  seat.id = who.id;
+  seat.userId = who.userId ?? null;
+  seat.character = who.character ?? null;
+  seat.name = who.name;
+  seat.color = who.color;
+  seat.avatar = who.avatar ?? null;
+  seat.gold = game.gold.get(who.id);
+  // 앞 사람이 이번 핸드에 낸 흔적은 지운다. `beginHand` 가 어차피 비우지만, 그 전에
+  // 화면이 한 번 그려지면 지원군이 남의 베팅을 걸고 있는 것처럼 보인다.
+  seat.bet = 0;
+  seat.committed = 0;
+  seat.lastAction = null;
+  touch(game);
+}
+
 export const hasNpc = (game, character) =>
   game.seats.some((s) => s.kind === 'npc' && s.character === character);
 
@@ -174,7 +221,9 @@ export function addSeat(game, seat) {
 /** 판을 시작한다. 잔액은 부르는 쪽이 미리 불러와서 넘긴다(load 는 async 라 여기 못 둔다). */
 export function start(game, balances) {
   if (game.seats.length < 2) return '두 자리 이상이어야 시작할 수 있어요.';
-  game.gold = ledger(balances);
+  // 던전은 같은 장부에 **체력**을 담아 돈다. 무엇을 세는지 장부가 알고 있어야
+  // 서버로 잘못 나가는 것을 막을 수 있다(payout.js).
+  game.gold = ledger(balances, game.mode === 'dungeon' ? 'hp' : 'gold');
   for (const s of game.seats) s.gold = game.gold.get(s.id);
   if (game.seats.filter((s) => s.gold >= game.stakes.bb).length < 2) {
     return '빅블라인드를 낼 수 있는 사람이 둘은 있어야 해요.';
@@ -206,10 +255,26 @@ export function beginHand(game) {
     s.stance = null;        // 이번 수를 무슨 마음으로 뒀는지 (대사용)
   }
 
+  // **탈락 순서를 남긴다.** 지금까지는 아무 데도 안 적혀서 등수를 만들 수가 없었다.
+  // 둘이 안 남아 빠지는 자리보다 **먼저** 적어야 마지막 탈락자가 빠지지 않는다.
+  for (const s of game.seats) {
+    if (s.out && !game.knocked.includes(s.id)) game.knocked.push(s.id);
+  }
+
   const playing = game.seats.filter((s) => !s.out);
   if (playing.length < 2) { end(game, 'broke'); return false; }
 
   game.handNo += 1;
+
+  // **블라인드는 여기서만 올린다.** 핸드와 핸드 사이, 블라인드를 걷기 전 딱 한 곳이다.
+  // 판 도중에 바뀌면 이미 건 돈의 뜻이 달라진다. `sb`·`bb` 와 표시용 `level` 만 갈고,
+  // `stack`·`minBuyIn` 은 판을 열 때만 쓰이므로 1단계 값 그대로 둔다.
+  if (game.mode === 'tourney') {
+    const level = Math.floor((game.handNo - 1) / LEVEL_EVERY);
+    if (level !== (game.stakes.level ?? 0)) game.stakes = atLevel(game.base, level);
+    game.minRaise = game.stakes.bb;
+  }
+
   game.deck = shuffle(newShoe(1));
   game.board = [];
   game.hist = [];
@@ -428,7 +493,7 @@ export function expired(now = Date.now()) {
 export default {
   MAX_SEATS, IDLE_MS,
   create, get, remove, forChannel, touch, seatOf, seatIndexOf, hasNpc,
-  humanSeat, npcSeat, addSeat, start, beginHand, currentSeat, pot,
+  humanSeat, npcSeat, addSeat, swapFighter, start, beginHand, currentSeat, pot,
   actionsFor, raisesFor, toCallFor, act, advance, settle, nextHand, end,
   standings, expired,
 };

@@ -11,6 +11,8 @@
  *   price  **상점 값 하나로 사고 판다.** 살 때 내는 돈이자 팔 때 받는 돈이다.
  *          0 이면 상점에 아예 안 나온다
  *   sell   플레이어가 **팔 수** 있는가. 회복약처럼 살 수는 있어도 못 파는 것이 있다
+ *   loot   `false` 면 **던전에서 안 나온다.** 안 적으면 나온다. 이야기용 물건(피·수배지·
+ *          열쇠)과 가공이 끝난 보석이 여기 든다 — 던전 바닥에 루비가 굴러다니면 안 된다
  *   heal   먹었을 때 HP 증감. 숫자 하나면 그만큼, `[a, b]` 면 a~b 사이에서 무작위.
  *          **음수는 깎인다** — 원석이나 열쇠를 먹으면 아픈 게 당연하다
  *
@@ -86,29 +88,29 @@ export const ITEMS = [
   { key: 'driedMeat',       name: '말린 고기 조각',           kind: '잡화', price:    3, sell: true,  heal: 10,         desc: '짭짤한 향이 도는 말린 고기. 씹을수록 감칠맛이 살아난다.' },
   { key: 'honeyWalnut',     name: '꿀절임 호두',              kind: '잡화', price:    4, sell: true,  heal: 5,          desc: '달콤한 꿀에 절인 호두. 한 입 베어물면 고소한 향이 퍼진다.' },
   { key: 'teaLeaf',         name: '찻잎',                     kind: '잡화', price:    6, sell: true,  heal: 5,          desc: '향긋한 찻잎. 따뜻한 물에 우려내면 피로를 풀어준다.' },
-  { key: 'banditPoster',    name: '도적단의 수배지',          kind: '잡화', price:    0, sell: false, heal: -5,         desc: '이걸 왜 가지고 싶었는진 잘 모르겠다. 팔 수도 없다.' },
+  { key: 'banditPoster',    name: '도적단의 수배지',          kind: '잡화', price:    0, sell: false, heal: -5,         loot: false, desc: '이걸 왜 가지고 싶었는진 잘 모르겠다. 팔 수도 없다.' },
   { key: 'scratchedGem',    name: '흠집난 빨간 보석',         kind: '잡화', price:   30, sell: true,  heal: 0,          desc: '원석을 가공한 것. 다만 험하게 다뤘는지, 흠집이 나 가치가 떨어졌다.' },
   { key: 'bugPile',         name: '벌레 더미',                kind: '잡화', price:    0, sell: false, heal: 3,          desc: '우글우글. 매우 많은 벌레입니다.' },
-  { key: 'blueMist',        name: '푸른 안개',                kind: '잡화', price:   40, sell: true,  heal: 0,          desc: '수면 및 마취 효과가 있는 안개. 부작용으론... 조금 멍청해진다.' },
-  { key: 'prisonKey',       name: '감옥 열쇠',                kind: '잡화', price:    0, sell: false, heal: -10,        desc: '두꺼운 철제 열쇠.' },
+  { key: 'blueMist',        name: '푸른 안개',                kind: '잡화', price:   40, sell: true,  heal: 0,          loot: false, desc: '수면 및 마취 효과가 있는 안개. 부작용으론... 조금 멍청해진다.' },
+  { key: 'prisonKey',       name: '감옥 열쇠',                kind: '잡화', price:    0, sell: false, heal: -10,        loot: false, desc: '두꺼운 철제 열쇠.' },
   { key: 'lizardEye',       name: '도마뱀 눈',                kind: '잡화', price:    2, sell: true,  heal: 8,          desc: '금방이라도 살아 움직일 것 같은 도마뱀의 눈.' },
   { key: 'voidLump',        name: '공허 덩어리',              kind: '잡화', price:   15, sell: false, heal: -100,       desc: '순수한 어둠으로 이루어진 물컹한 덩어리.' },
   { key: 'redApple',        name: '새빨간 사과',              kind: '잡화', price:    5, sell: true,  heal: 10,         desc: '마녀의 집에서 주운, 새빨간 사과. ...진짜 사과일까?' },
-  { key: 'ruby',            name: '루비',                     kind: '잡화', price:  200, sell: true,  heal: 0,          desc: '붉은 원석을 가공한, 아름다운 보석. ...어째서인지 루비가 되었다.' },
-  { key: 'sapphire',        name: '사파이어',                 kind: '잡화', price:  180, sell: true,  heal: 0,          desc: '푸른 원석을 가공한, 새파란 보석.' },
-  { key: 'garnet',          name: '가넷',                     kind: '잡화', price:  100, sell: true,  heal: 0,          desc: '붉은 원석을 가공한, 빨갛게 빛나는 예쁜 보석.' },
-  { key: 'emerald',         name: '에메랄드',                 kind: '잡화', price:  150, sell: true,  heal: 0,          desc: '녹빛 원석을 가공한, 초록 빛깔의 보석.' },
-  { key: 'onyx',            name: '오닉스',                   kind: '잡화', price:  100, sell: true,  heal: 0,          desc: '까만 원석을 가공한, 빛을 흡수하는 새까만 보석.' },
-  { key: 'topaz',           name: '토파즈',                   kind: '잡화', price:  150, sell: true,  heal: 0,          desc: '금빛 원석을 가공한, 노란 빛의 보석.' },
+  { key: 'ruby',            name: '루비',                     kind: '잡화', price:  200, sell: true,  heal: 0,          loot: false, desc: '붉은 원석을 가공한, 아름다운 보석. ...어째서인지 루비가 되었다.' },
+  { key: 'sapphire',        name: '사파이어',                 kind: '잡화', price:  180, sell: true,  heal: 0,          loot: false, desc: '푸른 원석을 가공한, 새파란 보석.' },
+  { key: 'garnet',          name: '가넷',                     kind: '잡화', price:  100, sell: true,  heal: 0,          loot: false, desc: '붉은 원석을 가공한, 빨갛게 빛나는 예쁜 보석.' },
+  { key: 'emerald',         name: '에메랄드',                 kind: '잡화', price:  150, sell: true,  heal: 0,          loot: false, desc: '녹빛 원석을 가공한, 초록 빛깔의 보석.' },
+  { key: 'onyx',            name: '오닉스',                   kind: '잡화', price:  100, sell: true,  heal: 0,          loot: false, desc: '까만 원석을 가공한, 빛을 흡수하는 새까만 보석.' },
+  { key: 'topaz',           name: '토파즈',                   kind: '잡화', price:  150, sell: true,  heal: 0,          loot: false, desc: '금빛 원석을 가공한, 노란 빛의 보석.' },
   { key: 'salt',            name: '소금',                     kind: '잡화', price:   10, sell: true,  heal: 15,         desc: '암염을 깎은 소금 덩어리.' },
   { key: 'fancyWatch',      name: '장식 회중시계',            kind: '잡화', price:   30, sell: true,  heal: 0,          desc: '그냥 조금 더 치렁치렁해진 회중시계.' },
-  { key: 'bungeeTicket',    name: '번지점프 티켓',            kind: '잡화', price:   20, sell: true,  heal: 0,          desc: '가지고 있으면 단장이 번지점프를 시켜줍니다.' },
-  { key: 'sinew',           name: '심줄',                     kind: '잡화', price:    0, sell: false, heal: 100,        desc: '단장 주머니에서 쌔빈 것.' },
-  { key: 'dragonBlood',     name: '드래곤의 피',              kind: '잡화', price:    0, sell: false, heal: 50,         desc: '아는 드래곤의 피입니다.' },
+  { key: 'bungeeTicket',    name: '번지점프 티켓',            kind: '잡화', price:   20, sell: true,  heal: 0,          loot: false, desc: '가지고 있으면 단장이 번지점프를 시켜줍니다.' },
+  { key: 'sinew',           name: '심줄',                     kind: '잡화', price:    0, sell: false, heal: 100,        loot: false, desc: '단장 주머니에서 쌔빈 것.' },
+  { key: 'dragonBlood',     name: '드래곤의 피',              kind: '잡화', price:    0, sell: false, heal: 50,         loot: false, desc: '아는 드래곤의 피입니다.' },
   { key: 'braveMeat',       name: '용맹한 고기',              kind: '잡화', price:   10, sell: true,  heal: 20,         desc: '사냥으로 얻은 용맹함의 고기! 질깁니다.' },
-  { key: 'adventureToken',  name: '모험의 증표',              kind: '잡화', price:    0, sell: false, heal: 50,         desc: '당신이야말로 진정한 모험가! 10장 모으면 선물이 있을지도 모른다.' },
-  { key: 'vampireBlood',    name: '흡혈귀의 피',              kind: '잡화', price:    0, sell: false, heal: -50,        desc: '아는 흡혈귀의 피입니다.' },
-  { key: 'humElfBlood',     name: '훔-엘프의 피',             kind: '잡화', price:    0, sell: false, heal: 5,          desc: '아는 훔의 피입니다. 어라? 조금 엘프가 섞인 것 같은데요.' },
+  { key: 'adventureToken',  name: '모험의 증표',              kind: '잡화', price:    0, sell: false, heal: 50,         loot: false, desc: '당신이야말로 진정한 모험가! 10장 모으면 선물이 있을지도 모른다.' },
+  { key: 'vampireBlood',    name: '흡혈귀의 피',              kind: '잡화', price:    0, sell: false, heal: -50,        loot: false, desc: '아는 흡혈귀의 피입니다.' },
+  { key: 'humElfBlood',     name: '훔-엘프의 피',             kind: '잡화', price:    0, sell: false, heal: 5,          loot: false, desc: '아는 훔의 피입니다. 어라? 조금 엘프가 섞인 것 같은데요.' },
   { key: 'bobSponge',       name: '밥르퐁지',                 kind: '잡화', price:    5, sell: true,  heal: -10,        desc: '해면을 닮았지만, 이건 말을 할 수 있다. 무슨 말을 하는 지 알고 싶다면 귀를 대 보자.' },
   { key: 'starGari',        name: '별가리',                   kind: '잡화', price:    5, sell: true,  heal: -10,        desc: '불가사리와 닮았지만, 이건 말을 할 수 있다. 무슨 말을 하는 지 알고 싶으면 귀를 대 보자.' },
   { key: 'waterCentipede',  name: '물지네',                   kind: '잡화', price:    5, sell: true,  heal: -50,        desc: '수십 개의 다리로 헤엄친다. 지네의 친척. 독이 있다.' },

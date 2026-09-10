@@ -31,8 +31,11 @@ const btn = (game, action, label, style = ButtonStyle.Secondary, arg) =>
 const holeBtn = (game) => btn(game, 'hole', '내 패', ButtonStyle.Primary)
   .setDisabled(!game.seats.some((s) => s.hole.length));
 
-/** 골드를 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
-const savedMark = (game) => (game.saveFailed ? ' · ⚠ 골드 저장 안 됨' : '');
+/** 이 판이 무엇을 걸고 있는지. 던전은 골드가 아니라 체력이다. */
+export const unitLabel = (game) => (game.mode === 'dungeon' ? '체력' : '골드');
+
+/** 못 저장한 판에 붙이는 꼬리표. 다음 정산이 성공하면 저절로 사라진다. */
+const savedMark = (game) => (game.saveFailed ? ` · ⚠ ${unitLabel(game)} 저장 안 됨` : '');
 
 // ---------------------------------------------------------------- 자리 표
 
@@ -64,7 +67,7 @@ function seatTable(game) {
       + `  ${padEndW(clipW(act, ACT_W), ACT_W)}`;
   });
 
-  const head = '   ' + padEndW('', NAME_W) + padStartW('골드', COL_W) + padStartW('이번', COL_W)
+  const head = '   ' + padEndW('', NAME_W) + padStartW(unitLabel(game), COL_W) + padStartW('이번', COL_W)
     + '  방금';
   return ['```', head, '-'.repeat(NAME_W + COL_W * 2 + ACT_W + 5), ...rows, '```'].join('\n');
 }
@@ -187,7 +190,9 @@ export function lobbyRows(game) {
     btn(game, 'join', '참가', ButtonStyle.Primary).setDisabled(full),
     btn(game, 'npc', '미겔 부르기', ButtonStyle.Secondary, 'migel').setDisabled(full),
     btn(game, 'npc', '마티암 부르기', ButtonStyle.Secondary, 'matiam').setDisabled(full),
-    btn(game, 'start', '시작', ButtonStyle.Success).setDisabled(game.seats.length < 2),
+    // 토너먼트는 셋부터. 명령 쪽에서도 한 번 더 본다.
+    btn(game, 'start', '시작', ButtonStyle.Success)
+      .setDisabled(game.seats.length < (game.mode === 'tourney' ? 3 : 2)),
     btn(game, 'cancel', '취소', ButtonStyle.Danger),
   )];
 }
@@ -252,6 +257,31 @@ export function boardEmbed(game) {
 
 export function boardRows(game) {
   if (game.phase === 'settled' || game.phase === 'showdown') {
+    // **토너먼트는 저절로 넘어간다.** 버튼을 남겨 두면 사람이 누르는 순간 드라이버와
+    // 같이 두 핸드가 돌아간다. rev 가 대부분 걸러 주지만 전부는 아니다.
+    if (game.mode === 'tourney') {
+      return [new ActionRowBuilder().addComponents(
+        btn(game, 'wait', '다음 핸드로…').setDisabled(true),
+        holeBtn(game),
+      )];
+    }
+    if (game.mode === 'dungeon') {
+      // 한 줄에 다섯이 한도다. 지금 싸우는 사람은 부를 필요가 없으니 빼면 딱 맞는다.
+      const fighter = game.seats.find((s) => s.kind !== 'mob');
+      const call = [
+        ...(fighter?.id === game.owner ? [] : [['me', '내가 싸우기']]),
+        ...(game.reserves ?? [])
+          .filter((id) => id !== fighter?.id)
+          .map((id) => [id.slice(4), `${id.endsWith('migel') ? '미겔' : '마티암'} 부르기`]),
+      ].slice(0, 2);
+
+      return [new ActionRowBuilder().addComponents(
+        btn(game, 'next', '다음 핸드', ButtonStyle.Success),
+        ...call.map(([arg, label]) => btn(game, 'ally', label, ButtonStyle.Secondary, arg)),
+        btn(game, 'flee', '도망', ButtonStyle.Danger),
+        holeBtn(game),
+      )];
+    }
     return [new ActionRowBuilder().addComponents(
       btn(game, 'next', '다음 핸드', ButtonStyle.Success),
       btn(game, 'stop', '정산하고 끝내기', ButtonStyle.Danger),
@@ -322,7 +352,7 @@ export function holeMessage(game, seat) {
       title: `${seat.name}의 패`,
       description: lines.join('\n'),
       color: seat.color,
-      footer: `골드 ${seat.gold} · 이번 라운드 ${seat.bet} · 팟 ${pot(game)}`,
+      footer: `${unitLabel(game)} ${seat.gold} · 이번 라운드 ${seat.bet} · 팟 ${pot(game)}`,
     })],
   };
 }
@@ -330,12 +360,14 @@ export function holeMessage(game, seat) {
 // ---------------------------------------------------------------- 끝
 
 export function resultEmbed(game) {
+  const unit = unitLabel(game);
   const rows = standings(game).map((r, i) => {
     const sign = r.delta > 0 ? `+${r.delta}` : String(r.delta);
-    return `${['🥇', '🥈', '🥉'][i] ?? '　'} **${r.seat.name}** ${r.gold}골드 \`${sign}\``;
+    return `${['🥇', '🥈', '🥉'][i] ?? '　'} **${r.seat.name}** ${r.gold}${unit} \`${sign}\``;
   });
   return base({
-    title: '홀덤 — 판이 끝났어요',
+    title: { tourney: '토너먼트 — 끝났어요', dungeon: '던전 — 끝났어요' }[game.mode]
+      ?? '홀덤 — 판이 끝났어요',
     description: rows.join('\n'),
     footer: `${game.handNo}핸드${savedMark(game)}`,
   });
@@ -356,6 +388,6 @@ export function turnCall(game) {
 }
 
 export default {
-  PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
+  PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows, unitLabel,
   holeMessage, turnCall, resultEmbed,
 };

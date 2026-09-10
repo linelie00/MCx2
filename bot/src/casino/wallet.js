@@ -179,7 +179,7 @@ export const commit = (guildId, deltas, bump = {}) => apply({ deltas, bump });
  * 하나로 두면 반드시 한쪽이 틀린다. 실제로 그렇게 돼 있었고, 그대로 저장을 붙이면
  * 핸드마다 골드가 복제되거나(base 로 안 쓸 때) 결산이 전부 +0 으로 뜬다(origin 으로 안 쓸 때).
  */
-export function ledger(initial) {
+export function ledger(initial, unit = 'gold') {
   const gold = { ...initial };
   const origin = { ...initial };
   let base = { ...initial };
@@ -189,6 +189,15 @@ export function ledger(initial) {
   );
 
   return {
+    /**
+     * 이 장부가 **무엇을 세고 있는지**. `'gold'` 또는 `'hp'`.
+     *
+     * 던전은 같은 장부에 체력을 담아 돈다. 그대로 서버에 보내면 체력 100 이 골드
+     * 100 으로 저장되는데, 그건 조용히 틀리는 종류라 알아채기까지 오래 걸린다.
+     * 보내는 자리(`holdem/payout.js`)가 이 표를 보고 아니면 **크게 터뜨린다.**
+     */
+    unit,
+
     get: (id) => gold[id] ?? 0,
     has: (id, amount) => (gold[id] ?? 0) >= amount,
 
@@ -217,6 +226,18 @@ export function ledger(initial) {
      * 성공할 때 함께 반영된다 — 서버가 잠깐 죽었다 살아나면 저절로 만회된다.
      */
     rebase() { base = { ...gold }; },
+
+    /**
+     * 서버가 고쳐 준 값으로 맞춘다. **체력만 쓴다.**
+     *
+     * 서버는 체력을 0~최대치로 자른다. 봇이 −30 을 보냈는데 서버가 20에서 0으로
+     * 잘랐다면 장부는 −10 을 더 믿고 있고, 그 상태로 `rebase()` 하면 그 −10 이
+     * 영구히 굳어 눈덩이가 된다. 쓴 직후에 응답으로 덮어쓰고 나서 rebase 한다.
+     *
+     * 골드에는 안 쓴다 — 쓰는 곳이 여럿이라 남이 넣은 몫까지 덮어쓰게 된다.
+     * 체력은 한 번에 한 판만 만지므로 이 방법이 안전하다.
+     */
+    reconcile(id, n) { gold[id] = n; },
 
     snapshot: () => ({ ...gold }),
   };

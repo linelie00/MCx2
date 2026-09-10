@@ -786,7 +786,7 @@ const data = new SlashCommandBuilder()
   .addSubcommand((s) => s.setName('토너먼트').setDescription('한 명이 남을 때까지 — 셋부터')
     .addStringOption((o) => o.setName('판돈').setDescription('시작 블라인드. 여기서 점점 오릅니다')
       .addChoices(...STAKES_CHOICES)))
-  .addSubcommand((s) => s.setName('던전').setDescription('엘리트 에너미와 체력을 걸고 단둘이'))
+  .addSubcommand((s) => s.setName('던전').setDescription('에너미와 체력을 걸고 단둘이'))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
   .addSubcommand((s) => s.setName('족보').setDescription('손의 순서를 알려줍니다'))
   .addSubcommand((s) => s.setName('그만').setDescription('진행 중인 판을 접습니다'));

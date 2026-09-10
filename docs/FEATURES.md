@@ -396,11 +396,11 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/플리 듣기` | 누구나 | `GET /api/playlist` (링크만 만든다) |
 | `/캐입 말 · 초기화 · 사용량` | 누구나 | 없음 (Gemini) |
 | `/요트 시작 · 판 · 그만` | 누구나 | 없음 (Gemini) |
-| `/블랙잭 시작 · 판 · 그만` | 누구나 | `POST /api/accounts/open`·`/deltas` |
-| `/홀덤 시작 · 판 · 족보 · 그만` | 누구나 | `POST /api/accounts/open`·`/deltas` |
+| `/블랙잭 시작 · 판 · 그만` | 누구나 | `GET /api/accounts` · `POST /deltas` |
+| `/홀덤 시작 · 판 · 족보 · 그만` | 누구나 | `GET /api/accounts` · `POST /deltas` |
 | `/출첵` | 누구나 | `POST /api/accounts/claim` |
 | `/급여` | 누구나 | `POST /api/accounts/deltas` |
-| `/프로필` | 누구나 | `GET /api/accounts` (카드·전적·아이템 탭) |
+| `/프로필` | 누구나 | `GET /api/accounts` · `POST /accounts/title` (카드·전적·칭호·아이템 탭) |
 | `/주사위` `/뽑기` | 누구나 | 없음 |
 
 `판` 은 판을 아래에 다시 띄우고, `그만` 은 **판에 앉은 사람이나 판을 연 사람만** 접을 수 있다.
@@ -505,7 +505,9 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 
 ### 아직 안 만든 것
 
-- **`/상점` · `/요리` · `/아이템 양도` · `/상호작용`.** 계정 레코드에 `title`(칭호)과
-  `items` 자리는 이미 뚫려 있고 `/프로필` 이 그 자리를 보여준다 — 늘 비어 있을 뿐이다.
+- **`/상점` · `/요리` · `/아이템 양도` · `/상호작용`.** 계정 레코드의 `items` 자리는
+  이미 뚫려 있고 `/프로필` 이 그 자리를 보여준다 — 늘 비어 있을 뿐이다.
   칩 양도는 `/아이템 양도` 에서 칩을 골라 개수를 정하는 형태로 들어가고, 대상에는
-  미겔·마티암도 포함된다(미겔↔마티암도). 자세한 것은 [CASINO_CHIPS.md](CASINO_CHIPS.md).
+  미겔·마티암도 포함된다(미겔↔마티암도). 뽑기·요리·상점 **칭호**도 같은 명부
+  (`bot/src/casino/titles.js`)에 조건 한 줄로 붙는다.
+  자세한 것은 [CASINO_CHIPS.md](CASINO_CHIPS.md).

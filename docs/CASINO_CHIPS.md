@@ -133,16 +133,17 @@
 | `services/accountStore.js` | 읽기·쓰기. 아래 두 가지가 다른 스토어와 다르다 |
 | `services/dayKey.js` | KST `YYYY-MM-DD` |
 | `middleware/requireBot.js` | `X-Bot-Key`. `BOT_KEY` 가 비면 전부 401(fail closed) |
-| `controllers/accountController.js` | `list` · `applyDeltas` · `claim` |
+| `controllers/accountController.js` | `list` · `applyDeltas` · `claim` · `setTitle` |
 | `routes/accounts.js` | `express.json()` 은 **POST 마다 따로** |
 | `data/accounts.seed.json` | `{ "accounts": {} }` |
-| `scripts/check-accounts.js` | `npm run check-accounts` — 28건 |
+| `scripts/check-accounts.js` | `npm run check-accounts` — 53건 |
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
 | `GET` | `/api/accounts?ids=a,b` | 순수 조회 (`/프로필` · `wallet.load`) |
 | `POST` | `/api/accounts/deltas` | `{deltas, bump}` 적용 (`wallet.commit` · `/급여`) |
 | `POST` | `/api/accounts/claim` | `{id}` → 일일 규칙 (`/출첵`) |
+| `POST` | `/api/accounts/title` | `{id, title}` → 달고 있는 칭호. **키만 받는다**(`[A-Za-z0-9_-]{1,40}`) |
 
 `accountStore` 가 다른 스토어와 다른 두 가지. 둘 다 **이 파일이 유일본**이라서다.
 
@@ -165,6 +166,7 @@ src/api.js                 bot:true 요청 옵션 + 함수 넷 + checkBotKey
 src/casino/wallet.js       load/commit · origin/net/rebase · buyIn · roundToUnit
 src/casino/stakes.js       판돈 등급 (마이크로·로우·미들·하이)
 src/casino/accounts.js     id 해석과 표기 (/프로필·/출첵·나중의 양도가 같이 쓴다)
+src/casino/titles.js       칭호 명부 34종 — 전적에서 계산해 낸다
 src/holdem/mobs.js         엘리트 에너미 35종과 성향
 src/casino/tables.js       다른 채널 판에 앉아 있는지
 src/commands/checkin.js    /출첵 (사람)
@@ -284,10 +286,39 @@ cd bot && npm run check-keys          # BOT_KEY 가 통하는지
 - 미겔을 파산시키고 다음 날 판 열기 → 1000으로 돌아오는지
 - 20000 가진 사람이 앉아도 스택이 1000인지, 다 잃으면 19000인지
 
+## 6-1. 칭호
+
+**저장하지 않는다.** `src/casino/titles.js` 의 명부 34종을 전적에 대고 매번 계산한다.
+계정에 남는 것은 **지금 달고 있는 것 하나의 키**뿐이다(`account.title`).
+
+이렇게 둔 이유가 셋이다.
+
+1. 조건을 고치면 **이미 논 사람에게도 소급된다.** 저장해 두면 옛 규칙으로 받은 칭호가
+   영영 남고, 새 조건에 맞는데도 안 주는 계정이 생긴다.
+2. 판을 도는 중에 칭호를 쓸 일이 없다 — 정산 뒤에 한 번 세면 된다.
+3. 이름을 고쳐도 달고 있던 게 안 날아간다. 저장하는 것이 이름이 아니라 키라서다.
+
+대신 **"새로 얻었다"를 알려면 전과 견줘야 한다.** 판을 열 때 `game.titles` 에 키 목록을
+담아 두고(`loadAccounts`), 정산 커밋의 응답(쓰고 난 뒤의 계정)으로 다시 세어 `gained()`
+로 차이를 낸다. **커밋이 실패하면 아무 말도 안 한다** — 저장 안 된 칭호를 알리면 다음
+판에 또 새것으로 나온다.
+
+미겔·마티암은 `npc: false` 로 표시된 칭호(칩 계열 셋)를 못 받는다. `/급여` 로 넣은 칩이
+최고 잔액을 올려서 공짜가 되기 때문이다.
+
+칭호가 보는 카운터는 전부 `BUMP_KEYS`/`MAX_KEYS` 에 있어야 한다. **하나라도 빠지면 그
+칭호는 영영 안 나온다** — 서버가 모르는 카운터를 400 으로 막기 때문에 조용히 사라지지는
+않지만, 정산 한 번이 통째로 거절되므로 그쪽이 더 나쁘다. `check-accounts.js` 가 이 목록을
+통째로 한 번 보낸다.
+
+`/프로필` 의 칭호 탭에서 셀렉트로 골라 단다. **가진 것만 목록에 나온다.** '벗기' 칸의
+값은 빈 문자열이 아니라 `-` 다 — 디스코드가 셀렉트 값을 한 글자 이상으로 막는다.
+
 ## 7. 다음 배치 — 아직 안 만든 것
 
-계정 레코드에 `title`(칭호)과 `items` 자리는 이미 뚫려 있고 `/프로필` 이 그 자리를
-보여준다. 늘 비어 있을 뿐이다.
+계정 레코드의 `items` 자리는 뚫려 있고 `/프로필` 이 그 자리를 보여준다. 늘 비어 있을
+뿐이다. **뽑기·요리·상점 칭호도 같은 명부(`titles.js`)에 `when` 한 줄로 붙인다** —
+`when` 은 전적이 아니라 계정 전체를 받으므로 `account.items` 를 볼 수 있다.
 
 | 명령 | 하는 일 |
 |---|---|

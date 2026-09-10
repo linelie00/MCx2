@@ -5,8 +5,17 @@
  *
  * 명부는 시트에서 옮긴 것이라 손으로 고칠 일이 잦다. **키가 저장되는 값**이라
  * 오타 하나가 남의 창고를 비운다 — 모양이 어긋나면 여기서 걸린다.
+ *
+ * 명부를 보여 주는 `/아이템` 도 같이 본다. 서버를 안 부르는 명령이라 가짜 인터랙션만
+ * 있으면 끝까지 돌아서, 따로 띄울 것이 없다.
  */
 import { ITEMS, ITEM_BY_KEY, MAX_HP, forSale, healOf, findItem } from '../src/casino/items.js';
+
+process.env.DISCORD_TOKEN ||= 'x';
+process.env.DISCORD_CLIENT_ID ||= 'x';
+process.env.DISCORD_GUILD_ID ||= 'x';
+const cmd = (await import('../src/commands/items.js')).default;
+const { width } = await import('../src/text.js');
 
 let ok = 0; let bad = 0;
 const eq = (name, got, want) => {
@@ -63,6 +72,109 @@ eq('잡화 중 제일 비싼 건 루비',
 eq('원석 여섯', ITEMS.filter((i) => i.key.startsWith('ore')).length, 6);
 eq('깨진 값은 안 넘어왔다',
   ['아이스크림', '고고고', '따꼼약', '아무튼 먹으면 죽는거'].filter((n) => findItem(n)), []);
+
+// ---------------------------------------------------------------- /아이템
+// 명부를 보여 주는 쪽도 여기서 같이 본다. 서버를 안 부르는 명령이라 가짜 인터랙션만
+// 있으면 끝까지 돈다.
+
+const show = async (name) => {
+  let out = null;
+  await cmd.execute({
+    options: { getString: () => name, getSubcommand: () => '정보' },
+    async reply(p) { out = p; },
+  });
+  return out;
+};
+const click = async (customId, values) => {
+  let out = null;
+  await cmd.component({ customId, values, async update(p) { out = p; } });
+  return out;
+};
+/** 동기로 한 번 누른다. component 안에 await 이 없어 update 가 그 자리에서 불린다. */
+const click2 = (customId) => {
+  let out = null;
+  cmd.component({ customId, async update(p) { out = p; } });
+  return out;
+};
+const complete = async (typed) => {
+  let got = null;
+  await cmd.autocomplete({ options: { getFocused: () => typed }, async respond(r) { got = r; } });
+  return got;
+};
+const read = (p) => {
+  const e = p?.embeds?.[0]?.data ?? {};
+  const rows = p?.components ?? [];
+  const sel = rows.map((r) => r.components[0]).find((b) => b?.data?.type === 3);
+  return {
+    title: e.title,
+    body: e.description ?? '',
+    footer: e.footer?.text,
+    fields: (e.fields ?? []).map((f) => `${f.name}=${f.value}`),
+    ids: rows.flatMap((r) => r.components.map((b) => b.data.custom_id)),
+    labels: rows.flatMap((r) => r.components.map((b) => b.data.label)).filter(Boolean),
+    options: sel ? sel.options.map((o) => o.data.value) : null,
+  };
+};
+const lines = (body) => body.split(String.fromCharCode(10)).filter((l) => l && !l.startsWith('```'));
+
+console.log('\n/아이템 — 목록');
+let c = read(await show(null));
+eq('전체 99종', c.fields[0], '종류=**99**');
+eq('다섯 쪽', c.fields[1], '쪽=1 / 5');
+eq('한 쪽에 스무 줄', lines(c.body).length, 20);
+eq('갈래 버튼 셋', c.labels.slice(0, 3), ['전체', '소비', '잡화']);
+eq('넘김 버튼', c.labels.slice(3), ['◀', '▶']);
+eq('셀렉트도 스물', c.options.length, 20);
+eq('셀렉트 값은 키', c.options[0], 'potionSmall');
+
+console.log('\n/아이템 — 갈래와 쪽');
+c = read(await click('item:list:use:0'));
+eq('소비만 여덟', c.fields[0], '종류=**8**');
+eq('한 쪽뿐이면 넘김 버튼이 없다', c.labels, ['전체', '소비', '잡화']);
+eq('회복약이 보인다', /소형 회복약/.test(c.body), true);
+eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
+
+c = read(await click('item:list:misc:4'));
+eq('잡화 마지막 쪽', c.fields[1], '쪽=5 / 5');
+eq('마지막 것이 보인다', /메기/.test(c.body), true);
+// 쪽을 넘길 때마다 표가 들썩이면 안 된다 — 줄의 **칸 수**가 어느 쪽에서나 같아야 한다.
+const widths = new Set([0, 1, 2, 3, 4].flatMap(
+  (n) => lines(read(click2(`item:list:misc:${n}`)).body).map(width)));
+eq('쪽을 넘겨도 표 폭이 그대로', widths.size, 1);
+eq('범위를 넘겨도 안 터진다', read(await click('item:list:misc:99')).fields[1], '쪽=5 / 5');
+
+console.log('\n/아이템 — 한 장');
+c = read(await show('potionSmall'));
+eq('이름이 제목', c.title, '🍶 소형 회복약');
+eq('설명이 본문에', /젤린/.test(c.body), true);
+eq('못 파는 것은 그렇게 적는다', /팔 수는 없어요/.test(c.body), true);
+eq('갈래·값·회복 세 칸', c.fields, ['갈래=소비', '값=450골드', '회복=15 ~ 20']);
+eq('돌아갈 버튼 하나', c.labels, ['목록으로']);
+
+c = read(await show('twig'));
+eq('팔 수 있는 것은 양쪽 다', /사기 \*\*1골드\*\* · 팔기 \*\*1골드\*\*/.test(c.body), true);
+eq('깎이는 것은 음수로', c.fields[2], '회복=−1');
+
+c = read(await show('dragonBlood'));
+eq('상점에 없는 것', /상점에 없어요/.test(c.body), true);
+eq('값 칸은 비운다', c.fields[1], '값=_없음_');
+
+eq('회복이 0 이면 푸터가 다르다', read(await show('redFeather')).footer, '먹어도 아무 일 없어요');
+eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**99**');
+
+console.log('\n/아이템 — 고르고 돌아오기');
+c = read(await click('item:pick:misc:3', ['ruby']));
+eq('고른 것이 열린다', c.title, '🎒 루비');
+eq('보던 자리를 들고 돌아간다', c.ids, ['item:list:misc:3']);
+eq('돌아가면 그 쪽이다', read(await click(c.ids[0])).fields[1], '쪽=4 / 5');
+
+console.log('\n/아이템 — 자동완성');
+eq('이름 조각으로', (await complete('회복')).length, 3);
+eq('키로도', (await complete('ore')).length, 6);
+eq('공백은 무시', (await complete('소형회복약')).map((x) => x.value), ['potionSmall']);
+eq('빈 입력은 스물다섯까지', (await complete('')).length, 25);
+eq('돌려주는 값은 키', (await complete('루비')).every((x) => ITEM_BY_KEY[x.value]), true);
+eq('없는 것', await complete('없는물건'), []);
 
 console.log(`\n${bad ? '✗' : '✓'} ${ok + bad}건 중 통과 ${ok} · 실패 ${bad}`);
 process.exit(bad ? 1 : 0);

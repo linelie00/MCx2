@@ -401,6 +401,7 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/출첵` | 누구나 | `POST /api/accounts/claim` |
 | `/급여` | 누구나 | `POST /api/accounts/deltas` |
 | `/프로필` | 누구나 | `GET /api/accounts` · `POST /accounts/title` (카드·전적·칭호·아이템 탭) |
+| `/아이템 정보` | 누구나 | 없음 (명부가 코드 안에 있다) |
 | `/주사위` `/뽑기` | 누구나 | 없음 |
 
 `판` 은 판을 아래에 다시 띄우고, `그만` 은 **판에 앉은 사람이나 판을 연 사람만** 접을 수 있다.

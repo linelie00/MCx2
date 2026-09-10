@@ -12,6 +12,10 @@
  *
  * account shape: { chips, title, items, stats, refilledAt, updatedAt }
  *
+ * `title` 은 **달고 있는 칭호의 키**다. 이름이 아니라 키를 두는 이유는 나중에 칭호
+ * 이름을 고쳐도 달고 있던 게 안 날아가게 하려는 것이고, 무엇이 유효한 키인지는
+ * 서버가 모른다 — 칭호 규칙은 봇에 있다(`casino/titles.js`).
+ *
  * `stats` 는 전적 카운터다. **칩과 똑같이 더하기만 한다** — 그래서 락 없는 이 스토어에
  * 안전하게 쓸 수 있는 유일한 방식(증감)을 그대로 탄다. 최댓값(최고 팟 같은 것)도
  * 순서를 안 타므로 같이 실어도 된다.
@@ -124,16 +128,20 @@ exports.list = (req, res) => {
 
 // ---------------------------------------------------------------- 정산
 
-/** POST /api/accounts/deltas — `{ deltas: { id: ±n } }` */
 /** 카운터 이름. 여기 없는 키는 안 받는다 — 오타 하나로 전적이 둘로 갈리면 못 고친다. */
 const BUMP_KEYS = new Set([
   'hands', 'won', 'earned', 'lost',                 // 공통
   'holdemHands', 'holdemWon', 'blackjackHands', 'blackjackWon', 'blackjacks',
+  'allInWon', 'allInLost', 'allInHigh',             // 올인 — 칭호가 읽는다
+  // 쇼다운에서 깐 족보. **최댓값이 아니라 족보마다 따로** 센다 — 칭호가 묻는 것이
+  // "그 족보를 직접 만들어 봤나" 라서, 최댓값으로 두면 아래가 전부 딸려 온다.
+  'handStraight', 'handFlush', 'handFullHouse', 'handQuads', 'handStraightFlush',
 ]);
 
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
 const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet']);
 
+/** POST /api/accounts/deltas — `{ deltas: { id: ±n }, bump: { id: { 카운터: n } } }` */
 exports.applyDeltas = (req, res) => {
   const deltas = req.body && req.body.deltas;
   if (!deltas || typeof deltas !== 'object' || Array.isArray(deltas)) {
@@ -200,6 +208,37 @@ exports.applyDeltas = (req, res) => {
 };
 
 // ---------------------------------------------------------------- 출첵
+
+/**
+ * POST /api/accounts/title — `{ id, title }`
+ *
+ * 달고 있을 칭호의 키를 바꾼다. `null` 이면 벗는다. **서버는 그 키가 유효한지 모른다** —
+ * 칭호 규칙은 봇에 있고, 이 라우트는 봇만 부른다. 길이와 글자만 본다.
+ */
+exports.setTitle = (req, res) => {
+  const id = String((req.body && req.body.id) || '').trim();
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'id 모양이 아닙니다' });
+
+  const raw = req.body && req.body.title;
+  const title = raw == null || raw === '' ? null : String(raw).trim();
+  if (title !== null && !/^[A-Za-z0-9_-]{1,40}$/.test(title)) {
+    return res.status(400).json({ error: '칭호 키 모양이 아닙니다' });
+  }
+
+  const data = readOr503(res);
+  if (!data) return undefined;
+
+  const acct = normalize(data.accounts[id]);
+  acct.title = title;
+  acct.updatedAt = now();
+  data.accounts[id] = acct;
+  try {
+    store.write(data);
+  } catch (e) {
+    return res.status(503).json({ error: `계정 데이터를 쓰지 못했습니다: ${e.message}` });
+  }
+  return res.json({ accounts: { [id]: publicView(acct) } });
+};
 
 /** POST /api/accounts/claim — `{ id }`. 사람이 `/출첵` 으로 부른다. */
 exports.claim = (req, res) => {

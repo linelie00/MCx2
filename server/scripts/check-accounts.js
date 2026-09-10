@@ -97,6 +97,35 @@ const server = app.listen(0, async () => {
   eq('급여는 그냥 delta 다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].chips, 1000);
   eq('부를 때마다 는다', (await post('/deltas', { deltas: { 'npc:migel': 1000 } })).body.accounts['npc:migel'].chips, 2000);
   eq('NPC 는 출첵 규칙을 안 탄다(사람 기준선 그대로)', DAILY_FLOOR, 1000);
+  // --- 칭호. **이름이 아니라 키를 저장한다** — 나중에 이름을 고쳐도 달고 있던 게 안 날아간다.
+  const t1 = await post('/title', { id: '1000004', title: 'puyo' });
+  eq('칭호가 붙는다', t1.body.accounts['1000004'].title, 'puyo');
+  eq('조회에도 나온다', (await hit('?ids=1000004')).body.accounts['1000004'].title, 'puyo');
+  eq('칭호를 바꿔도 전적은 그대로', t1.body.accounts['1000004'].stats.hands, 2);
+  eq('빈 값이면 벗는다', (await post('/title', { id: '1000004', title: '' })).body.accounts['1000004'].title, null);
+  await post('/title', { id: '1000004', title: 'crown' });
+  eq('null 로도 벗는다', (await post('/title', { id: '1000004', title: null })).body.accounts['1000004'].title, null);
+  eq('한글 이름은 400(키만 받는다)', (await post('/title', { id: '1000004', title: '왕관' })).status, 400);
+  eq('너무 긴 키 400', (await post('/title', { id: '1000004', title: 'x'.repeat(41) })).status, 400);
+  eq('이상한 id 400', (await post('/title', { id: 'drop-table', title: 'crown' })).status, 400);
+  eq('NPC 도 달 수 있다', (await post('/title', { id: 'npc:migel', title: 'firstStep' })).body.accounts['npc:migel'].title, 'firstStep');
+  eq('본문 없으면 400', (await hit('/title', { method: 'POST' })).status, 400);
+  eq('키 없으면 401', (await post('/title', { id: '1000004', title: 'crown' }, { 'X-Bot-Key': 'nope' })).status, 401);
+
+  // --- 칭호가 보는 카운터들. 하나라도 빠지면 그 칭호는 영영 안 나온다.
+  const titleKeys = ['allInWon', 'allInLost', 'allInHigh', 'handStraight', 'handFlush',
+    'handFullHouse', 'handQuads', 'handStraightFlush', 'blackjacks', 'holdemHands', 'blackjackHands'];
+  const tc = await post('/deltas', {
+    deltas: { 1000004: 1 },
+    bump: { 1000004: Object.fromEntries(titleKeys.map((k) => [k, 1])) },
+  });
+  eq('칭호가 보는 카운터를 전부 받는다', tc.status, 200);
+  eq('전부 1 로 쌓였다', titleKeys.map((k) => tc.body.accounts['1000004'].stats[k]), titleKeys.map(() => 1));
+  const bb = await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { bestBet: 1000, bestHand: 5 } } });
+  eq('최대 베팅은 큰 쪽만', bb.body.accounts['1000004'].stats.bestBet, 1000);
+  eq('최고 족보도 큰 쪽만',
+    (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { bestHand: 2 } } })).body.accounts['1000004'].stats.bestHand, 5);
+
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

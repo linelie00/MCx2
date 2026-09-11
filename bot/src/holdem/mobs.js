@@ -169,30 +169,7 @@ export const ELITE_LOOSE_BONUS = 0;
  */
 export const hpOf = (e) => (e.elite
   ? Math.max(100, Math.min(160, 95 + e.seen * 20))
-  : Math.max(45, Math.min(80, 45 + e.seen)));
-
-/**
- * **재생** — 핸드가 끝날 때마다 적이 되찾는 체력. 시작 체력까지만, 쓰러졌으면 안 한다.
- *
- * "둘 다 조금 더 어렵게" 에서 나왔다. 재 보니 **성향(loose·bluff·raise)은 승률을 거의 못
- * 움직였고**(±3%), 체력은 조금, 재생이 제일 크게 움직였다. 적의 체력 상한 때문에 적은 이쪽을
- * 이겨도 불어나지 못하는데, 재생이 있으면 **이쪽이 몰아붙이지 않는 동안** 적이 버틴다 —
- * 조금씩 깎아서는 안 되고 크게 한 번 이겨야 한다.
- *
- * 판 800번씩(체력 100 으로 입장, 적과 같은 엔진, 블라인드 2/4 + 6핸드마다):
- *
- *                     예전                지금
- *   일반    86%  (체력 30~60)      77%  (45~80, 핸드마다 +2)
- *   엘리트  47%  (100~160)         43%  (100~160, 핸드마다 +4)
- *
- * 엘리트는 재생을 6 으로 올려도 40% 로, 더 줄지 않았다(1200판). 체력이 이미 두꺼워서
- * 한 번에 크게 이기는 판으로 끝나는 일이 많다.
- *
- * 적은 지갑이 없어서 재생한 체력은 판 안에서 새로 생긴다 — 이쪽이 이기면 넘긴 몫(골드)으로
- * 조금 더 나간다. 넘긴 몫은 들어올 때 체력을 넘은 것만이라 크지 않다.
- */
-export const REGEN = { normal: 2, elite: 4 };
-export const regenOf = (e) => (e.elite ? REGEN.elite : REGEN.normal);
+  : Math.max(30, Math.min(60, 30 + e.seen)));
 
 /**
  * 던전에 나올 한 마리. `{ …에너미, elite }`.
@@ -227,6 +204,4 @@ export function drawMobs(count, rand = Math.random) {
   return out;
 }
 
-export default {
-  MOBS, NORMALS, drawMobs, drawEnemy, hpOf, regenOf, REGEN, ELITE_CHANCE, ELITE_LOOSE_BONUS, TOTAL,
-};
+export default { MOBS, NORMALS, drawMobs, drawEnemy, hpOf, ELITE_CHANCE, ELITE_LOOSE_BONUS, TOTAL };

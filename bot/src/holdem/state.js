@@ -468,24 +468,14 @@ export function settle(game) {
   // 던전의 적은 **시작 체력을 넘지 못한다.** 이쪽을 이겨 뺏은 몫 가운데 넘치는 것은
   // 흩어진다 — 이쪽을 때려도 적이 낫지는 않는다. 잃었던 만큼 되찾는 것까지는 된다.
   const capped = [];
-  const regen = [];
   if (game.mode === 'dungeon' && game.cap) {
     for (const s of game.seats) {
       const cap = game.cap[s.id];
-      if (s.kind !== 'mob' || cap === undefined) continue;
-      if (s.gold > cap) {
-        capped.push({ name: s.name, cap, burned: s.gold - cap });
-        game.burned = (game.burned ?? 0) + s.gold - cap;   // 판 전체에서 흩어진 몫 — 검사가 센다
-        game.gold.reconcile(s.id, cap);
-        s.gold = cap;
-      } else if (s.regen && s.gold > 0 && s.gold < cap) {
-        // **재생**(mobs.regenOf). 쓰러졌으면 안 한다 — 그 핸드로 판이 끝난다.
-        const hp = Math.min(cap, s.gold + s.regen) - s.gold;
-        regen.push({ name: s.name, hp });
-        game.regened = (game.regened ?? 0) + hp;           // 판 전체에서 되찾은 몫 — 검사가 센다
-        game.gold.reconcile(s.id, s.gold + hp);
-        s.gold += hp;
-      }
+      if (s.kind !== 'mob' || cap === undefined || s.gold <= cap) continue;
+      capped.push({ name: s.name, cap, burned: s.gold - cap });
+      game.burned = (game.burned ?? 0) + s.gold - cap;     // 판 전체에서 흩어진 몫 — 검사가 센다
+      game.gold.reconcile(s.id, cap);
+      s.gold = cap;
     }
   }
 
@@ -504,7 +494,6 @@ export function settle(game) {
       seat: s, name: s.name, net: gain[i] - s.committed, won: gain[i], put: s.committed,
     })),
     capped,
-    regen,
   };
   game.phase = 'settled';
   touch(game);

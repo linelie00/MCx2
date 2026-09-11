@@ -16,7 +16,7 @@ import {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder, MessageFlags,
 } from 'discord.js';
-import { MOBS, NORMALS, ELITE_LOOSE_BONUS, hpOf, regenOf } from '../holdem/mobs.js';
+import { MOBS, NORMALS, ELITE_LOOSE_BONUS, hpOf } from '../holdem/mobs.js';
 import { getAccounts } from '../api.js';
 import { enemiesFor } from '../casino/bag.js';
 import { base, fail, gauge, trunc, THEME_COLOR } from '../embeds.js';
@@ -182,7 +182,7 @@ export function cardPayload(id, book, name, tabKey, page) {
   }).addFields(
     { name: '만남', value: `${num(r.met)}번`, inline: true },
     { name: '처치', value: `${num(r.won ?? 0)}번`, inline: true },
-    { name: '체력', value: wonOf(r) ? `**${hpOf(m)}** · 재생 +${regenOf(m)}` : '🔒', inline: true },
+    { name: '체력', value: wonOf(r) ? `**${hpOf(m)}**` : '🔒', inline: true },
   );
 
   return {

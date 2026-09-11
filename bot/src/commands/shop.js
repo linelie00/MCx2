@@ -35,7 +35,7 @@ import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEMS, ITEM_BY_KEY, CATS } from '../casino/items.js';
 import { isDead, forget } from '../casino/alive.js';
 import { GRADE_BY_KEY } from '../casino/crafts.js';
-import { forgetCrafts, craftLabel } from '../casino/bag.js';
+import { forgetCrafts, forgetBag, craftLabel } from '../casino/bag.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
 export const PREFIX = 'shop';
@@ -389,6 +389,7 @@ async function trade(side, key, count, owner, account) {
     return { embeds: [fail('저장하지 못했어요. 잠시 뒤에 다시 해 주세요.')], flags: MessageFlags.Ephemeral };
   }
   forget(owner);
+  forgetBag(owner);          // /요리 재료 자동완성이 산 것을 바로 보게
 
   const after = saved.accounts[owner];
   const embed = base({

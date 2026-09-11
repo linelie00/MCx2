@@ -33,7 +33,7 @@ import { judge as askJudge } from '../ai/judge.js';
 import { checkRate } from '../ai/client.js';
 import { base, fail, trunc } from '../embeds.js';
 import { displayOf } from '../casino/accounts.js';
-import { forgetCrafts } from '../casino/bag.js';
+import { forgetCrafts, itemsFor } from '../casino/bag.js';
 
 const SLOTS = 5;
 
@@ -64,20 +64,45 @@ function build(label, mode) {
 }
 
 /**
- * 재료 추천. **명부만 보고 계정은 안 본다** — 자동완성도 3초 시한을 탄다.
- * 가진 게 없으면 실행할 때 거절한다. 요리면 재료를, 제작이면 잡화를 앞에 둔다.
+ * 재료 추천. **내가 가진 것만, 개수와 함께.** 요리면 재료를, 제작이면 잡화를 앞에 둔다.
+ *
+ * 처음엔 명부 전체에서 골랐는데, 재료가 아흔을 넘자 25칸에 앞쪽만 들어가 뒤에 들인
+ * 것들이 아예 안 보였다. 가진 것만 보이면 그럴 일도 없고 고르기도 쉽다.
+ *
+ * **다른 칸에 이미 넣은 만큼은 뺀다.** 꿀이 하나뿐인데 재료1 에 꿀을 넣었으면 재료2 에는
+ * 꿀이 안 뜬다. 계정은 짧게 캐시해서 읽고(`casino/bag.js`), 제때 못 읽으면 명부 전체로
+ * 물러선다 — 그래도 칠 수는 있어야 한다. 가졌는지는 실행할 때 한 번 더 본다.
  */
+const norm = (t) => String(t ?? '').replace(/\s+/g, '').toLowerCase();
+
 function autocompleteFor(mode) {
   const first = mode.key === 'cook' ? '재료' : '잡화';
+  const byKind = (a, b) => (a.kind === first ? 0 : 1) - (b.kind === first ? 0 : 1) || a.name.localeCompare(b.name, 'ko');
   return async (interaction) => {
-    const typed = String(interaction.options.getFocused() || '').replace(/\s+/g, '').toLowerCase();
-    const hit = ITEMS
-      .filter((i) => !typed
-        || i.name.replace(/\s+/g, '').toLowerCase().includes(typed)
-        || i.key.toLowerCase().includes(typed))
-      .sort((a, b) => (a.kind === first ? 0 : 1) - (b.kind === first ? 0 : 1));
-    await interaction.respond(hit.slice(0, 25).map((i) => ({
-      name: trunc(`${i.name} · ${i.kind}`, 100),
+    const focused = interaction.options.getFocused(true);
+    const typed = norm(focused?.value);
+    const match = (i) => !typed || norm(i.name).includes(typed) || i.key.toLowerCase().includes(typed);
+
+    const owned = await itemsFor(interaction.user.id);
+    if (!owned) {
+      const hit = ITEMS.filter(match).sort(byKind);
+      await interaction.respond(hit.slice(0, 25).map((i) => ({ name: trunc(`${i.name} · ${i.kind}`, 100), value: i.key })));
+      return;
+    }
+
+    const used = {};
+    for (let i = 1; i <= SLOTS; i += 1) {
+      const slot = `재료${i}`;
+      if (slot === focused?.name) continue;
+      const item = findItem(interaction.options.getString(slot));
+      if (item) used[item.key] = (used[item.key] ?? 0) + 1;
+    }
+    const left = Object.entries(owned)
+      .map(([key, n]) => [ITEM_BY_KEY[key], n - (used[key] ?? 0)])
+      .filter(([item, n]) => item && n > 0 && match(item))
+      .sort(([a], [b]) => byKind(a, b));
+    await interaction.respond(left.slice(0, 25).map(([i, n]) => ({
+      name: trunc(`${i.name} ×${n} · ${i.kind}`, 100),
       value: i.key,
     })));
   };

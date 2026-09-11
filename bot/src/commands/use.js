@@ -36,7 +36,7 @@ import { NPC_CHOICES, resolveTarget } from '../casino/accounts.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEMS, ITEM_BY_KEY, MAX_HP, healOf } from '../casino/items.js';
 import { isDead, forget, deadEmbed } from '../casino/alive.js';
-import { craftsFor, forgetCrafts, craftLabel, CRAFT_VALUE } from '../casino/bag.js';
+import { craftsFor, forgetCrafts, forgetBag, craftLabel, CRAFT_VALUE } from '../casino/bag.js';
 import { GRADE_BY_KEY } from '../casino/crafts.js';
 import { earned, gained } from '../casino/titles.js';
 import { awardCard } from '../casino/titleCard.js';
@@ -296,6 +296,7 @@ async function execute(interaction) {
   }
   forget(me);
   forget(who.id);
+  forgetBag(me);             // 먹은 만큼 창고가 줄었다
 
   // **결과는 응답에서 읽는다.** 서버가 0~최대치로 자르므로 봇의 산수는 틀린다.
   const now = Number(saved.accounts[who.id]?.hp ?? was);

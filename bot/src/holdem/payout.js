@@ -24,13 +24,20 @@ import { MAX_HP } from '../casino/items.js';
 import { one } from '../casino/loot.js';
 
 /**
- * 넘긴 체력을 골드로 바꾸는 값. **체력 1 = 5골드.**
+ * 넘긴 체력을 골드로 바꾸는 값. **체력 1 = 2골드.**
  *
  * 넘긴 체력은 적에게서 뺏은 것이고 적은 지갑이 없다 — 즉 여기서 **골드가 새로 생긴다.**
- * 그래서 값을 짜게 잡았다. 100 에서 시작해 체력 60 짜리를 통째로 뺏어도 300골드로,
- * 던전이 떨구는 골드(20~500)와 비슷한 자리에 머문다.
+ * 처음엔 5 였는데 너무 후했다. 이기면 적의 체력을 거의 통째로 넘기게 되니, 전리품 골드
+ * (일반 평균 135 · 엘리트 299)에 **그만큼이 한 번 더** 얹혔다(일반 ~225 · 엘리트 ~450).
+ * 2 면 일반 ~90 · 엘리트 ~180 으로, 전리품 골드보다 작은 덤이 된다.
  */
-export const OVER_RATE = 5;
+export const OVER_RATE = 2;
+
+/**
+ * 미겔·마티암의 남은 기운을 아이템으로 바꿀 때의 값어치(체력 1 = 5골드어치).
+ * **골드 환산과 따로 둔다** — 골드를 줄이면서 아이템까지 같이 줄일 까닭은 없었다.
+ */
+const ALLY_ITEM_RATE = 5;
 
 /** 최대치를 넘긴 몫. **판 안에만 있는 숫자다** — 서버는 이걸 모른다. */
 export const overOf = (game, id) => Math.max(0, game.gold.get(id) - MAX_HP);
@@ -173,7 +180,7 @@ export async function settleOverflow(game, { rand = Math.random } = {}) {
     const cure = Math.min(over, budget);
     if (cure > 0) { heal.push({ from: id, hp: cure }); budget -= cure; }
     const rest = over - cure;
-    if (rest > 0) { items[id] = lootWorth(rest * OVER_RATE, rand); spare[id] = rest; }
+    if (rest > 0) { items[id] = lootWorth(rest * ALLY_ITEM_RATE, rand); spare[id] = rest; }
   }
   const cured = heal.reduce((a, h) => a + h.hp, 0);
   const summary = { gold, heal, items, spare, to: owner, rate: OVER_RATE };

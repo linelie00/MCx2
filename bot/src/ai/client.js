@@ -150,6 +150,7 @@ export function meter() {
 export async function generate({
   system, contents, temperature = 1.0, maxOutputTokens = 2000,
   model = config.gemini.model, fallback = config.gemini.fallbackModel,
+  json = false,
 }) {
   const ai = getClient();
   if (!ai) throw new Error('GEMINI_API_KEY 가 설정돼 있지 않아요.');
@@ -164,6 +165,8 @@ export async function generate({
       // thinking 하는 모델은 사고 토큰도 이 한도에서 깎아 쓴다. 실제로 400 이었을 때
       // gemini-3.5-flash 가 382토큰을 사고에 쓰고 본문은 18자만 내놓은 채 잘렸다.
       maxOutputTokens,
+      // 판정처럼 **모양이 정해진 답**이 필요할 때. 모델이 JSON 만 내놓게 한다(judge.js).
+      ...(json ? { responseMimeType: 'application/json' } : {}),
     },
   };
 

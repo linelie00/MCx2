@@ -554,6 +554,8 @@ function handStats(game) {
     const bj = mine.filter((r) => r.outcome === 'blackjack').length;
     if (bj) c.blackjacks = bj;
     c.bestBet = Math.max(...mine.map((r) => r.hand.bet));
+    // 소심한 손 — 그 판의 손을 전부 최소 베팅으로 뒀다(더블다운하면 두 배라 안 센다).
+    if (mine.every((r) => r.hand.bet <= game.stakes.minBet)) c.minBetHands = 1;
 
     // 올인은 **걸 때** 표시해 둔다(state.placeBet). 정산 시점에는 이미 돌려받은 뒤라
     // 골드만 봐서는 다 밀었는지 알 수가 없다.

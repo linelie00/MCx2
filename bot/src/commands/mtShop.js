@@ -60,15 +60,16 @@ const owns = (account, t) => t.when(account?.stats ?? {}, account);
 
 function buyPayload(owner, account) {
   const have = Number(account?.mt ?? 0);
+  // 설명도 같이 — 무엇을 사는지 목록에서 바로 보이게. 셀렉트에도 붙어 있지만 펼쳐야 보인다.
   const lines = SHOP_TITLES.map((t) => (owns(account, t)
-    ? `✅ ${stampMd(t)} — _가짐_`
-    : `${stampMd(t)} — **${t.shop.mt} MT**${have < t.shop.mt ? ' 🔒' : ''}`));
+    ? `✅ ${stampMd(t)} — _가짐_\n-# ${t.desc}`
+    : `${stampMd(t)} — **${t.shop.mt} MT**${have < t.shop.mt ? ' 🔒' : ''}\n-# ${t.desc}`));
 
   const embed = base({
     title: '🪙 MT 상점 — 칭호',
     description: `${lines.join('\n')}\n\n_산 칭호는 \`/프로필\` 칭호 탭에서 달 수 있어요._`,
     color: MT_COLOR,
-    footer: 'MT 는 요트 1위 · 토너먼트 우승 · 던전에서 드물게 · 💠💎 요리·제작품에서',
+    footer: 'MT 는 요트 1위 · 토너먼트 1·2위 · 던전에서 드물게 · 💠💎 요리·제작품에서',
   }).addFields(mtField(account));
 
   const rows = [tabRow(owner, 'buy')];

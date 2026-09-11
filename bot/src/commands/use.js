@@ -185,8 +185,17 @@ async function eatCraft(interaction, who, raw) {
     })],
   });
 
-  // 새 칭호 — 먹은 사람(식중독·최후의 만찬)과 먹인 사람(독살 미수)이 따로 받는다.
-  for (const id of Object.keys(bump)) {
+  // 새 칭호 — 먹은 사람(식중독·최후의 만찬·오이쉬)과 먹인 사람(독살 미수)이 따로 받는다.
+  await announce(interaction, who, accounts, saved, Object.keys(bump));
+}
+
+/**
+ * 새 칭호를 알린다. 쓰기 **전** 계정(`accounts`)과 **뒤** 계정(`saved.accounts`)을 견준다 —
+ * 칭호는 저장하지 않고 전적에서 계산하므로. `ids` 는 전적이 움직인 자리.
+ */
+async function announce(interaction, who, accounts, saved, ids) {
+  const me = interaction.user.id;
+  for (const id of ids) {
     const before = accounts[id];
     const after = saved.accounts[id];
     if (!before || !after) continue;
@@ -286,9 +295,13 @@ async function execute(interaction) {
   let heal = 0;
   for (let i = 0; i < count; i += 1) heal += healOf(item);
 
+  // 힐러·용사 — **남에게**, 쓰러진 사람에게 부활의 영약을 먹였을 때 한 번 센다(개수와 상관없이).
+  const revived = !self && item.key === 'potionRevive' && was <= 0 && heal > 0;
+  const bump = revived ? { [me]: { reviveGiven: 1 } } : {};
   const saved = await apply({
     items: { [me]: { [item.key]: -count } },
     hp: { [who.id]: heal },
+    bump,
   });
   if (!saved.ok) {
     await interaction.editReply({ embeds: [fail('저장하지 못했어요. 잠시 뒤에 다시 해 주세요.')] });
@@ -321,6 +334,7 @@ async function execute(interaction) {
       footer: `${sign(now - was)} · 남은 ${item.name} ${num(left)}개`,
     })],
   });
+  await announce(interaction, who, accounts, saved, Object.keys(bump));
 }
 
 export default {

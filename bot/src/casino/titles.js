@@ -56,6 +56,7 @@ export const TITLES = [
   // ---------------------------------------------------------------- 들른 자
   { key: 'firstStep', name: '첫걸음', tier: 1, cond: '한 판이라도 두면', group: '들른 자', desc: 'bard 의 문을 열고 들어왔다.', when: (s) => n(s, 'hands') >= 1 },
   { key: 'hundred', name: '백전', tier: 1, cond: '누적 100핸드', group: '들른 자', desc: '백 번을 겨뤘다. 이겼는지는 별개다.', when: (s) => n(s, 'hands') >= 100 },
+  { key: 'fourHundred', name: '400', tier: 1, cond: '누적 400핸드', group: '들른 자', desc: '사백 번. 어딘가 익숙한 숫자다.', when: (s) => n(s, 'hands') >= 400 },
   { key: 'regular', name: '단골손님', tier: 2, cond: '누적 500핸드', group: '들른 자', desc: '이제 자리를 안 물어봐도 된다.', when: (s) => n(s, 'hands') >= 500 },
   { key: 'allNighter', name: '밤을 새운 자', tier: 2, cond: '누적 2,000핸드', group: '들른 자', desc: '해가 뜨는 걸 여기서 봤다.', when: (s) => n(s, 'hands') >= 2000 },
   { key: 'fixture', name: 'bard의 터줏대감', tier: 3, cond: '누적 5,000핸드', group: '들른 자', desc: '미겔보다 이 가게에 오래 있었을지도 모른다.', when: (s) => n(s, 'hands') >= 5000 },
@@ -79,8 +80,10 @@ export const TITLES = [
   { key: 'doubleDown', name: '두 배로 잃다', tier: 2, cond: '100핸드 이상에서 잃은 것이 딴 것의 두 배', group: '빈 주머니', desc: '딴 것의 두 배를 잃었다. 계산은 맞다.', when: (s) => n(s, 'hands') >= 100 && n(s, 'lost') >= n(s, 'earned') * 2 },
   { key: 'shoved', name: '전부 걸었다가', tier: 1, cond: '올인해서 잃은 판 1회', group: '빈 주머니', desc: '가진 것을 전부 걸었다. 이제 가진 것이 없다.', when: (s) => n(s, 'allInLost') >= 1 },
   { key: 'neverLearns', name: '못 배우는 사람', tier: 2, cond: '올인해서 잃은 판 10회', group: '빈 주머니', desc: '열 번이면 배울 만도 한데.', when: (s) => n(s, 'allInLost') >= 10 },
-  { key: 'smallChange', name: '잔돈', tier: 2, cond: '홀덤 50핸드 이상, 최대 팟 500 미만', group: '빈 주머니', desc: '쉰 판을 했는데 제일 큰 팟이 잔돈이었다.', when: (s) => n(s, 'holdemHands') >= 50 && n(s, 'bestPot') < 500 },
-  { key: 'timidHand', name: '소심한 손', tier: 2, cond: '블랙잭 100핸드 이상, 최대 베팅 100 이하', group: '빈 주머니', desc: '백 판 내내 최소 베팅. 안전한 건 맞다.', when: (s) => n(s, 'blackjackHands') >= 100 && n(s, 'bestBet') <= 100 },
+  // 잔돈·소심한 손은 예전에 "최대 팟 500 미만" · "최대 베팅 100 이하" 였다 — 최댓값이라
+  // **한 번 넘으면 영영 못 얻었다.** 횟수로 바꿔 누구든 언제든 모을 수 있게 했다.
+  { key: 'smallChange', name: '잔돈', tier: 2, cond: '홀덤에서 팟 5BB 이하로 이긴 판 30회', group: '빈 주머니', desc: '잔돈만 서른 번 긁어 왔다. 모으면 돈이다.', when: (s) => n(s, 'smallPotWon') >= 30 },
+  { key: 'timidHand', name: '소심한 손', tier: 2, cond: '블랙잭 최소 베팅으로 100핸드', group: '빈 주머니', desc: '백 판 내내 최소 베팅. 안전한 건 맞다.', when: (s) => n(s, 'minBetHands') >= 100 },
 
   // ---------------------------------------------------------------- 홀덤
   { key: 'reader', name: '판을 읽는 눈', tier: 1, cond: '홀덤 누적 100핸드', group: '홀덤', desc: '홀덤만 백 판. 이제 보이는 게 있다.', when: (s) => n(s, 'holdemHands') >= 100 },
@@ -89,7 +92,7 @@ export const TITLES = [
   { key: 'counting', name: '숫자세기', tier: 1, cond: '스트레이트로 쇼다운', group: '홀덤', desc: '다섯 장이 나란히 이어졌다.', when: (s) => n(s, 'handStraight') >= 1 },
   { key: 'puyo', name: '뿌요뿌요', tier: 1, cond: '플러시로 쇼다운', group: '홀덤', desc: '같은 무늬만 다섯 장. 색이 맞았다.', when: (s) => n(s, 'handFlush') >= 1 },
   { key: 'cozyHouse', name: '아늑한 집', tier: 2, cond: '풀하우스로 쇼다운', group: '홀덤', desc: '셋과 둘이 한 지붕 아래.', when: (s) => n(s, 'handFullHouse') >= 1 },
-  { key: 'fourOwner', name: '네 장의 주인', tier: 3, cond: '포카드로 쇼다운', group: '홀덤', desc: '같은 숫자 네 장. 남은 한 장은 장식이다.', when: (s) => n(s, 'handQuads') >= 1 },
+  { key: 'fourOwner', name: '포카포카', tier: 3, cond: '포카드로 쇼다운', group: '홀덤', desc: '같은 숫자 네 장. 남은 한 장은 장식이다.', when: (s) => n(s, 'handQuads') >= 1 },
   { key: 'crown', name: '왕관', tier: 3, cond: '스트레이트 플러시로 쇼다운', group: '홀덤', desc: '같은 무늬로 이어진 다섯 장. 평생 몇 번이나 볼까.', when: (s) => n(s, 'handStraightFlush') >= 1 },
   { key: 'beastHeart', name: '야수의 심장', tier: 3, cond: '올인한 판을 하이카드로 쇼다운', group: '홀덤', desc: '심장이 패보다 컸다.', when: (s) => n(s, 'allInHigh') >= 1 },
 
@@ -107,6 +110,7 @@ export const TITLES = [
   { key: 'dungeonChef', name: '던전의 셰프', tier: 2, cond: '요리 20회', group: '요리', desc: '모험단의 끼니는 이제 이 사람 손에 달렸다.', when: (s) => n(s, 'cooked') >= 20 },
   { key: 'attemptedPoisoning', name: '독살 미수', tier: 2, cond: '남에게 먹인 요리가 탈을 내면', group: '요리', desc: '일부러 그런 건 아니었다. 아마도.', when: (s) => n(s, 'fedBad') >= 1 },
   { key: 'lastSupper', name: '최후의 만찬', tier: 2, cond: '만든 요리를 먹고 쓰러지면', group: '요리', desc: '마지막 한 입까지 맛있었다.', when: (s) => n(s, 'diedEating') >= 1 },
+  { key: 'oishii', name: '오이쉬', tier: 2, cond: '만든 요리 10번 먹기', group: '요리', desc: '맛있는 건 열 번 먹어도 맛있다.', when: (s) => n(s, 'ateMade') >= 10 },
   { key: 'goldenTongue', name: '황금의 혀', tier: 3, cond: '다이아몬드 요리', group: '요리', desc: '한 입에 모험단이 조용해졌다.', when: (s) => n(s, 'bestCook') >= 5 },
 
   // ---- 제작
@@ -126,8 +130,12 @@ export const TITLES = [
   { key: 'oneShot', name: '한 방', tier: 2, cond: '첫 핸드에 에너미 처치', group: '던전', desc: '카드를 받자마자 끝났다.', when: (s) => n(s, 'quickKill') >= 1 },
   { key: 'hunter', name: '사냥꾼', tier: 2, cond: '에너미 20회 처치', group: '던전', desc: '던전 입구의 발자국 절반이 이 사람 것이다.', when: (s) => n(s, 'dungeonWon') >= 20 },
   { key: 'nemesis', name: '천적', tier: 2, cond: '같은 에너미 5번 처치', group: '던전', desc: '그놈은 이제 이 사람을 보면 도망간다.', when: (s, a) => mostBeaten(a) >= 5 },
-  { key: 'eliteSlayer', name: '엘리트', tier: 3, cond: '엘리트 에너미 처치', group: '던전', desc: '금빛 테를 두른 놈을 눕혔다.', when: (s) => n(s, 'eliteKill') >= 1 },
-  { key: 'eliteHunter', name: '엘리트 사냥꾼', tier: 3, cond: '엘리트 에너미 10회 처치', group: '던전', desc: '금빛 테가 이제는 표적으로 보인다.', when: (s) => n(s, 'eliteKill') >= 10 },
+  { key: 'eliteSlayer', name: '엘리트', tier: 2, cond: '엘리트 에너미 처치', group: '던전', desc: '금빛 테를 두른 놈을 눕혔다.', when: (s) => n(s, 'eliteKill') >= 1 },
+  { key: 'eliteHunter', name: '엘리트 사냥꾼', tier: 3, cond: '엘리트 에너미 20회 처치', group: '던전', desc: '금빛 테가 이제는 표적으로 보인다.', when: (s) => n(s, 'eliteKill') >= 20 },
+
+  // ---- 동료 — 남을 일으켜 세운 것. /사용 으로 쓰러진 사람에게 부활의 영약을 먹여 **일어났을 때만** 센다
+  { key: 'healer', name: '힐러', tier: 1, cond: '쓰러진 사람에게 부활의 영약 1번', group: '동료', desc: '쓰러진 이를 일으켜 세웠다.', when: (s) => n(s, 'reviveGiven') >= 1 },
+  { key: 'trueHero', name: '용사', tier: 3, cond: '쓰러진 사람에게 부활의 영약 10번', group: '동료', desc: '진정한 용사란 이런 것이죠.', when: (s) => n(s, 'reviveGiven') >= 10 },
 
   // ---- MT 상점 — 전적이 아니라 **산 것**이다. `shop.mt` 가 값, `shop.stat` 이 산 기록
   // (`own…` 카운터 — 서버가 모양으로 받는다). 명부에 한 줄 넣으면 상점에 바로 뜬다.
@@ -138,6 +146,7 @@ export const TITLES = [
     ['tailor', '재봉사', 2, 15, '해진 것은 꿰매고, 모자란 것은 덧댄다.'],
     ['baranson', '바란손', 2, 20, '박자를 지킨다. 한 번도 어긋난 적이 없다.'],
     ['dullahan', '듀라한', 2, 20, '머리는 없어도 손은 날렵하다.'],
+    ['captain', '단장', 3, 50, '가져가보시지.'],
     ['adventureSpoils', '모험에서 얻을 수 있는 것들', 3, 100, '돈으로는 못 사는 것들이라, MT 로 샀다.'],
   ].map(([key, name, tier, mt, desc]) => {
     const stat = `own${key[0].toUpperCase()}${key.slice(1)}`;

@@ -309,6 +309,9 @@ const BUMP_KEYS = new Set([
   'eliteKill', 'soloWon', 'dungeonDied',
   // 첫 핸드에 처치 · 미겔·마티암을 둘 다 불러 처치
   'quickKill', 'trioWon',
+  // 쓰러진 남을 부활의 영약으로 일으켰다(힐러·용사) · 홀덤 팟 5BB 이하로 이겼다(잔돈) ·
+  // 블랙잭 최소 베팅으로 둔 판(소심한 손)
+  'reviveGiven', 'smallPotWon', 'minBetHands',
 ]);
 
 /**

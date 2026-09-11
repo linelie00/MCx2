@@ -460,6 +460,8 @@ function handStats(game, results) {
     const c = { hands: 1, holdemHands: 1 };
     if (r.net > 0) { c.won = 1; c.holdemWon = 1; c.earned = r.net; } else if (r.net < 0) c.lost = -r.net;
     if (r.won > 0) c.bestPot = r.won;
+    // 잔돈 — 블라인드 몇 개어치 팟으로 이겼다. 판돈 등급마다 크기가 달라서 BB 로 잰다.
+    if (r.net > 0 && r.won <= game.stakes.bb * 5) c.smallPotWon = 1;
 
     if (r.seat.allIn) {
       if (r.net > 0) c.allInWon = 1; else if (r.net < 0) c.allInLost = 1;

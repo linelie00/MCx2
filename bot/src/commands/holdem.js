@@ -22,7 +22,7 @@ import { live } from '../holdem/rules.js';
 import { loadAccounts, buyIn } from '../casino/wallet.js';
 import * as payout from '../holdem/payout.js';
 import { roll, listText, TIER as LOOT } from '../casino/loot.js';
-import { ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
+import { ITEM_BY_KEY } from '../casino/items.js';
 import { forget, deadEmbed } from '../casino/alive.js';
 import { forgetBag as forgetBook } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
@@ -865,8 +865,10 @@ const dungeonHowto = (game, mob, hp) => ((tier) => base({
     '한쪽이 0 이 되면 끝나고, **0 이 된 쪽은 쓰러집니다.**',
     `블라인드는 **${game.stakes.sb}/${game.stakes.bb}** 에서 시작해 **${LEVEL_EVERY}핸드마다** 올라요`
     + ' — 오래 버틸수록 한 핸드가 비싸집니다.',
-    `뺏은 체력이 **${MAX_HP}** 를 넘어도 판 안에서는 그대로 걸 수 있어요. 판이 끝나면 넘긴 몫은`
-    + ` — 그쪽 것은 **체력 1 = ${payout.OVER_RATE}골드**, 미겔·마티암 것은 **그쪽 체력을 고치고** 남으면 아이템이 됩니다.`,
+    `**누구도 들어올 때 체력보다 강해지지 않아요.** 이겨도 계정 체력은 들어올 때(**${hp}**)까지만 돌아와요.`
+    + ` 넘긴 몫은 판 안에서는 그대로 걸 수 있고, 끝나면 그쪽 것은 **체력 1 = ${payout.OVER_RATE}골드**,`
+    + ' 미겔·마티암 것은 **그쪽 체력을 고치고** 남으면 아이템이 됩니다.',
+    `${mob.name} 도 시작 체력(**${hpOf(mob)}**)을 넘지 못해요 — 그쪽을 때려도 적이 낫지는 않아요.`,
     '',
     '핸드가 끝날 때마다 **[다음 핸드]** 로 이어가거나 **[도망]** 으로 물러날 수 있어요.',
     '물러나면 그때까지의 체력 그대로 나갑니다.',

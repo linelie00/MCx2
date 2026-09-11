@@ -241,7 +241,18 @@ export function boardEmbed(game) {
       .map((r) => {
         const sign = r.net > 0 ? `+${r.net}` : String(r.net);
         return `**${r.name ?? r.seat.name}** \`${sign}\``;
-      }), '');
+      }));
+    // 던전 — 적은 시작 체력을 넘지 못한다(state.settle). 숫자가 갑자기 줄어 보이지 않게 적는다.
+    lines.push(...(game.results.capped ?? []).map((c) => `🩸 **${c.name}** — 시작 체력 **${c.cap}** 까지만 · 흩어진 몫 **${c.burned}**`));
+    // 들어올 때 체력을 넘긴 몫. 판 안에서는 걸 수 있고 끝나면 정산된다.
+    if (game.mode === 'dungeon' && game.cap) {
+      for (const s of game.seats) {
+        const cap = game.cap[s.id];
+        if (s.kind === 'mob' || cap === undefined || s.gold <= cap) continue;
+        lines.push(`✨ **${s.name}** — 들어올 때 **${cap}** · 넘긴 몫 **${s.gold - cap}** (끝나면 정산)`);
+      }
+    }
+    lines.push('');
   }
 
   lines.push(seatTable(game));

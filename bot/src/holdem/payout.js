@@ -39,8 +39,14 @@ export const OVER_RATE = 2;
  */
 const ALLY_ITEM_RATE = 5;
 
-/** 최대치를 넘긴 몫. **판 안에만 있는 숫자다** — 서버는 이걸 모른다. */
-export const overOf = (game, id) => Math.max(0, game.gold.get(id) - MAX_HP);
+/**
+ * 그 자리의 상한 — **들어올 때 체력**(state.start 의 `game.cap`). 60 으로 들어오면 60 이다.
+ * 기록이 없으면 최대치. 최대치보다 클 수는 없다(서버가 거기서 자른다).
+ */
+export const capOf = (game, id) => Math.min(game.cap?.[id] ?? MAX_HP, MAX_HP);
+
+/** 상한을 넘긴 몫. **판 안에만 있는 숫자다** — 서버는 이걸 모른다. */
+export const overOf = (game, id) => Math.max(0, game.gold.get(id) - capOf(game, id));
 
 /**
  * 지원군(미겔·마티암)이 넘친 기운으로 오너를 고칠 때, **오너가 잃은 체력의 몇 할까지.**
@@ -99,15 +105,14 @@ export async function hand(game, stats = {}) {
 /**
  * 던전 한 핸드. 체력만 쓴다.
  *
- * **서버는 체력을 최대치에서 자른다.** 그래서 장부의 증감을 그대로 보내면 넘긴 몫이
- * 잘려 나가고, 응답으로 장부를 맞추는 순간 **판 안의 스택까지 100 으로 끌려 내려온다** —
- * 애써 뺏은 체력이 핸드마다 사라진다.
- *
- * 그래서 **보내는 것은 최대치까지만**이고, 넘긴 몫은 판 안에만 둔다. 그 몫은 그대로
- * 다시 걸 수 있고, 판이 끝날 때 `settleOverflow` 가 한 번에 정산한다.
+ * **서버에 보내는 것은 상한(들어올 때 체력)까지만**이다. 넘긴 몫은 판 안에만 두고 그대로
+ * 다시 걸 수 있으며, 판이 끝날 때 `settleOverflow` 가 한 번에 정산한다. 60 으로 들어와
+ * 적을 이기고 110 이 돼도 계정은 60 이다 — 던전이 공짜 회복이 되지 않게.
+ * (상한이 최대치였을 때 생긴 까닭도 그대로다 — 서버는 최대치에서 자르므로, 증감을 그대로
+ * 보내면 넘긴 몫이 잘리고 응답으로 장부를 맞추는 순간 판 안의 스택까지 끌려 내려온다.)
  *
  * 보낼 몫은 **서버에 들어 있는 값과 견줘서** 잰다(`game.stored`). 그래야 목표가 늘
- * 0~최대치 안이라 서버가 자를 일이 아예 없다 — 자르지 않으면 어긋날 일도 없다.
+ * 0~상한 안이라 서버가 자를 일이 아예 없다 — 자르지 않으면 어긋날 일도 없다.
  */
 async function dungeonHand(game) {
   expect(game, 'hp');
@@ -118,8 +123,8 @@ async function dungeonHand(game) {
   for (const [id, n] of Object.entries(want)) {
     if (id.startsWith('mob:')) continue;
     // 처음 보는 id 는 지금 값을 기준으로 삼는다. 기준 없이 보내면 남의 체력을 밀어낸다.
-    if (stored[id] === undefined) { stored[id] = Math.min(n, MAX_HP); continue; }
-    const d = Math.min(n, MAX_HP) - stored[id];
+    if (stored[id] === undefined) { stored[id] = Math.min(n, capOf(game, id)); continue; }
+    const d = Math.min(n, capOf(game, id)) - stored[id];
     if (d) hp[id] = d;
   }
   if (!Object.keys(hp).length) return { ok: true, accounts: {} };
@@ -132,7 +137,7 @@ async function dungeonHand(game) {
     if (got === undefined) continue;
     stored[id] = got;
     // 넘긴 몫은 서버가 모르니 응답 위에 그대로 얹는다.
-    game.gold.reconcile(id, got + Math.max(0, want[id] - MAX_HP));
+    game.gold.reconcile(id, got + Math.max(0, want[id] - capOf(game, id)));
   }
   for (const seat of game.seats) {
     if (seat.kind === 'mob') continue;
@@ -143,7 +148,7 @@ async function dungeonHand(game) {
 }
 
 /**
- * 넘긴 체력을 정산한다. **판이 끝날 때 한 번** — 이기든 도망치든 방치로 닫히든.
+ * 상한(들어올 때 체력)을 넘긴 체력을 정산한다. **판이 끝날 때 한 번** — 이기든 도망치든 방치로 닫히든.
  * 교체할 때는 안 한다. 쉬는 동안에도 장부에 남아, 다시 불려 나오면 그대로 걸 수 있다.
  *
  * 누구의 몫이냐에 따라 가는 곳이 다르다.
@@ -154,8 +159,11 @@ async function dungeonHand(game) {
  *
  * **쓰러진 오너는 못 고친다.** 부활은 부활의 영약으로만이다. 그때는 전부 아이템이 된다.
  *
- * 한 번의 쓰기로 골드·오너 체력·아이템이 같이 간다. 서버의 체력은 이미 최대치에 멈춰
- * 있으므로 지원군의 체력은 안 쓴다 — 장부만 최대치로 내린다.
+ * 한 번의 쓰기로 골드·오너 체력·아이템이 같이 간다. 서버의 체력은 이미 상한에 멈춰
+ * 있으므로 지원군의 체력은 안 쓴다 — 장부만 상한으로 내린다.
+ *
+ * **지원군의 치료는 들어올 때 체력을 넘어 고칠 수 있다**(최대치의 잃은 몫 기준). 판 안에서
+ * 체력을 되찾는 유일한 길이라, 미겔·마티암을 부를 까닭이 된다.
  *
  * `{ ok, gold: { id: 골드 }, heal: [{ from, hp }], items: { id: { 키: 개수 } }, spare: { id: 체력 }, to, rate }`.
  */
@@ -164,8 +172,9 @@ export async function settleOverflow(game, { rand = Math.random } = {}) {
 
   const owner = game.owner;
   const ids = Object.keys(game.gold.snapshot()).filter((id) => !id.startsWith('mob:'));
-  const ownerNow = owner ? game.gold.get(owner) : 0;
-  // 고쳐 줄 수 있는 몫. 넘친 오너는 잃은 게 없고, 쓰러진 오너는 고칠 수 없다.
+  // 오너의 **실제 체력**. 상한을 넘긴 몫은 골드가 될 것이라 치료의 기준에서 뺀다.
+  const ownerNow = owner ? Math.min(game.gold.get(owner), capOf(game, owner)) : 0;
+  // 고쳐 줄 수 있는 몫. 최대치를 기준으로 잃은 것의 절반. 쓰러진 오너는 고칠 수 없다.
   let budget = ownerNow > 0 ? Math.ceil(Math.max(0, MAX_HP - ownerNow) * ALLY_HEAL_SHARE) : 0;
 
   const gold = {};
@@ -193,9 +202,9 @@ export async function settleOverflow(game, { rand = Math.random } = {}) {
   });
   if (!saved.ok) return { ok: false, ...summary };
 
-  // 장부를 맞춘다. 넘긴 사람은 최대치로, 고침을 받은 오너는 그만큼 위로.
+  // 장부를 맞춘다. 넘긴 사람은 상한으로, 고침을 받은 오너는 그만큼 위로.
   for (const id of ids) {
-    if (overOf(game, id)) game.gold.reconcile(id, MAX_HP);
+    if (overOf(game, id)) game.gold.reconcile(id, capOf(game, id));
   }
   if (cured) {
     game.gold.reconcile(owner, ownerNow + cured);
@@ -262,5 +271,5 @@ export const dungeonLost = (id, died = id) => apply({
 export const metEnemy = (id, foe) => apply({ enemies: { [id]: { [foe]: { met: 1 } } } });
 
 export default {
-  hand, finishTourney, dungeonWon, dungeonLost, metEnemy, settleOverflow, overOf, OVER_RATE, ALLY_HEAL_SHARE,
+  hand, finishTourney, dungeonWon, dungeonLost, metEnemy, settleOverflow, overOf, capOf, OVER_RATE, ALLY_HEAL_SHARE,
 };

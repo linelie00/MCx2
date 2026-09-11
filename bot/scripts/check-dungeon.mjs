@@ -18,7 +18,7 @@
 import assert from 'node:assert/strict';
 import * as hold from '../src/holdem/state.js';
 import { ledger } from '../src/casino/wallet.js';
-import { overOf, OVER_RATE } from '../src/holdem/payout.js';
+import { overOf, capOf, OVER_RATE } from '../src/holdem/payout.js';
 import { boardEmbed } from '../src/holdem/render.js';
 import { DUNGEON, STAKES, atLevel } from '../src/casino/stakes.js';
 import { MAX_HP } from '../src/casino/items.js';
@@ -112,20 +112,25 @@ function runDungeon(channelId, startHp, mobHp) {
     if (!playHand(game)) break;
     hands += 1;
 
-    // payout.dungeonHand 이 하는 일 그대로 — **서버에는 최대치까지만** 보내고,
-    // 넘긴 몫은 판 안에 남겨 둔다. 보낼 몫은 서버에 들어 있는 값과 견줘서 잰다.
+    // payout.dungeonHand 이 하는 일 그대로 — **서버에는 상한(들어올 때 체력)까지만**
+    // 보내고, 넘긴 몫은 판 안에 남겨 둔다. 보낼 몫은 서버에 들어 있는 값과 견줘서 잰다.
     const want = game.gold.snapshot();
     const hp = {};
     for (const [id, n] of Object.entries(want)) {
       if (id.startsWith('mob:')) continue;
-      const d = Math.min(n, MAX_HP) - game.stored[id];
+      const d = Math.min(n, capOf(game, id)) - game.stored[id];
       if (d) hp[id] = d;
     }
     server.apply({ hp });
     for (const id of Object.keys(hp)) {
       game.stored[id] = server.bal.hp[id];
-      game.gold.reconcile(id, server.bal.hp[id] + Math.max(0, want[id] - MAX_HP));
+      game.gold.reconcile(id, server.bal.hp[id] + Math.max(0, want[id] - capOf(game, id)));
     }
+    // 적은 시작 체력을 넘지 않는다(state.settle) — 매 핸드 끝에서 본다.
+    const mobSeat = game.seats.find((s) => s.kind === 'mob');
+    assert.ok(mobSeat.gold <= mobHp, `적이 시작 체력 ${mobHp} 를 넘어 ${mobSeat.gold} 이다`);
+    // 서버의 체력은 들어올 때 체력을 넘지 않는다 — 던전이 공짜 회복이 되면 안 된다.
+    assert.ok(server.bal.hp[ME] <= startHp, `들어올 때 ${startHp} 였는데 서버가 ${server.bal.hp[ME]} 이다`);
     for (const seat of game.seats) {
       if (seat.kind === 'mob') continue;
       seat.gold = game.gold.get(seat.id);
@@ -148,16 +153,35 @@ check('골드를 한 푼도 안 건드린다', () => {
   }
 });
 
-check('체력 총합이 언제나 보존된다', () => {
-  // 천장에 닿든 안 닿든 한 톨도 새면 안 된다. **넘긴 몫은 판 안에 남기 때문이다** —
-  // 예전에는 여기서 초과분이 사라져서, 최대치 위로는 아무리 뺏어도 소용이 없었다.
+check('체력 총합이 보존된다 — 적이 넘겨 흩어진 몫까지 세면', () => {
+  // 한 톨도 새면 안 된다. **이쪽이 넘긴 몫은 판 안에 남고**, 적이 시작 체력을 넘긴 몫만
+  // 흩어진다(state.settle 이 game.burned 에 센다). 둘을 더하면 처음과 같아야 한다.
+  let sawBurn = false;
   for (const [start, mobHp] of [[60, 40], [100, 80], [MAX_HP, MAX_HP]]) {
     for (let i = 0; i < ROUNDS; i += 1) {
       const { game } = runDungeon(`ds-${start}-${mobHp}-${i}`, start, mobHp);
-      const total = game.seats.reduce((a, s) => a + s.gold, 0);
+      const total = game.seats.reduce((a, s) => a + s.gold, 0) + (game.burned ?? 0);
       assert.equal(total, start + mobHp, `${start}+${mobHp} 인데 총합이 ${total} 이 됐다`);
+      if (game.burned) sawBurn = true;
     }
   }
+  assert.ok(sawBurn, '적이 한 번도 시작 체력을 넘기지 않았다 — 검사가 흩어지는 길을 못 봤다');
+});
+
+check('60 으로 들어오면 이겨도 계정은 60 까지', () => {
+  // 예전에는 이기면 적의 체력이 통째로 넘어와 100 이 되어 나왔다.
+  let sawWin = false;
+  for (let i = 0; i < ROUNDS * 2; i += 1) {
+    const { server, game, me } = runDungeon(`d60-${i}`, 60, 40);
+    const mob = game.seats.find((s) => s.kind === 'mob');
+    if (mob.gold > 0) continue;
+    sawWin = true;
+    // 이겼어도 60 아래일 수 있다 — 적이 넘겨 흩어진 몫은 돌아오지 않는다.
+    const seat = game.seats.find((s) => s.id === me);
+    assert.equal(server.bal.hp[me], Math.min(seat.gold, 60), `이겼는데 계정 체력이 ${server.bal.hp[me]} 이다`);
+    assert.equal(overOf(game, me), Math.max(0, seat.gold - 60), '넘긴 몫이 들어올 때 체력 기준이 아니다');
+  }
+  assert.ok(sawWin, '한 번도 못 이겼다');
 });
 
 check('넘긴 몫은 판 안에만 있다', () => {
@@ -168,7 +192,7 @@ check('넘긴 몫은 판 안에만 있다', () => {
     const { server, game, me } = runDungeon(`dm-${i}`, 100, 80);
     const seat = game.seats.find((s) => s.id === me);
     assert.ok(server.bal.hp[me] <= MAX_HP, `서버 체력이 ${server.bal.hp[me]} 이다`);
-    assert.equal(server.bal.hp[me], Math.min(seat.gold, MAX_HP), '서버와 자리가 어긋난다');
+    assert.equal(server.bal.hp[me], Math.min(seat.gold, capOf(game, me)), '서버와 자리가 어긋난다');
     if (seat.gold > MAX_HP) sawOver = true;
   }
   assert.ok(sawOver, `${ROUNDS}판을 돌렸는데 최대치를 넘긴 판이 하나도 없다`);
@@ -178,7 +202,7 @@ check('서버 체력과 자리 값이 같다', () => {
   for (let i = 0; i < ROUNDS; i += 1) {
     const { server, game, me } = runDungeon(`dh-${i}`, 100, 80);
     const seat = game.seats.find((s) => s.id === me);
-    assert.equal(server.bal.hp[me], Math.min(seat.gold, MAX_HP), '서버와 자리가 어긋난다');
+    assert.equal(server.bal.hp[me], Math.min(seat.gold, capOf(game, me)), '서버와 자리가 어긋난다');
     assert.deepStrictEqual(game.gold.deltas(), { [me]: 0, [game.seats[1].id]: 0 },
       '리베이스 뒤에 밀린 몫이 남았다');
   }

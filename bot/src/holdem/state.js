@@ -123,7 +123,8 @@ export function create({
     knocked: [],         // 탈락한 순서(먼저 나간 사람이 앞). 토너먼트 등수가 이걸 쓴다
     owner: null,         // 던전 주인. 자리를 갈아 끼우면 seatOf 로는 못 알아본다
     reserves: [],        // 던전에 데려온 지원군 id. 장부에 실려 있고 자리에는 없다
-    stored: null,        // 던전: **서버에 실제로 들어 있는 체력**. 장부는 최대치를 넘길 수 있다
+    stored: null,        // 던전: **서버에 실제로 들어 있는 체력**. 장부는 상한을 넘길 수 있다
+    cap: null,           // 던전: 자리마다 **들어올 때 체력** — 그 판에서 강해질 수 있는 끝
     gold: null,         // 동기 장부(wallet.ledger)
     pendingChat: [],
     startedAt: Date.now(),   // 토너먼트 벽시계 상한이 본다
@@ -231,7 +232,15 @@ export function start(game, balances) {
   // 던전은 **장부가 서버보다 클 수 있다** — 적에게서 뺏은 체력이 최대치를 넘겨도 판
   // 안에서는 그대로 걸 수 있다. 서버에 무엇이 들어 있는지 따로 들고 있어야 매 핸드
   // 보낼 몫을 잴 수 있다(holdem/payout.js).
-  if (game.mode === 'dungeon') game.stored = { ...balances };
+  if (game.mode === 'dungeon') {
+    game.stored = { ...balances };
+    // **누구든 들어올 때 체력보다 강해지지 않는다.** 이기면 적의 체력이 통째로 넘어와,
+    // 60 으로 들어가도 이기면 100 이 되어 나왔다(던전이 공짜 회복이 됐다). 적은 거꾸로
+    // 이쪽을 이길수록 스택이 불어 한 번 밀리면 계속 밀렸다.
+    //   사람·미겔·마티암  넘긴 몫도 판 안에서는 걸 수 있다. 끝날 때 정산(payout.settleOverflow)
+    //   적                넘긴 몫이 **그 자리에서 흩어진다**(settle)
+    game.cap = { ...balances };
+  }
   for (const s of game.seats) s.gold = game.gold.get(s.id);
   if (game.seats.filter((s) => s.gold >= game.stakes.bb).length < 2) {
     return '빅블라인드를 낼 수 있는 사람이 둘은 있어야 해요.';
@@ -456,6 +465,20 @@ export function settle(game) {
     s.gold = game.gold.get(s.id);
   }
 
+  // 던전의 적은 **시작 체력을 넘지 못한다.** 이쪽을 이겨 뺏은 몫 가운데 넘치는 것은
+  // 흩어진다 — 이쪽을 때려도 적이 낫지는 않는다. 잃었던 만큼 되찾는 것까지는 된다.
+  const capped = [];
+  if (game.mode === 'dungeon' && game.cap) {
+    for (const s of game.seats) {
+      const cap = game.cap[s.id];
+      if (s.kind !== 'mob' || cap === undefined || s.gold <= cap) continue;
+      capped.push({ name: s.name, cap, burned: s.gold - cap });
+      game.burned = (game.burned ?? 0) + s.gold - cap;     // 판 전체에서 흩어진 몫 — 검사가 센다
+      game.gold.reconcile(s.id, cap);
+      s.gold = cap;
+    }
+  }
+
   // **화면에 쓸 것은 여기서 떠 둔다.** 정산 결과는 다음 핸드를 누를 때까지 화면에
   // 남아 있는데, 그 사이에 던전에서 자리를 갈아 끼울 수 있다(swapFighter). 자리
   // 객체를 그대로 들고 있으면 **앞 사람이 잃은 몫이 지원군 이름으로 다시 그려진다** —
@@ -470,6 +493,7 @@ export function settle(game) {
     rows: game.seats.map((s, i) => ({
       seat: s, name: s.name, net: gain[i] - s.committed, won: gain[i], put: s.committed,
     })),
+    capped,
   };
   game.phase = 'settled';
   touch(game);

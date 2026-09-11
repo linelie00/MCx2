@@ -148,7 +148,9 @@ export function resultEmbed(mode, craft, { parts, total, capped, by, poison, who
     title: `${g.emoji} ${g.label} — ${craft.name}`,
     description: [...lines, '', worth.join(' · ')].join('\n'),
     color: g.color,
-    footer: `${who}의 ${mode.verb} · 재료 ${names.join(' · ')}`,
+    // 가운뎃점이 겹치면 어디서 끊기는지 안 보인다. 누가 만들었는지와 재료를 `/` 로 가르고,
+    // 재료끼리는 쉼표로 잇는다.
+    footer: `${who}의 ${mode.verb} / 재료 ${names.join(', ')}`,
   });
 }
 
@@ -281,7 +283,9 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
   const who = displayOf(me, { user: interaction.user, member: interaction.member }).name;
   await interaction.editReply({
     embeds: [resultEmbed(mode, { ...craft, verdict: answer.judged.verdict }, {
-      parts, total, capped, by, poison, who, names: keys.map((k) => ITEM_BY_KEY[k].name),
+      parts, total, capped, by, poison, who,
+      // 같은 재료를 여러 칸에 넣었으면 `멧돼지 갈비 ×2` 로 묶는다.
+      names: Object.entries(counts).map(([k, n]) => `${ITEM_BY_KEY[k].name}${n > 1 ? ` ×${n}` : ''}`),
     })],
   });
 

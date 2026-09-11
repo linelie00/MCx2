@@ -49,7 +49,7 @@ function build(label, mode) {
   const b = new SlashCommandBuilder()
     .setName(label)
     .setDescription(mode.key === 'cook'
-      ? '재료로 요리합니다. 제미나이가 채점하고 주사위가 솜씨를 정합니다.'
+      ? '재료로 요리합니다. 제미나이가 채점하고 🎲 가 그날의 실력을 정합니다.'
       : '재료로 물건을 만듭니다(보석 가공·장신구·도구…). 제미나이가 채점합니다.')
     .addStringOption((o) => o.setName('결과물').setDescription('무엇을 만들지')
       .setRequired(true).setMaxLength(40))
@@ -129,8 +129,8 @@ export function resultEmbed(mode, craft, { parts, total, capped, by, poison, who
   ];
   if (craft.verdict) lines.push('', `> ${craft.verdict}`);
   if (capped && by === 'dice') {
-    lines.push('', `_점수는 ${capped.emoji} ${capped.label}감이었지만 주사위가 모자랐어요`
-      + ` (${capped.dice} 이상이어야 해요)._`);
+    lines.push('', `_점수는 ${capped.emoji} ${capped.label}감이었지만 실력이 모자랐어요`
+      + ` (🎲 ${capped.dice} 이상이어야 해요)._`);
   }
   if (capped && by === 'poison') {
     const cap = GRADE_BY_KEY[POISON_CAP];

@@ -78,7 +78,11 @@ export const poisonOf = (keys) => Math.max(0, ...keys.map((k) => ITEM_BY_KEY[k]?
 export const monstrous = (keys) => keys.some((k) => ITEM_BY_KEY[k]?.monster);
 
 /** 점수 칸의 이름. 결과 화면이 쓴다. */
-export const PART_LABEL = { fit: '합당함', craft: '조리', look: '모양', dice: '주사위' };
+/**
+ * 점수 칸의 이름. **굴림 칸은 "실력" 이라 부른다** — 화면에 "주사위 27/30" 이 뜨면 운으로
+ * 점수를 받은 것처럼 읽힌다. 굴림은 그날의 손놀림이다. 🎲 아이콘과 숫자는 그대로 보여 준다.
+ */
+export const PART_LABEL = { fit: '합당함', craft: '조리', look: '모양', dice: '실력' };
 export const partLabel = (mode, part) => (mode.key === 'craft' && part === 'craft' ? '과정' : PART_LABEL[part]);
 
 /** 한 사람이 들고 있을 수 있는 만든 것. **서버의 MAX_CRAFTS 와 같아야 한다**(셀렉트 한 칸 = 25). */

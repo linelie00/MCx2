@@ -32,8 +32,10 @@ import { ITEMS } from './items.js';
  *   mt          MT 가 나올 확률
  */
 export const TIER = {
-  normal: { least: 2, most: 5, soft: 8, gold: [20, 250], mt: 0.03 },
-  elite: { least: 4, most: 8, soft: 60, gold: [100, 500], mt: 0.15 },
+  // 골드는 줄였다(일반 20~250 · 엘리트 100~500 → 지금). 이기면 무조건 나오는 몫이라,
+  // 넘긴 체력 골드와 합쳐 던전 한 판이 카지노 몇 판어치씩 벌어 왔다.
+  normal: { least: 2, most: 5, soft: 8, gold: [10, 100], mt: 0.03 },
+  elite: { least: 4, most: 8, soft: 60, gold: [50, 200], mt: 0.15 },
 };
 
 /** 뽑기 풀에 드는 갈래. */

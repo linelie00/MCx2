@@ -244,13 +244,23 @@ export async function finishTourney(game, winnerId) {
  *   foe    쓰러뜨린 에너미 이름 — 도감에 "이겼다" 를 적는다(성향이 드러난다)
  *   elite  엘리트였는지 — `엘리트` 칭호
  *   solo   지원군을 한 번도 안 불렀는지 — `솔플` 칭호
+ *   quick  첫 핸드에 끝냈는지 — `한 방` 칭호
+ *   trio   미겔·마티암을 둘 다 불렀는지 — `삼총사` 칭호
  */
-export const dungeonWon = (id, drops, { foe = null, elite = false, solo = false } = {}) => apply({
+export const dungeonWon = (id, drops, {
+  foe = null, elite = false, solo = false, quick = false, trio = false,
+} = {}) => apply({
   items: { [id]: drops.items },
   deltas: drops.gold ? { [id]: drops.gold } : {},
   mt: drops.mt ? { [id]: drops.mt } : {},
   bump: {
-    [id]: { dungeonWon: 1, ...(elite ? { eliteKill: 1 } : {}), ...(solo ? { soloWon: 1 } : {}) },
+    [id]: {
+      dungeonWon: 1,
+      ...(elite ? { eliteKill: 1 } : {}),
+      ...(solo ? { soloWon: 1 } : {}),
+      ...(quick ? { quickKill: 1 } : {}),
+      ...(trio ? { trioWon: 1 } : {}),
+    },
   },
   enemies: foe ? { [id]: { [foe]: { won: 1 } } } : {},
 });

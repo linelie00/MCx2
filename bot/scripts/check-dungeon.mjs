@@ -378,7 +378,7 @@ check('두 통을 따로 뽑는다', () => {
   assert.ok(NORMALS.some((m) => names.has(m.name)), '일반이 한 번도 안 나왔다');
 });
 
-check('던전 엘리트만 무르게, 표는 그대로', () => {
+check('던전 엘리트 보정은 표에 안 샌다', () => {
   // 더한 값이 표에 새면 현금 판 모브까지 물러진다.
   const raw = new Map(MOBS.map((m) => [m.name, m.loose]));
   let elites = 0;

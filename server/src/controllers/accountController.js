@@ -307,6 +307,8 @@ const BUMP_KEYS = new Set([
   'burnt', 'craftBroke', 'monsterDish', 'ateMade', 'foodSick', 'diedEating', 'fedBad',
   // 던전 칭호가 읽는다. 엘리트를 눕혔다 · 지원군 없이 이겼다 · 싸우던 자리가 쓰러졌다
   'eliteKill', 'soloWon', 'dungeonDied',
+  // 첫 핸드에 처치 · 미겔·마티암을 둘 다 불러 처치
+  'quickKill', 'trioWon',
 ]);
 
 /**

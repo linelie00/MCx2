@@ -640,7 +640,12 @@ async function finishDungeon(game) {
     // 엘리트를 눕히면 가짓수도 값도 MT 확률도 오른다(casino/loot.js).
     const drops = roll(Math.random, { elite: Boolean(mob?.elite) });
     const saved = await payout.dungeonWon(id, drops, {
-      foe: mob?.name, elite: Boolean(mob?.elite), solo: !game.allyUsed,
+      foe: mob?.name,
+      elite: Boolean(mob?.elite),
+      solo: !game.allyUsed,
+      // 이긴 뒤에는 새 핸드를 안 연다(beginHand 가 번호를 올리기 전에 끝낸다) — 1 이면 첫 핸드다.
+      quick: game.handNo === 1,
+      trio: (game.called ?? []).length >= 2,
     });
     await game.message?.channel?.send({
       embeds: [base({
@@ -817,6 +822,8 @@ async function openDungeon(interaction) {
   // 지원군을 한 번이라도 부르면 참이 된다. 다시 주인으로 바꿔도 안 돌아간다 — `솔플` 은
   // "혼자 처치" 라서다.
   game.allyUsed = false;
+  // 불러낸 지원군. 둘 다 부르고 이기면 `삼총사`.
+  game.called = [];
   const enemy = state.mobSeat(mob, 0, DUNGEON);
   // 등급을 자리에 남긴다. 판이 끝날 때 `finishDungeon` 이 볼 수 있는 것은 자리뿐이다.
   enemy.elite = mob.elite;
@@ -1200,7 +1207,10 @@ async function handlePlay(interaction, game, action, arg) {
       }
       // **넘긴 체력은 여기서 정산하지 않는다** — 판이 끝날 때 한 번에(finishDungeon).
       // 물러난 사람의 넘긴 몫은 장부에 그대로 남고, 다시 불려 나오면 그대로 걸 수 있다.
-      if (arg !== 'me') game.allyUsed = true;
+      if (arg !== 'me') {
+        game.allyUsed = true;
+        if (!game.called.includes(want)) game.called.push(want);
+      }
       state.swapFighter(game, fighter, arg === 'me'
         ? { ...displayOf(want), kind: 'human', userId: want }
         : { ...state.npcSeat(arg), kind: 'npc' });

@@ -14,6 +14,7 @@
  * `stats` 말고 `account.items` 를 봐도 되고, 그래서 두 번째 인자로 계정을 통째로 넘긴다.
  */
 import { CATEGORIES } from './poker.js';
+import { MOBS, NORMALS } from '../holdem/mobs.js';
 
 /** 전적이 비어 있어도 안전하게 읽는다. 처음 보는 계정은 stats 가 통째로 없다. */
 const n = (s, k) => Number(s?.[k] ?? 0);
@@ -25,6 +26,18 @@ const n = (s, k) => Number(s?.[k] ?? 0);
  */
 export const dungeonRuns = (account) => Object.values(account?.enemies ?? {})
   .reduce((a, r) => a + Number(r?.met ?? 0), 0);
+
+/** 도감에 있는 에너미 이름. 표에 없는 이름(옛 이름·오타)은 도감 칭호에서 안 센다. */
+const KNOWN = new Set([...MOBS, ...NORMALS].map((m) => m.name));
+export const ENEMY_TOTAL = KNOWN.size;
+
+/** 도감에서 만난 에너미 가짓수. */
+export const enemiesMet = (account) => Object.entries(account?.enemies ?? {})
+  .filter(([name, r]) => KNOWN.has(name) && (Number(r?.met ?? 0) > 0 || Number(r?.won ?? 0) > 0)).length;
+
+/** 한 에너미를 가장 많이 쓰러뜨린 횟수. `천적` 이 본다. */
+export const mostBeaten = (account) => Math.max(0, ...Object.values(account?.enemies ?? {})
+  .map((r) => Number(r?.won ?? 0)));
 
 /** 최소 표본을 걸고 재는 비율. 열 판에서 6승은 60% 지만 아무 뜻이 없다. */
 const rate = (s, min) => (n(s, 'hands') >= min ? n(s, 'won') / n(s, 'hands') : 0);
@@ -101,12 +114,20 @@ export const TITLES = [
   { key: 'shattered', name: '산산조각', tier: 1, cond: '제작하다 부수면 (🎲 1)', group: '제작', desc: '재료값은 수업료로 치자.', when: (s) => n(s, 'craftBroke') >= 1 },
   { key: 'masterSmith', name: '명장', tier: 3, cond: '다이아몬드 제작품', group: '제작', desc: '이름을 새겨 넣어도 부끄럽지 않다.', when: (s) => n(s, 'bestCraft') >= 5 },
 
-  // ---- 던전 — /홀덤 던전 이 쌓는 전적. 처치는 지원군이 대신 싸웠어도 주인 몫으로 센다
+  // ---- 던전 — /홀덤 던전 이 쌓는 전적. 처치는 지원군이 대신 싸웠어도 주인 몫으로 센다.
+  // 들어간 횟수·도감 칭호는 **에너미 도감에서 읽는다**(account.enemies) — 따로 안 센다
   { key: 'adventurer', name: '모험가', tier: 1, cond: '던전 5회', group: '던전', desc: '다섯 번 내려갔고, 다섯 번 올라왔다.', when: (s, a) => dungeonRuns(a) >= 5 },
+  { key: 'veteran', name: '백전노장', tier: 2, cond: '던전 30회', group: '던전', desc: '서른 번째 계단부터는 세지 않았다.', when: (s, a) => dungeonRuns(a) >= 30 },
+  { key: 'chronicler', name: '기록관', tier: 2, cond: '에너미 40종 만남', group: '던전', desc: '만난 것은 빠짐없이 적어 둔다.', when: (s, a) => enemiesMet(a) >= 40 },
+  { key: 'livingBestiary', name: '살아 있는 도감', tier: 3, cond: `에너미 ${ENEMY_TOTAL}종 모두 만남`, group: '던전', desc: '던전에 사는 것은 이제 다 안다.', when: (s, a) => enemiesMet(a) >= ENEMY_TOTAL },
   { key: 'dungeonRose', name: '던전 속에 피어난 장미', tier: 1, cond: '던전에서 쓰러지면', group: '던전', desc: '붉은 것이 피었다. 꽃은 아니었다.', when: (s) => n(s, 'dungeonDied') >= 1 },
   { key: 'soloPlay', name: '솔플', tier: 2, cond: '지원군 없이 혼자 에너미 처치', group: '던전', desc: '미겔도 마티암도 부르지 않았다. 부를 걸 그랬나.', when: (s) => n(s, 'soloWon') >= 1 },
+  { key: 'threeMusketeers', name: '삼총사', tier: 2, cond: '미겔·마티암을 둘 다 불러 처치', group: '던전', desc: '하나는 모두를 위해, 모두는 하나를 위해.', when: (s) => n(s, 'trioWon') >= 1 },
+  { key: 'oneShot', name: '한 방', tier: 2, cond: '첫 핸드에 에너미 처치', group: '던전', desc: '카드를 받자마자 끝났다.', when: (s) => n(s, 'quickKill') >= 1 },
   { key: 'hunter', name: '사냥꾼', tier: 2, cond: '에너미 20회 처치', group: '던전', desc: '던전 입구의 발자국 절반이 이 사람 것이다.', when: (s) => n(s, 'dungeonWon') >= 20 },
+  { key: 'nemesis', name: '천적', tier: 2, cond: '같은 에너미 5번 처치', group: '던전', desc: '그놈은 이제 이 사람을 보면 도망간다.', when: (s, a) => mostBeaten(a) >= 5 },
   { key: 'eliteSlayer', name: '엘리트', tier: 3, cond: '엘리트 에너미 처치', group: '던전', desc: '금빛 테를 두른 놈을 눕혔다.', when: (s) => n(s, 'eliteKill') >= 1 },
+  { key: 'eliteHunter', name: '엘리트 사냥꾼', tier: 3, cond: '엘리트 에너미 10회 처치', group: '던전', desc: '금빛 테가 이제는 표적으로 보인다.', when: (s) => n(s, 'eliteKill') >= 10 },
 
   // ---- MT 상점 — 전적이 아니라 **산 것**이다. `shop.mt` 가 값, `shop.stat` 이 산 기록
   // (`own…` 카운터 — 서버가 모양으로 받는다). 명부에 한 줄 넣으면 상점에 바로 뜬다.

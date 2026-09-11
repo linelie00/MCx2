@@ -353,6 +353,12 @@ const server = app.listen(0, async () => {
   eq('own 뒤가 소문자면 400', (await post('/deltas', { bump: { [OK_]: { ownbard: 1 } } })).status, 400);
   eq('own 만 있으면 400', (await post('/deltas', { bump: { [OK_]: { own: 1 } } })).status, 400);
 
+  // --- 요트·토너먼트 칭호 카운터
+  const YT = '4000003';
+  const yt1 = await post('/deltas', { bump: { [YT]: { yachtPlayed: 1, yachtYacht: 1, yachtBonus: 1, yachtEmpty: 1, yachtWon: 1, yachtLast: 1, bestYacht: 180, tourneyWon: 1, tourneySecond: 1, tourneyFirstOut: 1, mobHuntWon: 1, comebackWon: 1 } } });
+  eq('요트·토너먼트 카운터를 받는다', [yt1.status, yt1.body.accounts[YT].stats.bestYacht], [200, 180]);
+  eq('요트 최고 점수는 큰 쪽만', (await post('/deltas', { bump: { [YT]: { bestYacht: 120 } } })).body.accounts[YT].stats.bestYacht, 180);
+
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

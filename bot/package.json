@@ -19,7 +19,8 @@
     "check-load": "node scripts/check-load.mjs",
     "check-ack": "node scripts/check-ack.mjs",
     "check-crafts": "node scripts/check-crafts.mjs",
-    "check-bestiary": "node scripts/check-bestiary.mjs"
+    "check-bestiary": "node scripts/check-bestiary.mjs",
+    "check-yacht-titles": "node scripts/check-yacht-titles.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

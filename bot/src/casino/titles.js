@@ -137,6 +137,22 @@ export const TITLES = [
   { key: 'healer', name: '힐러', tier: 1, cond: '쓰러진 사람에게 부활의 영약 1번', group: '동료', desc: '쓰러진 이를 일으켜 세웠다.', when: (s) => n(s, 'reviveGiven') >= 1 },
   { key: 'trueHero', name: '용사', tier: 3, cond: '쓰러진 사람에게 부활의 영약 10번', group: '동료', desc: '진정한 용사란 이런 것이죠.', when: (s) => n(s, 'reviveGiven') >= 10 },
 
+  // ---- 요트 — 끝까지 둔 판에서만 센다(접거나 방치로 끝난 판은 아니다). 1위·꼴찌는 둘 이상 앉은 판에서
+  { key: 'firstVoyage', name: '첫 항해', tier: 1, cond: '요트 한 판을 끝까지', group: '요트', desc: '돛을 올렸다. 어디로 갈지는 주사위가 정한다.', when: (s) => n(s, 'yachtPlayed') >= 1 },
+  { key: 'yachtShout', name: '야추!', tier: 1, cond: '요트(같은 눈 5개)로 점수 1회', group: '요트', desc: '다섯 개가 같은 눈. 소리를 안 지를 수가 없다.', when: (s) => n(s, 'yachtYacht') >= 1 },
+  { key: 'bonusHunter', name: '보너스 사냥꾼', tier: 2, cond: '윗칸 보너스(63점) 5회', group: '요트', desc: '윗칸을 채우는 법을 안다. 다섯 번이나.', when: (s) => n(s, 'yachtBonus') >= 5 },
+  { key: 'fullNet', name: '만선', tier: 2, cond: '요트 한 판 210점 이상', group: '요트', desc: '그물이 찢어질 만큼 건졌다.', when: (s) => n(s, 'bestYacht') >= 210 },
+  { key: 'skipper', name: '선장', tier: 2, cond: '요트 1위 10회', group: '요트', desc: '열 번의 항해를 이끌었다.', when: (s) => n(s, 'yachtWon') >= 10 },
+  { key: 'emptyNet', name: '빈 그물', tier: 1, cond: '0점 칸 다섯 개 이상으로 끝낸 판', group: '요트', desc: '다섯 칸이 비었다. 바다는 원래 그렇다.', when: (s) => n(s, 'yachtEmpty') >= 1 },
+  { key: 'adrift', name: '표류', tier: 2, cond: '요트 꼴찌 5회', group: '요트', desc: '다섯 번 맨 뒤에서 떠밀려 왔다.', when: (s) => n(s, 'yachtLast') >= 5 },
+
+  // ---- 토너먼트 — /홀덤 토너먼트. 모브 자리는 안 센다
+  { key: 'champion', name: '챔피언', tier: 3, cond: '토너먼트 1위 5회', group: '토너먼트', desc: '다섯 번, 마지막까지 앉아 있었다.', when: (s) => n(s, 'tourneyWon') >= 5 },
+  { key: 'eternalSecond', name: '만년 2등', tier: 2, cond: '토너먼트 2위 5회', group: '토너먼트', desc: '결승 테이블은 익숙하다. 그다음이 문제다.', when: (s) => n(s, 'tourneySecond') >= 5 },
+  { key: 'earlyLeave', name: '조기 퇴근', tier: 1, cond: '토너먼트에서 제일 먼저 탈락', group: '토너먼트', desc: '제일 먼저 일어났다. 저녁이 있는 삶.', when: (s) => n(s, 'tourneyFirstOut') >= 1 },
+  { key: 'monsterHunt', name: '마물 사냥', tier: 2, cond: '모브가 둘 이상 앉은 토너먼트 우승', group: '토너먼트', desc: '에너미로 가득한 테이블을 쓸어 담았다.', when: (s) => n(s, 'mobHuntWon') >= 1 },
+  { key: 'comeback', name: '기사회생', tier: 3, cond: '칩 5BB 이하까지 몰렸다가 토너먼트 우승', group: '토너먼트', desc: '빅블라인드 다섯 개로 버텨서 끝내 이겼다.', when: (s) => n(s, 'comebackWon') >= 1 },
+
   // ---- MT 상점 — 전적이 아니라 **산 것**이다. `shop.mt` 가 값, `shop.stat` 이 산 기록
   // (`own…` 카운터 — 서버가 모양으로 받는다). 명부에 한 줄 넣으면 상점에 바로 뜬다.
   ...[

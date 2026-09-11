@@ -312,6 +312,10 @@ const BUMP_KEYS = new Set([
   // 쓰러진 남을 부활의 영약으로 일으켰다(힐러·용사) · 홀덤 팟 5BB 이하로 이겼다(잔돈) ·
   // 블랙잭 최소 베팅으로 둔 판(소심한 손)
   'reviveGiven', 'smallPotWon', 'minBetHands',
+  // 요트 — 끝까지 둔 판 · 요트(같은 눈 5개) · 윗칸 보너스 · 0점 칸 다섯 이상 · 혼자 1위 · 꼴찌
+  'yachtPlayed', 'yachtYacht', 'yachtBonus', 'yachtEmpty', 'yachtWon', 'yachtLast',
+  // 홀덤 토너먼트 — 1위 · 2위 · 제일 먼저 탈락 · 모브 둘 이상 앉은 판 우승 · 5BB 밑에서 살아나 우승
+  'tourneyWon', 'tourneySecond', 'tourneyFirstOut', 'mobHuntWon', 'comebackWon',
 ]);
 
 /**
@@ -322,7 +326,7 @@ const BUMP_KEYS = new Set([
 const OWN_RE = /^own[A-Z][A-Za-z0-9]{1,39}$/;
 
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
-const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet', 'bestCook', 'bestCraft']);
+const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet', 'bestCook', 'bestCraft', 'bestYacht']);
 
 /**
  * POST /api/accounts/deltas — 계정 하나의 네 가지를 **한 번에** 옮긴다.

@@ -190,7 +190,7 @@ src/api.js                 bot:true 요청 옵션 + 함수 넷 + checkBotKey
 src/casino/wallet.js       load/commit · origin/net/rebase · buyIn · roundToUnit
 src/casino/stakes.js       판돈 등급 (마이크로·로우·미들·하이)
 src/casino/accounts.js     id 해석과 표기 (/프로필·/출첵·나중의 양도가 같이 쓴다)
-src/casino/titles.js       칭호 명부 69종 — 전적에서 계산해 낸다
+src/casino/titles.js       칭호 명부 81종 — 전적에서 계산해 낸다
 src/casino/titleCard.js    칭호를 화면에 내는 모양 (명패·별·등급 색)
 src/casino/items.js        아이템 명부 95종 — 시트에서 옮겼다
 src/casino/alive.js        쓰러진 사람 막기 (hp <= 0). 30초 캐시
@@ -449,6 +449,32 @@ Ambiguous 라 글꼴에 따라 한 칸이 되기도 두 칸이 되기도 하는�
 그 밖에 이번에 더한 것 — **400**(누적 400핸드) · **오이쉬**(만든 요리 10번 먹기, `ateMade`) ·
 MT 상점 **단장**(50 MT). 이름·등급만 바꾼 것 — 네 장의 주인 → **포카포카**, 엘리트 ★★★ → ★★,
 엘리트 사냥꾼 10회 → 20회. `/mt상점` 목록에 칭호 설명을 한 줄씩 붙였다.
+
+### 요트 · 토너먼트 칭호
+
+**요트**는 판 중에 서버를 안 부르고, **끝까지 둔 판**이 끝날 때 한 번 전적을 적는다(`yacht.yachtStats`,
+MT 와 같은 쓰기). 접거나 방치로 끝난 판은 안 센다. 새 칭호를 알리려고 쓰기 전에 계정을 한 번 읽는다 —
+못 읽으면 알림만 건너뛴다.
+
+| 칭호 | 조건 | 전적 |
+|---|---|---|
+| ★ 첫 항해 | 요트 한 판을 끝까지 | `yachtPlayed` |
+| ★ 야추! | 요트 칸(같은 눈 5개)에 점수 | `yachtYacht` |
+| ★★ 보너스 사냥꾼 | 윗칸 보너스 5회 | `yachtBonus` |
+| ★★ 만선 | 한 판 210점 이상 | `bestYacht`(큰 쪽만) |
+| ★★ 선장 | 요트 1위 10회 — 둘 이상 앉은 판, 혼자 1위 | `yachtWon` |
+| ★ 빈 그물 | 0점 칸 다섯 개 이상으로 끝낸 판 | `yachtEmpty` |
+| ★★ 표류 | 꼴찌 5회 — 둘 이상, 전원 동점은 아님 | `yachtLast` |
+
+**토너먼트**는 끝날 때 상금·MT 와 같은 쓰기로 적는다(`holdem.tourneyStats`). 모브 자리는 안 센다.
+
+| 칭호 | 조건 | 전적 |
+|---|---|---|
+| ★★★ 챔피언 | 1위 5회 | `tourneyWon` |
+| ★★ 만년 2등 | 2위 5회 | `tourneySecond` |
+| ★ 조기 퇴근 | 제일 먼저 탈락 | `tourneyFirstOut` |
+| ★★ 마물 사냥 | 모브가 둘 이상 앉은 판 우승 | `mobHuntWon` |
+| ★★★ 기사회생 | 칩 5BB 이하까지 몰렸다가 우승 | `comebackWon` — `game.lowBB`(핸드마다 블라인드 걷기 전 스택 ÷ BB 의 최솟값) |
 
 ### 화면 두 곳
 

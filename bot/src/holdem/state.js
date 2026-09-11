@@ -329,6 +329,12 @@ export function beginHand(game) {
   if (game.mode === 'tourney') {
     stepTourney(game, playing);
     game.minRaise = game.stakes.bb;
+    // 기사회생 — 자리마다 **블라인드를 걷기 전** 스택이 몇 BB 까지 내려갔었는지.
+    game.lowBB ??= {};
+    for (const s of playing) {
+      const bb = s.gold / game.stakes.bb;
+      if (game.lowBB[s.id] === undefined || bb < game.lowBB[s.id]) game.lowBB[s.id] = bb;
+    }
   } else if (rising(game)) {
     const level = Math.floor((game.handNo - 1) / LEVEL_EVERY);
     if (level !== (game.stakes.level ?? 0)) game.stakes = atLevel(game.base, level);

@@ -550,12 +550,34 @@ function tourneyRank(game) {
   return [...alive, ...out.map((id) => game.seats.find((s) => s.id === id)).filter(Boolean)];
 }
 
+/**
+ * 토너먼트 칭호의 전적. 모브 자리는 안 센다.
+ *
+ *   tourneyWon      1위 · 모브가 둘 이상 앉았으면 mobHuntWon · 5BB 이하까지 몰렸었으면 comebackWon
+ *   tourneySecond   2위
+ *   tourneyFirstOut 제일 먼저 탈락
+ */
+export function tourneyStats(game, rank) {
+  const bump = {};
+  const add = (seat, key) => {
+    if (!seat || seat.kind === 'mob') return;
+    bump[seat.id] = { ...(bump[seat.id] ?? {}), [key]: 1 };
+  };
+  const [first, second] = rank;
+  add(first, 'tourneyWon');
+  if (first && game.seats.filter((s) => s.kind === 'mob').length >= 2) add(first, 'mobHuntWon');
+  if (first && (game.lowBB?.[first.id] ?? Infinity) <= 5) add(first, 'comebackWon');
+  add(second, 'tourneySecond');
+  add(game.seats.find((s) => s.id === game.knocked[0]), 'tourneyFirstOut');
+  return bump;
+}
+
 /** 칩 증감대로 골드를 옮기고(모브 칩 포함), MT 는 1위 둘 · 2위 하나(payout.TOURNEY_MT). */
 async function finishTourney(game) {
   const rank = tourneyRank(game);
   const winner = rank[0] ?? null;
 
-  const saved = await payout.finishTourney(game, rank.map((s) => s.id));
+  const saved = await payout.finishTourney(game, rank.map((s) => s.id), tourneyStats(game, rank));
   game.saveFailed = !saved.ok;
 
   const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
@@ -587,6 +609,8 @@ async function finishTourney(game) {
       footer: `판돈 ${num(saved.pool)}골드 · 블라인드 ${game.stakes.sb}/${game.stakes.bb} 까지 올랐어요`,
     })],
   }).catch((err) => console.warn('[홀덤] 토너먼트 결과 실패:', err.message));
+  // 챔피언·만년 2등·조기 퇴근·마물 사냥·기사회생 — 판을 열 때 적어 둔 목록과 견준다.
+  if (saved.ok) await announceTitles(game, saved.accounts);
 }
 
 /**

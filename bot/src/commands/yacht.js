@@ -25,7 +25,11 @@ import {
 import { base, fail, THEME_COLOR } from '../embeds.js';
 import { ack } from '../discord/ack.js';
 import { apply } from '../casino/wallet.js';
-import { NPC_ID } from '../casino/accounts.js';
+import { NPC_ID, displayOf } from '../casino/accounts.js';
+import { getAccounts } from '../api.js';
+import { CATEGORY_KEYS } from '../yacht/rules.js';
+import { earned as earnedTitles, gained as gainedTitles } from '../casino/titles.js';
+import { awardCard } from '../casino/titleCard.js';
 
 const { filledCount } = state;
 
@@ -244,7 +248,36 @@ async function runNpcTurns(game) {
 }
 
 /**
- * 판이 끝났다. **1위에게 MT 한 개.**
+ * 한 자리의 요트 전적 — 칭호가 읽는다(casino/titles.js 의 요트 갈래).
+ *
+ *   yachtPlayed 끝까지 둔 판 · yachtYacht 요트 칸에 점수 · yachtBonus 윗칸 보너스 ·
+ *   bestYacht   한 판 최고 점수(큰 쪽만) · yachtEmpty 0점 칸 다섯 이상 ·
+ *   yachtWon    혼자 1위(둘 이상 앉은 판) · yachtLast 꼴찌(둘 이상, 전원 동점은 아님)
+ */
+export function yachtStats(game) {
+  const rows = state.ranking(game);
+  const many = game.seats.length >= 2;
+  const first = rows.filter((r) => r.rank === 1);
+  const lastRank = rows.length ? rows[rows.length - 1].rank : 1;
+  const out = {};
+  for (const r of rows) {
+    const id = r.seat.kind === 'human' ? r.seat.userId : NPC_ID[r.seat.character];
+    if (!id) continue;
+    const sheet = r.seat.sheet;
+    const t = totals(sheet);
+    const c = { yachtPlayed: 1, bestYacht: t.total };
+    if ((sheet.yacht ?? 0) > 0) c.yachtYacht = 1;
+    if (t.bonus > 0) c.yachtBonus = 1;
+    if (CATEGORY_KEYS.filter((k) => sheet[k] === 0).length >= 5) c.yachtEmpty = 1;
+    if (many && first.length === 1 && first[0].seat === r.seat) c.yachtWon = 1;
+    if (many && lastRank > 1 && r.rank === lastRank) c.yachtLast = 1;
+    out[id] = c;
+  }
+  return out;
+}
+
+/**
+ * 판이 끝났다. **전적을 적고, 1위에게 MT 한 개.**
  *
  * MT 는 얻는 길이 좁다 — 요트 1위와 홀덤 토너먼트 우승뿐이다. 그래서 조건을 좁게 잡는다.
  *
@@ -261,31 +294,47 @@ async function runNpcTurns(game) {
 async function finish(game) {
   if (game.rewarded) return;
   game.rewarded = true;
-  if (game.endedReason !== 'finished' || game.seats.length < 2) return;
+  if (game.endedReason !== 'finished') return;
 
+  const bump = yachtStats(game);
   const rows = state.ranking(game);
   const first = rows.filter((r) => r.rank === 1);
-  if (first.length !== 1) return;
+  const seat = game.seats.length >= 2 && first.length === 1 ? first[0].seat : null;
+  const id = seat ? (seat.kind === 'human' ? seat.userId : NPC_ID[seat.character]) : null;
 
-  const seat = first[0].seat;
-  const id = seat.kind === 'human' ? seat.userId : NPC_ID[seat.character];
-  if (!id) return;
-
-  // 요트는 여태 서버를 한 번도 안 불렀다. 여기서 처음 부르는 만큼, 실패해도 판이
-  // 깨지지 않게 통째로 감싼다.
+  // 요트는 판 중에 서버를 안 부른다. 여기서 부르는 만큼, 실패해도 판이 깨지지 않게 통째로 감싼다.
   try {
-    const res = await apply({ mt: { [id]: 1 } });
+    // 새 칭호를 알리려면 **쓰기 전 계정**이 있어야 한다(칭호는 전적에서 계산하므로).
+    // 못 읽으면 알림만 건너뛴다 — 전적과 MT 는 그대로 적는다.
+    const ids = Object.keys(bump);
+    const before = ids.length ? (await getAccounts(ids).catch(() => null))?.accounts : null;
+    const res = await apply({ mt: id ? { [id]: 1 } : {}, bump });
     if (!res.ok) return;
-    await game.message?.channel?.send({
-      embeds: [base({
-        title: '🪙 MT +1',
-        description: `**${seat.name}** 이(가) 1위로 MT 를 얻었어요.`
-          + ` 지금 **${res.accounts[id]?.mt ?? '?'}개**.`,
-        color: THEME_COLOR,
-      })],
-    });
+    if (id) {
+      await game.message?.channel?.send({
+        embeds: [base({
+          title: '🪙 MT +1',
+          description: `**${seat.name}** 이(가) 1위로 MT 를 얻었어요.`
+            + ` 지금 **${res.accounts[id]?.mt ?? '?'}개**.`,
+          color: THEME_COLOR,
+        })],
+      });
+    }
+    if (!before) return;
+    for (const r of rows) {
+      const who = r.seat.kind === 'human' ? r.seat.userId : NPC_ID[r.seat.character];
+      if (!who || !before[who] || !res.accounts[who]) continue;
+      const npc = r.seat.kind === 'npc';
+      const held = earnedTitles(res.accounts[who], { npc });
+      const fresh = gainedTitles(earnedTitles(before[who], { npc }).map((t) => t.key), held);
+      if (!fresh.length) continue;
+      const face = npc ? displayOf(who) : { avatar: null, avatarFile: null };
+      await game.message?.channel?.send(awardCard({
+        name: r.seat.name, avatar: face.avatar, avatarFile: face.avatarFile, fresh, held: held.length,
+      }));
+    }
   } catch (err) {
-    console.warn('[요트] MT 지급 실패:', err.message);
+    console.warn('[요트] 전적·MT 저장 실패:', err.message);
   }
 }
 

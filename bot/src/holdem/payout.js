@@ -256,13 +256,14 @@ export function tourneyDeltas(game) {
  * 토너먼트가 끝났다. **한 번에 정산하고 MT 는 1위 둘 · 2위 하나**(TOURNEY_MT).
  *
  * `order` 는 등수대로 늘어놓은 자리 id(1위 먼저). 모브 자리는 MT 를 안 받는다.
+ * `bump` 는 토너먼트 칭호의 전적(commands/holdem.js 의 tourneyStats) — 같은 쓰기로 간다.
  * 핸드마다 `rebase()` 를 안 했으므로 `net()` 이 판 시작 대비 누적이다(tourneyDeltas).
  */
-export async function finishTourney(game, order = []) {
+export async function finishTourney(game, order = [], bump = {}) {
   expect(game, 'gold');
   const { deltas, pool } = tourneyDeltas(game);
   const mt = tourneyMt(order);
-  const saved = await apply({ deltas, mt });
+  const saved = await apply({ deltas, mt, bump });
   if (saved.ok) game.gold.rebase();
   return { ...saved, deltas, mt, pool };
 }

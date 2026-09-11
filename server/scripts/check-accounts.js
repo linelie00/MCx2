@@ -342,6 +342,17 @@ const server = app.listen(0, async () => {
   eq('던전 칭호 카운터를 받는다',
     (await post('/deltas', { bump: { [FK]: { eliteKill: 1, soloWon: 1, dungeonDied: 1 } } })).body.accounts[FK].stats.eliteKill, 1);
 
+  // --- 산 것 카운터 — own + 대문자 모양이면 받는다. MT 와 한 번에
+  const OK_ = '4000002';
+  await post('/deltas', { mt: { [OK_]: 3 } });
+  const buy = await post('/deltas', { mt: { [OK_]: -1 }, bump: { [OK_]: { ownMamul: 1 } } });
+  eq('칭호를 산다', [buy.status, buy.body.accounts[OK_].mt, buy.body.accounts[OK_].stats.ownMamul], [200, 2, 1]);
+  const poor = await post('/deltas', { mt: { [OK_]: -5 }, bump: { [OK_]: { ownBard: 1 } } });
+  eq('MT 가 모자라면 통째로 409', poor.status, 409);
+  eq('409 면 산 것도 안 적힌다', (await hit(`?ids=${OK_}`)).body.accounts[OK_].stats.ownBard, undefined);
+  eq('own 뒤가 소문자면 400', (await post('/deltas', { bump: { [OK_]: { ownbard: 1 } } })).status, 400);
+  eq('own 만 있으면 400', (await post('/deltas', { bump: { [OK_]: { own: 1 } } })).status, 400);
+
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

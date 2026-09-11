@@ -309,6 +309,13 @@ const BUMP_KEYS = new Set([
   'eliteKill', 'soloWon', 'dungeonDied',
 ]);
 
+/**
+ * **산 것** 카운터 — `/mt상점` 칭호. 이름을 하나씩 적지 않고 모양으로 받는다(`own` + 대문자).
+ * 상점에 칭호를 들일 때마다 서버를 다시 배포하지 않으려는 것이다. 무엇을 얼마에 파는지는
+ * 봇의 명부(titles.js)에만 있다 — 칭호 키를 서버가 안 보는 것과 같은 원칙.
+ */
+const OWN_RE = /^own[A-Z][A-Za-z0-9]{1,39}$/;
+
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
 const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet', 'bestCook', 'bestCraft']);
 
@@ -405,7 +412,7 @@ exports.applyDeltas = (req, res) => {
   for (const [id, counters] of Object.entries(bump)) {
     if (!counters || typeof counters !== 'object') return res.status(400).json({ error: `bump.${id} 가 객체가 아닙니다` });
     for (const [k, v] of Object.entries(counters)) {
-      if (!BUMP_KEYS.has(k) && !MAX_KEYS.has(k)) return res.status(400).json({ error: `모르는 카운터: ${k}` });
+      if (!BUMP_KEYS.has(k) && !MAX_KEYS.has(k) && !OWN_RE.test(k)) return res.status(400).json({ error: `모르는 카운터: ${k}` });
       if (!Number.isSafeInteger(v) || v < 0) return res.status(400).json({ error: `카운터가 0 이상 정수가 아닙니다: ${k}=${v}` });
     }
   }

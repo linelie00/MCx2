@@ -98,7 +98,28 @@ export const TITLES = [
   { key: 'soloPlay', name: '솔플', tier: 2, cond: '지원군 없이 혼자 에너미 처치', group: '던전', desc: '미겔도 마티암도 부르지 않았다. 부를 걸 그랬나.', when: (s) => n(s, 'soloWon') >= 1 },
   { key: 'hunter', name: '사냥꾼', tier: 2, cond: '에너미 20회 처치', group: '던전', desc: '던전 입구의 발자국 절반이 이 사람 것이다.', when: (s) => n(s, 'dungeonWon') >= 20 },
   { key: 'eliteSlayer', name: '엘리트', tier: 3, cond: '엘리트 에너미 처치', group: '던전', desc: '금빛 테를 두른 놈을 눕혔다.', when: (s) => n(s, 'eliteKill') >= 1 },
+
+  // ---- MT 상점 — 전적이 아니라 **산 것**이다. `shop.mt` 가 값, `shop.stat` 이 산 기록
+  // (`own…` 카운터 — 서버가 모양으로 받는다). 명부에 한 줄 넣으면 상점에 바로 뜬다.
+  ...[
+    ['mamul', '마물', 1, 1, '던전의 것이 조금 묻어 있다.'],
+    ['berryWarden', '베리 파수꾼', 1, 5, '베리 덤불 앞에서 한 발짝도 안 물러난다.'],
+    ['bard', '바드', 2, 15, '류트 한 줄이면 판의 공기가 바뀐다.'],
+    ['tailor', '재봉사', 2, 15, '해진 것은 꿰매고, 모자란 것은 덧댄다.'],
+    ['baranson', '바란손', 2, 20, '박자를 지킨다. 한 번도 어긋난 적이 없다.'],
+    ['dullahan', '듀라한', 2, 20, '머리는 없어도 손은 날렵하다.'],
+    ['adventureSpoils', '모험에서 얻을 수 있는 것들', 3, 100, '돈으로는 못 사는 것들이라, MT 로 샀다.'],
+  ].map(([key, name, tier, mt, desc]) => {
+    const stat = `own${key[0].toUpperCase()}${key.slice(1)}`;
+    return {
+      key, name, tier, desc, group: 'MT 상점', cond: `/mt상점 에서 ${mt} MT`,
+      shop: { mt, stat }, when: (s) => n(s, stat) >= 1,
+    };
+  }),
 ];
+
+/** MT 상점에 올라가는 칭호. 명부 순서 그대로 — 싼 것부터. */
+export const SHOP_TITLES = TITLES.filter((t) => t.shop);
 
 /**
  * 등급. 별 개수와 **명패 색**이 여기서 나온다.
@@ -170,5 +191,5 @@ export const counterForHand = (category) => HAND_COUNTER[category] ?? null;
 export const isHighCard = (category) => category === CATEGORIES[CATEGORIES.length - 1];
 
 export default {
-  TITLES, TITLE_BY_KEY, TOTAL, TIER, GROUPS, tierOf, earned, gained, counterForHand, isHighCard,
+  TITLES, SHOP_TITLES, TITLE_BY_KEY, TOTAL, TIER, GROUPS, tierOf, earned, gained, counterForHand, isHighCard,
 };

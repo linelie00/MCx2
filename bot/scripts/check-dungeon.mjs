@@ -162,7 +162,7 @@ check('체력 총합이 언제나 보존된다', () => {
 
 check('넘긴 몫은 판 안에만 있다', () => {
   // 서버는 최대치를 절대 안 넘는다. 자리 값은 넘을 수 있고, 그 차이가 나갈 때
-  // 골드로 바뀌는 몫이다(payout.cashOverflow).
+  // 골드로 바뀌는 몫이다(payout.settleOverflow).
   let sawOver = false;
   for (let i = 0; i < ROUNDS; i += 1) {
     const { server, game, me } = runDungeon(`dm-${i}`, 100, 80);

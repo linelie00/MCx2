@@ -21,6 +21,7 @@
  */
 import { apply } from '../casino/wallet.js';
 import { MAX_HP } from '../casino/items.js';
+import { one } from '../casino/loot.js';
 
 /**
  * 넘긴 체력을 골드로 바꾸는 값. **체력 1 = 5골드.**
@@ -33,6 +34,33 @@ export const OVER_RATE = 5;
 
 /** 최대치를 넘긴 몫. **판 안에만 있는 숫자다** — 서버는 이걸 모른다. */
 export const overOf = (game, id) => Math.max(0, game.gold.get(id) - MAX_HP);
+
+/**
+ * 지원군(미겔·마티암)이 넘친 기운으로 오너를 고칠 때, **오너가 잃은 체력의 몇 할까지.**
+ * 회복 스킬을 썼다는 설정이다. 다 고쳐 주면 던전에서 다치는 것이 뜻을 잃는다.
+ */
+export const ALLY_HEAL_SHARE = 0.5;
+
+/** 남은 기운을 아이템으로 바꿀 때 한 번에 주는 개수 상한. */
+const ALLY_ITEM_CAP = 5;
+
+/**
+ * 남은 기운을 아이템으로. 값이 `value` 골드어치가 될 때까지 전리품 풀에서 뽑는다.
+ * 값이 0 인 것도 칸을 차지하도록 적어도 2골드로 센다 — 안 그러면 끝없이 뽑는다.
+ *
+ * **엘리트 쪽 가중치로 뽑는다**(값의 쏠림이 완만하다). 보통 가중치로 뽑았더니 기운 9 에
+ * 나뭇가지·손수건 같은 싼 것이 여덟 개 쏟아졌다 — 같은 값어치라면 적고 괜찮은 것이 낫다.
+ */
+function lootWorth(value, rand) {
+  const got = {};
+  let left = value;
+  for (let i = 0; i < ALLY_ITEM_CAP && left > 0; i += 1) {
+    const item = one(rand, 'elite');
+    got[item.key] = (got[item.key] ?? 0) + 1;
+    left -= Math.max(item.price, 2);
+  }
+  return got;
+}
 
 /** 장부가 세고 있는 것이 맞는지. 아니면 크게 터뜨린다. */
 function expect(game, unit) {
@@ -69,7 +97,7 @@ export async function hand(game, stats = {}) {
  * 애써 뺏은 체력이 핸드마다 사라진다.
  *
  * 그래서 **보내는 것은 최대치까지만**이고, 넘긴 몫은 판 안에만 둔다. 그 몫은 그대로
- * 다시 걸 수 있고, 나갈 때(끝·도망·교체) `cashOverflow` 가 골드로 바꿔 준다.
+ * 다시 걸 수 있고, 판이 끝날 때 `settleOverflow` 가 한 번에 정산한다.
  *
  * 보낼 몫은 **서버에 들어 있는 값과 견줘서** 잰다(`game.stored`). 그래야 목표가 늘
  * 0~최대치 안이라 서버가 자를 일이 아예 없다 — 자르지 않으면 어긋날 일도 없다.
@@ -108,33 +136,69 @@ async function dungeonHand(game) {
 }
 
 /**
- * 넘긴 체력을 골드로 바꾼다. **끝·도망·교체 — 판에서 나가는 순간에만.**
+ * 넘긴 체력을 정산한다. **판이 끝날 때 한 번** — 이기든 도망치든 방치로 닫히든.
+ * 교체할 때는 안 한다. 쉬는 동안에도 장부에 남아, 다시 불려 나오면 그대로 걸 수 있다.
  *
- * 서버의 체력은 이미 최대치에 멈춰 있으므로 체력 쓰기는 없다. 골드만 넣고 장부를
- * 최대치로 내린다. `{ ok, gold: { id: 골드 }, rate }`.
+ * 누구의 몫이냐에 따라 가는 곳이 다르다.
+ *
+ *   오너(사람)       골드. 체력 1 = OVER_RATE 골드
+ *   미겔·마티암      먼저 **오너를 고친다** — 잃은 체력의 ALLY_HEAL_SHARE 까지(회복 스킬).
+ *                    남은 기운은 **그 캐릭터에게 아이템**으로(같은 값어치만큼 전리품에서)
+ *
+ * **쓰러진 오너는 못 고친다.** 부활은 부활의 영약으로만이다. 그때는 전부 아이템이 된다.
+ *
+ * 한 번의 쓰기로 골드·오너 체력·아이템이 같이 간다. 서버의 체력은 이미 최대치에 멈춰
+ * 있으므로 지원군의 체력은 안 쓴다 — 장부만 최대치로 내린다.
+ *
+ * `{ ok, gold: { id: 골드 }, heal: [{ from, hp }], items: { id: { 키: 개수 } }, spare: { id: 체력 }, to, rate }`.
  */
-export async function cashOverflow(game, ids) {
+export async function settleOverflow(game, { rand = Math.random } = {}) {
   expect(game, 'hp');
 
-  const list = ids ?? Object.keys(game.gold.snapshot());
+  const owner = game.owner;
+  const ids = Object.keys(game.gold.snapshot()).filter((id) => !id.startsWith('mob:'));
+  const ownerNow = owner ? game.gold.get(owner) : 0;
+  // 고쳐 줄 수 있는 몫. 넘친 오너는 잃은 게 없고, 쓰러진 오너는 고칠 수 없다.
+  let budget = ownerNow > 0 ? Math.ceil(Math.max(0, MAX_HP - ownerNow) * ALLY_HEAL_SHARE) : 0;
+
   const gold = {};
-  for (const id of list) {
-    if (id.startsWith('mob:')) continue;
+  const heal = [];
+  const items = {};
+  const spare = {};                                   // 아이템이 된 남은 기운(체력)
+  for (const id of ids) {
     const over = overOf(game, id);
-    if (over > 0) gold[id] = over * OVER_RATE;
+    if (!over) continue;
+    if (!id.startsWith('npc:')) { gold[id] = over * OVER_RATE; continue; }
+
+    const cure = Math.min(over, budget);
+    if (cure > 0) { heal.push({ from: id, hp: cure }); budget -= cure; }
+    const rest = over - cure;
+    if (rest > 0) { items[id] = lootWorth(rest * OVER_RATE, rand); spare[id] = rest; }
   }
-  if (!Object.keys(gold).length) return { ok: true, gold: {}, rate: OVER_RATE };
+  const cured = heal.reduce((a, h) => a + h.hp, 0);
+  const summary = { gold, heal, items, spare, to: owner, rate: OVER_RATE };
+  if (!Object.keys(gold).length && !cured && !Object.keys(items).length) return { ok: true, ...summary };
 
-  const saved = await apply({ deltas: gold });
-  if (!saved.ok) return { ok: false, gold, rate: OVER_RATE };
+  const saved = await apply({
+    deltas: gold,
+    hp: cured ? { [owner]: cured } : {},
+    items,
+  });
+  if (!saved.ok) return { ok: false, ...summary };
 
-  for (const id of Object.keys(gold)) {
-    game.gold.reconcile(id, MAX_HP);
-    const seat = game.seats.find((s) => s.id === id);
-    if (seat) seat.gold = MAX_HP;
+  // 장부를 맞춘다. 넘긴 사람은 최대치로, 고침을 받은 오너는 그만큼 위로.
+  for (const id of ids) {
+    if (overOf(game, id)) game.gold.reconcile(id, MAX_HP);
+  }
+  if (cured) {
+    game.gold.reconcile(owner, ownerNow + cured);
+    if (game.stored) game.stored[owner] = (game.stored[owner] ?? ownerNow) + cured;
+  }
+  for (const seat of game.seats) {
+    if (seat.kind !== 'mob') seat.gold = game.gold.get(seat.id);
   }
   game.gold.rebase();
-  return { ok: true, gold, rate: OVER_RATE, accounts: saved.accounts };
+  return { ok: true, ...summary, accounts: saved.accounts };
 }
 
 /**
@@ -171,4 +235,6 @@ export const dungeonWon = (id, drops) => apply({
 /** 던전에서 졌다. 체력은 이미 저장돼 있으므로 전적만. */
 export const dungeonLost = (id) => apply({ bump: { [id]: { dungeonLost: 1 } } });
 
-export default { hand, finishTourney, dungeonWon, dungeonLost, cashOverflow, overOf, OVER_RATE };
+export default {
+  hand, finishTourney, dungeonWon, dungeonLost, settleOverflow, overOf, OVER_RATE, ALLY_HEAL_SHARE,
+};

@@ -46,6 +46,11 @@ export async function itemsFor(id, opts) {
   return account ? account.items ?? {} : null;
 }
 
+/** 그 사람의 에너미 도감 `{ 이름: { met, won } }`. 못 읽으면 빈 도감. */
+export async function enemiesFor(id, opts) {
+  return (await accountFor(id, opts))?.enemies ?? {};
+}
+
 /** 가진 것이 바뀌었다. 다음 자동완성이 서버를 다시 보게 한다. */
 export const forgetBag = (id) => invalidate(keyOf(id));
 /** 예전 이름. 만든 것만 바뀌어도 창고와 한 캐시다. */
@@ -57,4 +62,4 @@ export const craftLabel = (c) => `${GRADE_BY_KEY[c.grade]?.emoji ?? '❔'} ${c.n
 /** 자동완성의 값. 명부의 키와 안 겹치게 앞에 붙인다. */
 export const CRAFT_VALUE = 'craft:';
 
-export default { craftsFor, itemsFor, forgetBag, forgetCrafts, craftLabel, CRAFT_VALUE };
+export default { craftsFor, itemsFor, enemiesFor, forgetBag, forgetCrafts, craftLabel, CRAFT_VALUE };

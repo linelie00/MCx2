@@ -273,10 +273,19 @@ check('만든 것만 넣고 빼는 쓰기도 보낸다', () => {
   assert.deepStrictEqual(body.crafts, { a: { add: [{ id: 'x' }], remove: [] } });
   assert.equal(hasMoves(body), true, '만든 것만 있는 쓰기를 접어 버렸다');
 });
-check('여섯이 다 비면 안 보낸다', () => {
+check('도감만 적는 쓰기도 보낸다', () => {
+  // 던전을 열자마자 "만났다" 를 적는다. 골드도 전적도 없는 쓰기다. 0 칸과 모브는 뺀다.
+  const body = applyBody({
+    enemies: { a: { 리톨: { met: 1, won: 0 }, 슬라임: { met: 0 } }, 'mob:0': { 리톨: { met: 1 } }, b: {} },
+  });
+  assert.deepStrictEqual(body.enemies, { a: { 리톨: { met: 1 } } });
+  assert.equal(hasMoves(body), true, '도감만 있는 쓰기를 접어 버렸다');
+});
+check('다 비면 안 보낸다', () => {
   assert.equal(hasMoves(applyBody({})), false);
   assert.equal(hasMoves(applyBody({ deltas: { a: 0 }, items: { 'mob:1': { twig: 1 } } })), false);
   assert.equal(hasMoves(applyBody({ crafts: { a: { add: [], remove: [] } } })), false);
+  assert.equal(hasMoves(applyBody({ enemies: { a: { 리톨: { won: 0 } } } })), false);
 });
 
 console.log(failed ? `\n실패 ${failed}건` : '\n전부 통과');

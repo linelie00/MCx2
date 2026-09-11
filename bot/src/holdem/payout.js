@@ -221,20 +221,39 @@ export async function finishTourney(game, winnerId) {
 }
 
 /**
- * 던전을 깼다. 떨군 것을 **한 번의 쓰기로** 넣는다 — 아이템·골드·MT·전적이 같이 간다.
+ * 던전을 깼다. 떨군 것을 **한 번의 쓰기로** 넣는다 — 아이템·골드·MT·전적·도감이 같이 간다.
  *
  * 체력은 이미 핸드마다 저장돼 있으므로 여기서 안 건드린다.
+ *
+ *   foe    쓰러뜨린 에너미 이름 — 도감에 "이겼다" 를 적는다(성향이 드러난다)
+ *   elite  엘리트였는지 — `엘리트` 칭호
+ *   solo   지원군을 한 번도 안 불렀는지 — `솔플` 칭호
  */
-export const dungeonWon = (id, drops) => apply({
+export const dungeonWon = (id, drops, { foe = null, elite = false, solo = false } = {}) => apply({
   items: { [id]: drops.items },
   deltas: drops.gold ? { [id]: drops.gold } : {},
   mt: drops.mt ? { [id]: drops.mt } : {},
-  bump: { [id]: { dungeonWon: 1 } },
+  bump: {
+    [id]: { dungeonWon: 1, ...(elite ? { eliteKill: 1 } : {}), ...(solo ? { soloWon: 1 } : {}) },
+  },
+  enemies: foe ? { [id]: { [foe]: { won: 1 } } } : {},
 });
 
-/** 던전에서 졌다. 체력은 이미 저장돼 있으므로 전적만. */
-export const dungeonLost = (id) => apply({ bump: { [id]: { dungeonLost: 1 } } });
+/**
+ * 던전에서 졌다. 체력은 이미 저장돼 있으므로 전적만.
+ *
+ * `died` 는 **쓰러진 자리**다 — 지원군이 대신 싸우다 쓰러졌으면 주인이 아니라 지원군이
+ * 죽은 것이라 `던전 속에 피어난 장미` 도 지원군에게 핀다.
+ */
+export const dungeonLost = (id, died = id) => apply({
+  bump: died === id
+    ? { [id]: { dungeonLost: 1, dungeonDied: 1 } }
+    : { [id]: { dungeonLost: 1 }, [died]: { dungeonDied: 1 } },
+});
+
+/** 에너미를 만났다 — 도감에 이름과 설명이 열린다. 판이 열리자마자 적는다. */
+export const metEnemy = (id, foe) => apply({ enemies: { [id]: { [foe]: { met: 1 } } } });
 
 export default {
-  hand, finishTourney, dungeonWon, dungeonLost, settleOverflow, overOf, OVER_RATE, ALLY_HEAL_SHARE,
+  hand, finishTourney, dungeonWon, dungeonLost, metEnemy, settleOverflow, overOf, OVER_RATE, ALLY_HEAL_SHARE,
 };

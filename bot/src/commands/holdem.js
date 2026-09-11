@@ -24,6 +24,7 @@ import * as payout from '../holdem/payout.js';
 import { roll, listText, TIER as LOOT } from '../casino/loot.js';
 import { ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
 import { forget, deadEmbed } from '../casino/alive.js';
+import { forgetBag as forgetBook } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor, DUNGEON, LEVEL_EVERY } from '../casino/stakes.js';
 import { drawMobs, drawEnemy, hpOf } from '../holdem/mobs.js';
@@ -480,7 +481,9 @@ function handStats(game, results) {
 async function announceTitles(game, accounts) {
   if (!game.message?.channel) return;
   for (const [id, account] of Object.entries(accounts)) {
-    const seat = game.seats.find((s) => s.id === id);
+    // 던전에서는 주인이 지원군과 자리를 바꿔 **자리에 없을 수 있다.** 그래도 전리품과
+    // 칭호는 주인 몫이라, 열 때 떠 둔 자리(`ownerSeat`)로 알린다.
+    const seat = game.seats.find((s) => s.id === id) ?? (id === game.owner ? game.ownerSeat : null);
     if (!seat) continue;
     const npc = seat.kind === 'npc';
     const now = earnedTitles(account, { npc });
@@ -636,7 +639,9 @@ async function finishDungeon(game) {
   if (won) {
     // 엘리트를 눕히면 가짓수도 값도 MT 확률도 오른다(casino/loot.js).
     const drops = roll(Math.random, { elite: Boolean(mob?.elite) });
-    const saved = await payout.dungeonWon(id, drops);
+    const saved = await payout.dungeonWon(id, drops, {
+      foe: mob?.name, elite: Boolean(mob?.elite), solo: !game.allyUsed,
+    });
     await game.message?.channel?.send({
       embeds: [base({
         title: mob?.elite ? '⚔️ 엘리트를 쓰러뜨렸어요' : '⚔️ 쓰러뜨렸어요',
@@ -645,11 +650,13 @@ async function finishDungeon(game) {
           + (saved.ok ? '' : '\n\n_저장하지 못했어요._')
           + overText(game, cashed),
         color: mob?.elite ? 0xc9a227 : THEME_COLOR,
-        footer: `남은 체력 ${me?.gold ?? 0} · /사용 으로 회복약을 먹을 수 있어요`,
+        footer: `남은 체력 ${me?.gold ?? 0} · /사용 으로 회복약을 먹을 수 있어요`
+          + (mob?.name ? ` · /에너미 도감 에 ${mob.name}의 성향이 적혔어요` : ''),
       })],
     }).catch(() => {});
+    await announceTitles(game, saved.accounts);
   } else {
-    await payout.dungeonLost(id);
+    const saved = await payout.dungeonLost(id, me?.id ?? id);
     await game.message?.channel?.send({
       embeds: [base({
         title: '💀 쓰러졌어요',
@@ -664,9 +671,11 @@ async function finishDungeon(game) {
         color: 0x6b5b5b,
       })],
     }).catch(() => {});
+    await announceTitles(game, saved.accounts);
   }
   // 캐시를 비워야 다음 명령이 서버를 다시 본다. 쓰러진 것도 일어난 것도 여기서 갈린다.
   forget(id);
+  forgetBook(id);                  // 도감이 바뀌었다
   if (me) forget(me.id);
 }
 
@@ -804,6 +813,10 @@ async function openDungeon(interaction) {
   // 오너 이름도 적어 둔다. 지원군과 자리를 바꾸면 자리에서 사라지는데, 끝날 때 "마티암이
   // 사백의 체력을 고쳤어요" 라고 부를 이름이 있어야 한다.
   game.ownerName = game.seats[0].name;
+  game.ownerSeat = { ...game.seats[0] };
+  // 지원군을 한 번이라도 부르면 참이 된다. 다시 주인으로 바꿔도 안 돌아간다 — `솔플` 은
+  // "혼자 처치" 라서다.
+  game.allyUsed = false;
   const enemy = state.mobSeat(mob, 0, DUNGEON);
   // 등급을 자리에 남긴다. 판이 끝날 때 `finishDungeon` 이 볼 수 있는 것은 자리뿐이다.
   enemy.elite = mob.elite;
@@ -834,6 +847,10 @@ async function openDungeon(interaction) {
   }
 
   game.message = await room.send(payloadFor(game));
+  // 도감에 이름과 설명이 열린다. **판을 막지 않는다** — 못 적으면 다음에 만날 때 적힌다.
+  payout.metEnemy(me, mob.name)
+    .then((r) => { if (r.ok) forgetBook(me); })
+    .catch(() => {});
   kick(game);
 }
 
@@ -1176,6 +1193,7 @@ async function handlePlay(interaction, game, action, arg) {
       }
       // **넘긴 체력은 여기서 정산하지 않는다** — 판이 끝날 때 한 번에(finishDungeon).
       // 물러난 사람의 넘긴 몫은 장부에 그대로 남고, 다시 불려 나오면 그대로 걸 수 있다.
+      if (arg !== 'me') game.allyUsed = true;
       state.swapFighter(game, fighter, arg === 'me'
         ? { ...displayOf(want), kind: 'human', userId: want }
         : { ...state.npcSeat(arg), kind: 'npc' });

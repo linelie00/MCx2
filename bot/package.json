@@ -18,7 +18,8 @@
     "check-dungeon": "node scripts/check-dungeon.mjs",
     "check-load": "node scripts/check-load.mjs",
     "check-ack": "node scripts/check-ack.mjs",
-    "check-crafts": "node scripts/check-crafts.mjs"
+    "check-crafts": "node scripts/check-crafts.mjs",
+    "check-bestiary": "node scripts/check-bestiary.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

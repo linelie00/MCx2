@@ -92,6 +92,12 @@ export const TITLES = [
   { key: 'apprenticeSmith', name: '견습 장인', tier: 1, cond: '제작 1회', group: '제작', desc: '처음으로 무언가를 제 손으로 만들었다.', when: (s) => n(s, 'crafted') >= 1 },
   { key: 'shattered', name: '산산조각', tier: 1, cond: '제작하다 부수면 (🎲 1)', group: '제작', desc: '재료값은 수업료로 치자.', when: (s) => n(s, 'craftBroke') >= 1 },
   { key: 'masterSmith', name: '명장', tier: 3, cond: '다이아몬드 제작품', group: '제작', desc: '이름을 새겨 넣어도 부끄럽지 않다.', when: (s) => n(s, 'bestCraft') >= 5 },
+
+  // ---- 던전 — /홀덤 던전 이 쌓는 전적. 처치는 지원군이 대신 싸웠어도 주인 몫으로 센다
+  { key: 'dungeonRose', name: '던전 속에 피어난 장미', tier: 1, cond: '던전에서 쓰러지면', group: '던전', desc: '붉은 것이 피었다. 꽃은 아니었다.', when: (s) => n(s, 'dungeonDied') >= 1 },
+  { key: 'soloPlay', name: '솔플', tier: 2, cond: '지원군 없이 혼자 에너미 처치', group: '던전', desc: '미겔도 마티암도 부르지 않았다. 부를 걸 그랬나.', when: (s) => n(s, 'soloWon') >= 1 },
+  { key: 'hunter', name: '사냥꾼', tier: 2, cond: '에너미 20회 처치', group: '던전', desc: '던전 입구의 발자국 절반이 이 사람 것이다.', when: (s) => n(s, 'dungeonWon') >= 20 },
+  { key: 'eliteSlayer', name: '엘리트', tier: 3, cond: '엘리트 에너미 처치', group: '던전', desc: '금빛 테를 두른 놈을 눕혔다.', when: (s) => n(s, 'eliteKill') >= 1 },
 ];
 
 /**

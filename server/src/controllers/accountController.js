@@ -10,7 +10,7 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, mt, hp, title, items, crafts, stats, refilledAt, healedAt, updatedAt }
+ * account shape: { gold, mt, hp, title, items, crafts, enemies, stats, refilledAt, healedAt, updatedAt }
  *
  * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
  * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
@@ -120,6 +120,12 @@ function craftOf(c) {
   };
 }
 
+/**
+ * 에너미 도감의 키 — **에너미 이름 그대로**다(봇의 `holdem/mobs.js`). 일흔다섯이 다 다르고
+ * 짧아서 따로 키를 달지 않았다. 이름을 바꾸면 그 에너미의 기록이 끊긴다.
+ */
+const ENEMY_KEY_RE = /^[\p{L}\p{N} ·'!?-]{1,30}$/u;
+
 /** 한 번에 다룰 수 있는 계정 수. 자리는 넷이지만 넉넉히 둔다. */
 const MAX_IDS = 16;
 
@@ -138,6 +144,7 @@ const blank = () => ({
   title: null,
   items: {},
   crafts: [],           // /요리·/제작 이 만든 것. 명부에 없는 물건이라 한 줄씩 담는다
+  enemies: {},          // 에너미 도감 { 이름: { met, won } } — 만나면 이름이, 이기면 성향이 드러난다
   stats: {},
   refilledAt: null,
   healedAt: null,       // 오늘 체력을 되찾았는지. 골드 도장(refilledAt)과 **따로** 센다
@@ -162,6 +169,7 @@ const normalize = (raw) => {
   if (!Number.isFinite(acct.hp)) acct.hp = MAX_HP;
   if (!acct.items || typeof acct.items !== 'object') acct.items = {};
   if (!Array.isArray(acct.crafts)) acct.crafts = [];
+  if (!acct.enemies || typeof acct.enemies !== 'object' || Array.isArray(acct.enemies)) acct.enemies = {};
   return acct;
 };
 
@@ -173,6 +181,7 @@ const publicView = (acct) => ({
   title: acct.title,
   items: acct.items,
   crafts: acct.crafts,
+  enemies: acct.enemies,
   stats: acct.stats,
   refilledAt: acct.refilledAt,
 });
@@ -296,6 +305,8 @@ const BUMP_KEYS = new Set([
   // 요리·제작 칭호가 읽는다. 태웠다 · 부쉈다 · 괴식으로 골드 이상 · 만든 요리를 먹었다 ·
   // 먹고 탈이 났다 · 먹고 쓰러졌다 · 남에게 먹인 것이 탈을 냈다
   'burnt', 'craftBroke', 'monsterDish', 'ateMade', 'foodSick', 'diedEating', 'fedBad',
+  // 던전 칭호가 읽는다. 엘리트를 눕혔다 · 지원군 없이 이겼다 · 싸우던 자리가 쓰러졌다
+  'eliteKill', 'soloWon', 'dungeonDied',
 ]);
 
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
@@ -333,6 +344,21 @@ exports.applyDeltas = (req, res) => {
     return res.status(400).json({ error: 'bump 는 객체여야 합니다' });
   }
 
+  // 에너미 도감. `{ id: { 이름: { met: +n, won: +n } } }` — 더하기만 한다.
+  const foes = body.enemies || {};
+  if (typeof foes !== 'object' || Array.isArray(foes)) return res.status(400).json({ error: 'enemies 는 객체여야 합니다' });
+  for (const [id, book] of Object.entries(foes)) {
+    if (!book || typeof book !== 'object' || Array.isArray(book)) return res.status(400).json({ error: `enemies.${id} 가 객체가 아닙니다` });
+    for (const [name, rec] of Object.entries(book)) {
+      if (!ENEMY_KEY_RE.test(name)) return res.status(400).json({ error: `에너미 이름 모양이 아닙니다: ${name}` });
+      if (!rec || typeof rec !== 'object') return res.status(400).json({ error: `enemies.${id}.${name} 가 객체가 아닙니다` });
+      for (const [k, v] of Object.entries(rec)) {
+        if (!['met', 'won'].includes(k)) return res.status(400).json({ error: `모르는 도감 칸: ${k}` });
+        if (!Number.isSafeInteger(v) || v < 0) return res.status(400).json({ error: `도감 칸이 0 이상 정수가 아닙니다: ${k}=${v}` });
+      }
+    }
+  }
+
   const craftOps = body.crafts || {};
   if (typeof craftOps !== 'object' || Array.isArray(craftOps)) {
     return res.status(400).json({ error: 'crafts 는 객체여야 합니다' });
@@ -355,7 +381,7 @@ exports.applyDeltas = (req, res) => {
   // **bump 도 합집합에 넣는다.** 토너먼트는 핸드마다 전적만 적고 골드는 끝에 한 번
   // 옮기므로, 카운터만 있는 쓰기가 실제로 온다. 만든 것만 넣고 빼는 쓰기도 마찬가지.
   const ids = parseIds([...new Set(
-    [...Object.values(maps), bump, craftOps].flatMap((m) => Object.keys(m)),
+    [...Object.values(maps), bump, craftOps, foes].flatMap((m) => Object.keys(m)),
   )]);
   if (typeof ids === 'string') return res.status(400).json({ error: ids });
 
@@ -439,6 +465,13 @@ exports.applyDeltas = (req, res) => {
       return res.status(409).json({ error: `만든 것이 가득입니다(${MAX_CRAFTS}개): ${id}` });
     }
 
+    // 도감 — 복사해서 더한다(items 와 같은 까닭).
+    const enemies = { ...acct.enemies };
+    for (const [name, rec] of Object.entries(foes[id] ?? {})) {
+      const was = enemies[name] ?? { met: 0, won: 0 };
+      enemies[name] = { met: (was.met ?? 0) + (rec.met ?? 0), won: (was.won ?? 0) + (rec.won ?? 0) };
+    }
+
     // 최고 잔액은 **서버가 알아서** 센다. 봇은 새 잔액을 모르는 채로 증감만 보내므로
     // (그게 이 설계의 핵심이다) 여기서 재는 것이 유일하게 맞는 자리다.
     const stats = { ...acct.stats, peak: Math.max(acct.stats?.peak ?? 0, gold) };
@@ -446,7 +479,7 @@ exports.applyDeltas = (req, res) => {
       stats[k] = MAX_KEYS.has(k) ? Math.max(stats[k] ?? 0, v) : (stats[k] ?? 0) + v;
     }
 
-    next[id] = { ...acct, gold, mt, hp, items, crafts, stats, updatedAt: now() };
+    next[id] = { ...acct, gold, mt, hp, items, crafts, enemies, stats, updatedAt: now() };
   }
 
   Object.assign(data.accounts, next);

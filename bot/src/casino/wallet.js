@@ -106,6 +106,7 @@ export async function load(guildId, userIds) {
  *   hp      체력 증감          `{ id: ±n }` — 서버가 0~최대치로 **자른다**
  *   items   아이템 증감        `{ id: { 키: ±n } }`
  *   bump    그 판의 전적 카운터 `{ id: { 이름: n } }`
+ *   enemies 에너미 도감        `{ id: { 에너미 이름: { met, won } } }` — 더하기만
  *
  * **다섯이 한 번에 나가는 것이 핵심이다.** 상점은 골드를 빼고 아이템을 넣는 한 번의
  * 쓰기여야 하고, 던전은 체력과 아이템을 같이 써야 한다. 나눠 보내면 반쪽만 저장된
@@ -122,7 +123,7 @@ export async function load(guildId, userIds) {
  * 거르는 일은 `applyBody` 로 따로 빼 뒀다 — HTTP 없이 검사할 수 있게.
  */
 export function applyBody({
-  deltas = {}, mt = {}, hp = {}, items = {}, bump = {}, crafts = {},
+  deltas = {}, mt = {}, hp = {}, items = {}, bump = {}, crafts = {}, enemies = {},
 } = {}) {
   const clean = (map) => Object.fromEntries(
     Object.entries(map).filter(([id, n]) => n !== 0 && isPersistent(id)),
@@ -148,10 +149,21 @@ export function applyBody({
         .filter(([id, op]) => isPersistent(id) && ((op?.add?.length ?? 0) + (op?.remove?.length ?? 0)) > 0)
         .map(([id, op]) => [id, { add: op.add ?? [], remove: op.remove ?? [] }]),
     ),
+    // 도감은 **이름이 키**다(holdem/mobs.js). 칸마다 0 은 빼고, 빈 이름은 통째로 뺀다.
+    enemies: Object.fromEntries(
+      Object.entries(enemies)
+        .filter(([id]) => isPersistent(id))
+        .map(([id, book]) => [id, Object.fromEntries(
+          Object.entries(book)
+            .map(([name, rec]) => [name, clean(rec)])
+            .filter(([, rec]) => Object.keys(rec).length),
+        )])
+        .filter(([, book]) => Object.keys(book).length),
+    ),
   };
 }
 
-/** 보낼 것이 하나라도 있는지. 여섯이 다 비면 굳이 서버를 부르지 않는다. */
+/** 보낼 것이 하나라도 있는지. 다 비면 굳이 서버를 부르지 않는다. */
 export const hasMoves = (body) => Object.values(body).some((m) => Object.keys(m).length);
 
 export async function apply(moves = {}) {

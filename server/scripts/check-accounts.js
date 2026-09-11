@@ -199,6 +199,7 @@ const server = app.listen(0, async () => {
   eq('전적도 그대로', old.body.accounts['1000009'].stats.hands, 5);
   eq('chips 는 응답에 안 나온다', old.body.accounts['1000009'].chips, undefined);
   eq('옛 기록에는 만든 것이 빈 배열', old.body.accounts['1000009'].crafts, []);
+  eq('옛 기록에는 도감이 빈 객체', old.body.accounts['1000009'].enemies, {});
   eq('둘 다 있으면 gold 가 이긴다', old.body.accounts['1000010'].gold, 200);
   // null 은 `null <= 0` 이 참이라 그냥 두면 멀쩡한 계정이 죽은 것으로 읽힌다.
   eq('hp: null 은 죽음이 아니다', old.body.accounts['1000011'].hp, 100);
@@ -327,6 +328,19 @@ const server = app.listen(0, async () => {
 
   // 옛 기록에는 칸이 없다 — 빈 배열로 읽는다
   eq('만든 것만 넣는 쓰기도 id 로 친다', (await post('/deltas', { crafts: { 3000002: { add: [dish('eeee0001')] } } })).status, 200);
+
+  // --- 에너미 도감 — 더하기만. 이름이 키다
+  const FK = '4000001';
+  const f1 = await post('/deltas', { enemies: { [FK]: { 리톨: { met: 1 } } } });
+  eq('만나면 적힌다', [f1.status, f1.body.accounts[FK].enemies], [200, { 리톨: { met: 1, won: 0 } }]);
+  const f2 = await post('/deltas', { enemies: { [FK]: { 리톨: { met: 1, won: 1 }, '빨간 슬라임': { met: 1 } } } });
+  eq('더해진다', f2.body.accounts[FK].enemies, { 리톨: { met: 2, won: 1 }, '빨간 슬라임': { met: 1, won: 0 } });
+  eq('도감만 쓰는 것도 id 로 친다', f2.status, 200);
+  eq('이상한 이름은 400', (await post('/deltas', { enemies: { [FK]: { '<script>': { met: 1 } } } })).status, 400);
+  eq('모르는 칸은 400', (await post('/deltas', { enemies: { [FK]: { 리톨: { kill: 1 } } } })).status, 400);
+  eq('음수는 400', (await post('/deltas', { enemies: { [FK]: { 리톨: { met: -1 } } } })).status, 400);
+  eq('던전 칭호 카운터를 받는다',
+    (await post('/deltas', { bump: { [FK]: { eliteKill: 1, soloWon: 1, dungeonDied: 1 } } })).body.accounts[FK].stats.eliteKill, 1);
 
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');

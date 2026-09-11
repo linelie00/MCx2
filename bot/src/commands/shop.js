@@ -6,7 +6,12 @@
  * 것 전부라 그대로 쓰면 루비까지 판다.
  *
  * **사기는 진열대로 나눈다.** 셀렉트 한 칸에 25개가 한도인데 파는 것이 서른을 넘는다.
- * 진열대를 먼저 고르고 그 안에서 물건을 고른다.
+ * 진열대를 먼저 고르고 그 안에서 물건을 고른다. **팔기는 쪽을 넘긴다** — 주운 것이
+ * 스물다섯 가지를 넘으면 싼 것이 목록에서 밀려나 팔 수가 없었다.
+ *
+ * **만든 것(`/요리`·`/제작`)은 탭이 따로다.** 명부에 없는 물건이라 개수가 아니라 하나씩
+ * 판다. 값은 만들 때 정해졌다(재료값 × 등급 배수). 스톤(0골드)은 "버리기" 가 된다 —
+ * 칸이 25개라 비울 길이 있어야 한다.
  *
  * **응답이 에페메랄이다.** 남의 지갑을 들여다볼 일이 아니고, 무엇보다 사는 버튼은
  * 계정을 고치므로 남이 누르면 안 된다. 그런데 에페메랄 메시지도 봇이 재시작하면
@@ -29,6 +34,8 @@ import { base, fail, trunc, THEME_COLOR } from '../embeds.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEMS, ITEM_BY_KEY, CATS } from '../casino/items.js';
 import { isDead, forget } from '../casino/alive.js';
+import { GRADE_BY_KEY } from '../casino/crafts.js';
+import { forgetCrafts, craftLabel } from '../casino/bag.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
 export const PREFIX = 'shop';
@@ -67,6 +74,9 @@ const REVIVE = 'potionRevive';
 /** 한 번에 사고파는 개수 버튼. */
 const STEPS = [1, 5, 10];
 
+/** 팔기 한 쪽. 셀렉트 한 칸의 한도다. */
+const PER_PAGE = 25;
+
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 /** 먹으면 어떻게 되는지. `15~20` · `+5` · `−2` · `0` — 재료는 날로 먹으면 아픈 것도 있다. */
 function healText(heal) {
@@ -98,34 +108,49 @@ const bagFor = (account) => Object.entries(account?.items ?? {})
   .filter(([item, n]) => sellable(item) && n > 0)
   .sort(([a], [b]) => b.price - a.price || a.name.localeCompare(b.name, 'ko'));
 
-function listPayload(side, owner, account, shelfKey = 'potion') {
+function listPayload(side, owner, account, shelfKey = 'potion', page = 0) {
   const dead = isDead(account);
   const gold = Number(account?.gold ?? 0);
+
+  if (side === 'made') return madePayload(owner, account);
 
   if (side === 'sell') {
     const bag = bagFor(account);
     const worth = bag.reduce((a, [item, n]) => a + item.price * n, 0);
+    const pages = Math.max(1, Math.ceil(bag.length / PER_PAGE));
+    const at = Math.min(Math.max(0, page), pages - 1);
+    const shown = bag.slice(at * PER_PAGE, at * PER_PAGE + PER_PAGE);
     const embed = base({
       title: '💰 상점 — 팔기',
       description: bag.length
-        ? table(bag.slice(0, 25).map(([item, n]) => [clipW(`${item.name} ×${n}`, 24), `${num(item.price)}골드`]))
+        ? table(shown.map(([item, n]) => [clipW(`${item.name} ×${n}`, 24), `${num(item.price)}골드`]))
           + `\n_다 팔면_ **${num(worth)}골드**`
         : '_팔 수 있는 게 없어요._\n던전에서 주운 잡화·재료를 여기서 값으로 바꿉니다.',
       color: THEME_COLOR,
-      footer: '값은 명부에 적힌 그대로예요 — 흥정은 없습니다',
+      footer: `값은 명부에 적힌 그대로예요 — 흥정은 없습니다${pages > 1 ? ` · ${at + 1} / ${pages}쪽` : ''}`,
     }).addFields({ name: '가진 골드', value: `**${num(gold)}**`, inline: true });
 
     const rows = [];
     if (bag.length) {
       rows.push(new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(cid('sell', 'pick', '-', 0, owner))
+          // 쪽을 key 자리에 싣는다 — 쪽마다 셀렉트의 customId 가 달라진다.
+          .setCustomId(cid('sell', 'pick', `p${at}`, 0, owner))
           .setPlaceholder('팔 것 고르기')
-          .addOptions(bag.slice(0, 25).map(([item, n]) => ({
+          .addOptions(shown.map(([item, n]) => ({
             label: trunc(item.name, 100),
             value: item.key,
             description: trunc(`${n}개 · 개당 ${num(item.price)}골드`, 100),
           }))),
+      ));
+    }
+    if (pages > 1) {
+      // 쪽 자리에 숫자를 쓴다. 탭 버튼은 `t` 라 안 부딪힌다(50035).
+      rows.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(cid('sell', 'list', '-', at - 1, owner))
+          .setLabel('◀').setStyle(ButtonStyle.Secondary).setDisabled(at === 0),
+        new ButtonBuilder().setCustomId(cid('sell', 'list', '-', at + 1, owner))
+          .setLabel('▶').setStyle(ButtonStyle.Secondary).setDisabled(at === pages - 1),
       ));
     }
     rows.push(sideRow('sell', owner));
@@ -194,7 +219,101 @@ function sideRow(side, owner) {
       .setLabel('팔기').setEmoji('💰')
       .setStyle(side === 'sell' ? ButtonStyle.Primary : ButtonStyle.Secondary)
       .setDisabled(side === 'sell'),
+    new ButtonBuilder().setCustomId(cid('made', 'list', '-', 't', owner))
+      .setLabel('만든 것').setEmoji('🍽️')
+      .setStyle(side === 'made' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+      .setDisabled(side === 'made'),
   );
+}
+
+// ---------------------------------------------------------------- 만든 것
+
+const byWorth = (a, b) => b.price - a.price || a.name.localeCompare(b.name, 'ko');
+
+/** 만든 것 목록. 25개가 칸의 한도라 한 쪽에 다 들어간다(`MAX_CRAFTS`). */
+function madePayload(owner, account) {
+  const gold = Number(account?.gold ?? 0);
+  const crafts = [...(account?.crafts ?? [])].sort(byWorth);
+  const worth = crafts.reduce((a, c) => a + c.price, 0);
+
+  const embed = base({
+    title: '🍽️ 상점 — 만든 것',
+    description: crafts.length
+      ? table(crafts.map((c) => [clipW(craftLabel(c), 26), `${num(c.price)}골드`]))
+        + `\n_다 팔면_ **${num(worth)}골드**`
+        + (crafts.some((c) => c.mt) ? '\n_💠 💎 는 `/mt상점` 에서 MT 로도 바꿀 수 있어요._' : '')
+      : '_만든 게 없어요._\n`/요리` · `/제작` 으로 만든 것을 여기서 팝니다.',
+    color: THEME_COLOR,
+    footer: `${crafts.length} / 25칸 · 값은 만들 때 정해졌어요(재료값 × 등급)`,
+  }).addFields({ name: '가진 골드', value: `**${num(gold)}**`, inline: true });
+
+  const rows = [];
+  if (crafts.length) {
+    rows.push(new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(cid('made', 'pick', '-', 0, owner))
+        .setPlaceholder('팔 것 고르기')
+        .addOptions(crafts.map((c) => ({
+          label: trunc(c.name, 100),
+          value: c.id,
+          emoji: GRADE_BY_KEY[c.grade]?.emoji,
+          description: trunc(`${GRADE_BY_KEY[c.grade]?.label ?? ''} · ${c.kind} · ${num(c.price)}골드`, 100),
+        }))),
+    ));
+  }
+  rows.push(sideRow('made', owner));
+  return { embeds: [embed], components: rows, flags: MessageFlags.Ephemeral };
+}
+
+function madeCard(id, owner, account) {
+  const c = (account?.crafts ?? []).find((x) => x.id === id);
+  if (!c) return madePayload(owner, account);
+  const g = GRADE_BY_KEY[c.grade];
+  const lines = [c.desc ? `_${c.desc}_` : '', ''];
+  lines.push(`${g?.emoji ?? ''} **${g?.label ?? c.grade}** ${c.kind}`
+    + (c.kind === '요리' ? ` · 먹으면 **${c.heal > 0 ? '+' : ''}${c.heal}**` : '')
+    + ` · 팔면 **${num(c.price)}골드**`);
+  if (c.mt) lines.push(`_\`/mt상점\` 에서 팔면 **${c.mt} MT** 예요 — 골드와 MT 중 한쪽만 받아요._`);
+
+  return {
+    embeds: [base({ title: `🍽️ ${c.name}`, description: lines.join('\n'), color: g?.color ?? THEME_COLOR })],
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(cid('made', 'do', c.id, 1, owner))
+        .setLabel(c.price ? `팔기 · ${num(c.price)}골드` : '버리기')
+        .setStyle(c.price ? ButtonStyle.Success : ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(cid('made', 'list', '-', 't', owner))
+        .setLabel('목록으로').setStyle(ButtonStyle.Secondary),
+    )],
+    flags: MessageFlags.Ephemeral,
+  };
+}
+
+/** 만든 것 하나를 판다. 빼기와 골드가 한 번의 쓰기다. */
+async function sellCraft(id, owner, account) {
+  const c = (account?.crafts ?? []).find((x) => x.id === id);
+  if (!c) return { embeds: [fail('이미 없어요. 먹었거나 팔았을 수 있어요.')], components: [], flags: MessageFlags.Ephemeral };
+
+  const saved = await apply({
+    deltas: { [owner]: c.price },
+    crafts: { [owner]: { remove: [c.id] } },
+  });
+  if (!saved.ok) return { embeds: [fail('저장하지 못했어요. 잠시 뒤에 다시 해 주세요.')], components: [], flags: MessageFlags.Ephemeral };
+  forget(owner);
+  forgetCrafts(owner);
+
+  return {
+    embeds: [base({
+      title: c.price ? '💰 팔았어요' : '🗑️ 버렸어요',
+      description: `${craftLabel(c)}${c.price ? ` · +**${num(c.price)}골드**` : ''}`,
+      color: THEME_COLOR,
+      footer: `가진 골드 ${num(saved.accounts[owner]?.gold)} · 만든 것 ${saved.accounts[owner]?.crafts?.length ?? 0} / 25`,
+    })],
+    components: [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(cid('made', 'list', '-', 't', owner))
+        .setLabel('목록으로').setEmoji('🍽️').setStyle(ButtonStyle.Secondary),
+    )],
+    flags: MessageFlags.Ephemeral,
+  };
 }
 
 function cardPayload(side, key, owner, account) {
@@ -293,7 +412,8 @@ const data = new SlashCommandBuilder()
   .setName('상점')
   .setDescription('회복약과 재료를 사고, 주운 것을 팝니다.')
   .addSubcommand((s) => s.setName('사기').setDescription('회복약과 재료를 삽니다'))
-  .addSubcommand((s) => s.setName('팔기').setDescription('가진 잡화·재료를 팝니다'));
+  .addSubcommand((s) => s.setName('팔기').setDescription('가진 잡화·재료를 팝니다'))
+  .addSubcommand((s) => s.setName('만든것').setDescription('요리·제작으로 만든 것을 팝니다'));
 
 /** 계정을 읽고 앉아 있는지 본다. 막혔으면 `null`. */
 async function open(interaction, id) {
@@ -312,7 +432,7 @@ async function open(interaction, id) {
 }
 
 async function execute(interaction) {
-  const side = interaction.options.getSubcommand() === '팔기' ? 'sell' : 'buy';
+  const side = { 팔기: 'sell', 만든것: 'made' }[interaction.options.getSubcommand()] ?? 'buy';
   const id = interaction.user.id;
 
   // 계정을 읽는다 — HTTP 라 먼저 응답을 잡는다. 남이 볼 것이 아니라 에페메랄로.
@@ -352,6 +472,12 @@ async function component(interaction) {
     return;
   }
 
+  if (side === 'made') {
+    if (what === 'pick') { await interaction.editReply(madeCard(interaction.values?.[0], owner, account)); return; }
+    if (what === 'do') { await interaction.editReply(await sellCraft(key, owner, account)); return; }
+    await interaction.editReply(madePayload(owner, account));
+    return;
+  }
   if (what === 'shelf') {
     await interaction.editReply(listPayload('buy', owner, account, interaction.values?.[0]));
     return;
@@ -364,8 +490,8 @@ async function component(interaction) {
     await interaction.editReply(await trade(side, key, Number(n) || 1, owner, account));
     return;
   }
-  // 목록 버튼은 진열대를 key 자리에 싣고 온다('-' 이면 첫 칸).
-  await interaction.editReply(listPayload(side, owner, account, key === '-' ? undefined : key));
+  // 목록 버튼은 진열대를 key 자리에, 팔기의 쪽을 n 자리에 싣고 온다(`t` 면 첫 쪽).
+  await interaction.editReply(listPayload(side, owner, account, key === '-' ? undefined : key, Number(n) || 0));
 }
 
 export default {

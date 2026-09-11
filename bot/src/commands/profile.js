@@ -34,6 +34,8 @@ import {
 } from '../casino/titles.js';
 import { stamp, stampMd } from '../casino/titleCard.js';
 import { ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
+import { GRADE_BY_KEY } from '../casino/crafts.js';
+import { craftLabel } from '../casino/bag.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
 export const PREFIX = 'prof';
@@ -224,7 +226,23 @@ function titlesTab(account, page, npc) {
  * 명부에 없는 키가 나올 수 있다 — 아이템을 지웠는데 누가 들고 있는 경우다.
  * 그때도 개수는 보여 준다. 사라진 것처럼 보이는 편보다 낫다.
  */
+/**
+ * 만든 것(`/요리`·`/제작`). 창고의 첫 쪽 맨 위에 둔다 — 개수가 아니라 하나하나라서
+ * 표와 섞으면 읽기 나쁘다. 좋은 것부터 열 줄만, 나머지는 개수로.
+ */
+const MADE_SHOWN = 10;
+function madeLines(account) {
+  const crafts = [...(account.crafts ?? [])]
+    .sort((a, b) => (GRADE_BY_KEY[b.grade]?.rank ?? 0) - (GRADE_BY_KEY[a.grade]?.rank ?? 0) || b.price - a.price);
+  if (!crafts.length) return [];
+  const lines = [`**■ 만든 것**　\`${crafts.length}/25\``];
+  for (const c of crafts.slice(0, MADE_SHOWN)) lines.push(`${craftLabel(c)} · _${c.kind}_`);
+  if (crafts.length > MADE_SHOWN) lines.push(`_…외 ${crafts.length - MADE_SHOWN}개 — \`/상점 만든것\` 에서 다 봐요._`);
+  return [...lines, ''];
+}
+
 function itemsTab(account, page) {
+  const made = madeLines(account);
   const owned = Object.entries(account.items ?? {})
     .filter(([, n]) => n > 0)
     .map(([key, n]) => [ITEM_BY_KEY[key] ?? { key, name: key, kind: '?', price: 0, sell: false }, n])
@@ -233,7 +251,9 @@ function itemsTab(account, page) {
   if (!owned.length) {
     return {
       fields: [],
-      description: '_아직 아무것도 없어요._\n`/상점` 과 `/요리` 가 생기면 여기가 채워집니다.',
+      description: [...made, made.length
+        ? '_창고는 비었어요._'
+        : '_아직 아무것도 없어요._\n던전에서 줍거나 `/상점` 에서 사고, `/요리` · `/제작` 으로 만들어 보세요.'].join('\n'),
       pages: 1,
     };
   }
@@ -245,7 +265,8 @@ function itemsTab(account, page) {
   // 팔 수 있는 것만 센다. 회복약처럼 값은 있어도 못 파는 물건이 있다.
   const worth = owned.reduce((a, [item, n]) => a + (item.sell ? item.price * n : 0), 0);
 
-  const lines = [table(slice.map(([item, n]) => [clipW(item.name, 24), `×${num(n)}`]))];
+  // 만든 것은 첫 쪽에만. 쪽을 넘길 때마다 되풀이하면 표가 밀려 내려간다.
+  const lines = [...(at === 0 ? made : []), table(slice.map(([item, n]) => [clipW(item.name, 24), `×${num(n)}`]))];
   if (worth) lines.push(`_다 팔면_ **${num(worth)}골드**`);
 
   return {

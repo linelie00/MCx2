@@ -407,6 +407,8 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/아이템 정보` | 누구나 | 없음 (명부가 코드 안에 있다) |
 | `/상점 사기 · 팔기` | 누구나 | `GET /api/accounts` · `POST /deltas` (에페메랄) |
 | `/사용` | 누구나 | `GET /api/accounts` · `POST /deltas` |
+| `/요리` · `/제작` | 누구나 | 제미나이 1회 · `GET /api/accounts` · `POST /deltas` (재료 −, crafts +) |
+| `/mt상점` | 누구나 | `GET /api/accounts` · `POST /deltas` (crafts −, MT +) (에페메랄) |
 | `/주사위` `/뽑기` | 누구나 | 없음 |
 
 `판` 은 판을 아래에 다시 띄우고, `그만` 은 **판에 앉은 사람이나 판을 연 사람만** 접을 수 있다.

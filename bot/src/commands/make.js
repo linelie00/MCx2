@@ -28,6 +28,7 @@ import { judge as askJudge } from '../ai/judge.js';
 import { checkRate } from '../ai/client.js';
 import { base, fail, trunc } from '../embeds.js';
 import { displayOf } from '../casino/accounts.js';
+import { forgetCrafts } from '../casino/bag.js';
 
 const SLOTS = 5;
 
@@ -226,6 +227,8 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
     });
     return;
   }
+
+  forgetCrafts(me);          // /사용 자동완성이 새 요리를 보게
 
   const who = displayOf(me, { user: interaction.user, member: interaction.member }).name;
   await interaction.editReply({

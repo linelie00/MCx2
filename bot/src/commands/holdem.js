@@ -277,10 +277,14 @@ async function closeTable(game) {
   game.aiHandNo = -1;
   const final = state.standings(game);
 
-  // **`closeTable` 은 NPC 만 말한다.** 던전은 모브와 단둘이라 아무 말 없이 끝난다.
-  // 결과는 finishGame 이 이미 띄웠으니, 여기서는 판만 다시 올린다.
-  if (game.mode === 'dungeon' && !game.seats.some((s) => s.kind === 'npc')) {
-    await repost(game);
+  // **던전은 결과표를 다시 올리지 않는다.** 판이 끝나는 순간 결과표가 제자리에 한 번
+  // 그려지고, 그 아래에 finishDungeon 의 안내(이겼다·쓰러졌다·나왔다)가 마무리로 붙는다.
+  // 여기서 또 올리면 **같은 결과표가 두 번** 뜨는데, 그 사이에 넘긴 체력이 골드로 바뀌어
+  // 두 표의 숫자까지 달랐다(110 · +57 → 100 · +47). 앞의 것이 싸움의 결과이고,
+  // 바뀐 몫은 안내가 설명한다.
+  const again = game.mode !== 'dungeon';
+  if (!game.seats.some((s) => s.kind === 'npc')) {
+    if (again) await repost(game);
     return;
   }
 
@@ -293,7 +297,7 @@ async function closeTable(game) {
       { amount: `${Math.abs(delta)}${unitLabel(game)}`, delta, table: rows, me: seat.name },
       { always: true, live: 0.8 });
   }
-  await repost(game);
+  if (again) await repost(game);
 }
 
 /** 판을 열며 하는 인사. bard 주인인 미겔이 있으면 미겔이, 없으면 마티암이 한다. */
@@ -552,9 +556,12 @@ async function finishTourney(game) {
 function overText(game, cashed) {
   const rows = Object.entries(cashed?.gold ?? {});
   if (!rows.length) return '';
+  // 체력이 **얼마였는지**도 적는다. 결과표는 110 인데 남은 체력은 100 이라, 골드만
+  // 적으면 10 이 어디 갔는지 셈이 안 맞아 보인다.
   const lines = rows.map(([id, gold]) => {
     const name = game.seats.find((s) => s.id === id)?.name ?? displayOf(id)?.name ?? '누군가';
-    return `💰 **${name}** — 넘긴 체력을 **${gold.toLocaleString('ko-KR')}골드**로 바꿨어요.`;
+    const hp = cashed.rate ? Math.round(gold / cashed.rate) : null;
+    return `💰 **${name}** — 넘긴 체력${hp ? ` **${hp}**` : ''} → **${gold.toLocaleString('ko-KR')}골드**`;
   });
   if (!cashed.ok) lines.push('_저장하지 못했어요._');
   return `\n\n${lines.join('\n')}`;

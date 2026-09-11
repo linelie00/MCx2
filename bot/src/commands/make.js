@@ -15,11 +15,13 @@
  * 거절되면(그 사이 재료를 팔았다든가) 결과물도 안 들어간다.
  *
  * 결과는 **모두가 보는** 메시지로 낸다. 잘 만든 요리는 자랑하라고 있는 것이다.
+ * **내가 쓴 것(결과물·재료·과정)을 먼저 올리고** 결과는 그 아래에 붙인다 — 거절돼도 쓴 글이
+ * 남는다(`recipeText`).
  *
  * **먹으면 얼마나 차는지는 안 보여 준다.** 만들 때 굴려 두고(`crafts.effectOf`) `/사용` 이
  * 먹는 순간에만 꺼낸다. 독이 든 재료를 넣었으면 그것만 알려 준다 — 넣은 사람은 아니까.
  */
-import { SlashCommandBuilder, MessageFlags } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { getAccounts } from '../api.js';
 import { apply } from '../casino/wallet.js';
 import { ITEMS, ITEM_BY_KEY, findItem } from '../casino/items.js';
@@ -156,72 +158,135 @@ export function resultEmbed(mode, craft, { parts, total, capped, by, poison, who
 
 // ---------------------------------------------------------------- 만들기
 
-/** 칸에 적힌 재료를 키로. 자동완성을 안 고르고 이름을 쳐도 찾는다. */
-function readSlots(interaction) {
+/**
+ * 칸에 적힌 것을 재료로. `{ item }` 또는 `{ item: null, near: [비슷한 것] }`.
+ *
+ * 자동완성을 골랐으면 값이 키라 바로 찾는다. **안 고르고 쳐서 보낸 것도 찾아야 한다** —
+ * 이름이 긴 재료(`꿀 한 병`·`쪼글쪼글한 소시지`)가 많아서 사람은 `꿀`·`소시지` 만 친다.
+ * 그걸 전부 "이런 재료는 없어요" 로 돌려보냈더니, 다 가진 재료로 요리했는데 실패했다.
+ *
+ *   1. 키 · 이름 그대로
+ *   2. 자동완성 꾸밈을 뗀 이름 — `꿀 한 병 ×3 · 재료` (보이는 글자가 그대로 올 때가 있다)
+ *   3. 이름에 친 글자가 들어 있는 것 가운데 **가진 것이 하나뿐이면** 그것.
+ *      계정을 못 읽었으면 명부에서 하나뿐일 때만
+ *
+ * 여럿이 걸리면 고르지 않는다 — 엉뚱한 재료를 빼 가느니 되묻는다(`near`).
+ */
+const DECOR = /\s*×\s*\d+\s*(·\s*(재료|잡화|소비)\s*)?$|\s*·\s*(재료|잡화|소비)\s*$/;
+
+export function resolveSlot(raw, owned = null) {
+  const text = String(raw ?? '').trim();
+  const direct = findItem(text) ?? findItem(text.replace(DECOR, ''));
+  if (direct) return { item: direct };
+  const typed = norm(text.replace(DECOR, ''));
+  if (!typed) return { item: null, near: [] };
+  const hits = ITEMS.filter((i) => norm(i.name).includes(typed));
+  const mine = owned ? hits.filter((i) => Number(owned[i.key] ?? 0) > 0) : [];
+  if (mine.length === 1) return { item: mine[0] };
+  // 하나도 안 가졌는데 명부에서 하나로 좁혀지면 그것으로 친다 — "모자라요" 가 더 알아듣기 쉽다.
+  if (!mine.length && hits.length === 1) return { item: hits[0] };
+  return { item: null, near: (mine.length ? mine : hits).slice(0, 5) };
+}
+
+/** 칸 다섯을 읽는다. `{ raws, keys, unknown: [{ raw, near }] }` */
+function readSlots(interaction, owned) {
+  const raws = [];
   const keys = [];
   const unknown = [];
   for (let i = 1; i <= SLOTS; i += 1) {
     const raw = interaction.options.getString(`재료${i}`);
     if (!raw) continue;
-    const item = findItem(raw);
-    if (item) keys.push(item.key); else unknown.push(raw);
+    raws.push(raw);
+    const { item, near } = resolveSlot(raw, owned);
+    if (item) keys.push(item.key); else unknown.push({ raw, near });
   }
-  return { keys, unknown };
+  return { raws, keys, unknown };
 }
 
 const tally = (keys) => keys.reduce((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {});
 
-const deny = (interaction, text) =>
-  interaction.reply({ embeds: [fail(text)], flags: MessageFlags.Ephemeral });
+/** `멧돼지 갈비 ×2, 꿀 한 병` — 같은 재료는 묶는다. */
+const namesOf = (counts) => Object.entries(counts).map(([k, n]) => `${ITEM_BY_KEY[k].name}${n > 1 ? ` ×${n}` : ''}`);
+
+/**
+ * **내가 쓴 것.** 결과보다 먼저, 실패해도 남는다.
+ *
+ * 과정은 오백 자까지 쓰는 글인데, 예전에는 재료 하나가 틀리면 나만 보이는 거절 한 줄만
+ * 남고 **쓴 글이 통째로 사라졌다.** 그래서 명령을 받자마자 이것부터 채널에 올리고, 판정
+ * 결과(성공이든 실패든)는 그 아래에 붙인다. 임베드가 아니라 **본문**이다 — 휴대폰에서
+ * 임베드 글은 복사가 안 된다. 다시 쓰려면 복사할 수 있어야 한다.
+ *
+ * 남이 쓴 글이 그대로 나가므로 멘션은 막는다(`allowedMentions`).
+ */
+export function recipeText(mode, { who, name, process, names }) {
+  const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+  return [
+    `📝 **${who}의 ${mode.verb}** — ${clip(name, 60)}`,
+    `재료 · ${names.length ? names.join(', ') : '_없음_'}`,
+    `>>> ${clip(process, 1500)}`,
+  ].join('\n');
+}
 
 /**
  * 만든다. `deps` 는 검사가 제미나이 대신 끼우는 자리다.
+ *
+ * **맨 먼저 `deferReply` 하고 내가 쓴 것을 올린다**(recipeText). 그다음의 거절·판정·결과는
+ * 전부 **같은 메시지에** 임베드로 붙인다 — 그래서 무엇이 틀렸든 쓴 글은 그 자리에 있다.
  */
 export async function make(interaction, mode, { judge = askJudge, rand = Math.random, now = Date.now } = {}) {
   const me = interaction.user.id;
   const name = String(interaction.options.getString('결과물') ?? '').trim();
   const process = String(interaction.options.getString('과정') ?? '').trim();
-  const { keys, unknown } = readSlots(interaction);
+  const who = displayOf(me, { user: interaction.user, member: interaction.member }).name;
 
-  if (!name || !process) { await deny(interaction, '무엇을 어떻게 만들지 적어 주세요.'); return; }
-  if (unknown.length) {
-    await deny(interaction, `이런 재료는 없어요: **${unknown.join(', ')}**. 목록에서 골라 주세요.`);
-    return;
-  }
-  if (!keys.length) { await deny(interaction, '재료를 하나는 넣어 주세요.'); return; }
+  await interaction.deferReply();
+
+  // 쓴 것을 먼저. 재료 이름은 계정을 읽기 전이라 명부로만 풀어 보고, 못 푼 것은 친 그대로.
+  let names = readSlots(interaction, null).raws.map((raw) => resolveSlot(raw).item?.name ?? raw);
+  const recipe = () => recipeText(mode, { who, name, process, names });
+  const show = (embeds) => interaction.editReply({ content: recipe(), embeds, allowedMentions: { parse: [] } });
+  const refuse = (text) => show([fail(text)]);
+  await show([]);
+
+  if (!name || !process) { await refuse('무엇을 어떻게 만들지 적어 주세요.'); return; }
 
   // 한도 — 판정 한 번이 제미나이 한 번이다. /캐입 과 한도를 같이 쓴다.
   const since = now() - (lastAt.get(me) ?? 0);
   if (since < COOLDOWN) {
-    await deny(interaction, `조금만 천천히요. ${Math.ceil((COOLDOWN - since) / 1000)}초 뒤에 다시 해 주세요.`);
+    await refuse(`조금만 천천히요. ${Math.ceil((COOLDOWN - since) / 1000)}초 뒤에 다시 해 주세요. 쓴 글은 위에 남겨 뒀어요.`);
     return;
   }
   const limited = checkRate();
-  if (limited) { await deny(interaction, limited); return; }
-
-  // 계정을 읽고 제미나이를 부른다 — 둘 다 3초를 넘길 수 있다.
-  await interaction.deferReply();
+  if (limited) { await refuse(limited); return; }
 
   let account;
   try {
     ({ accounts: { [me]: account } } = await getAccounts([me]));
   } catch (err) {
-    await interaction.editReply({ embeds: [fail(`계정을 읽지 못했어요. ${err.message}`)] });
+    await refuse(`계정을 읽지 못했어요. ${err.message}`);
     return;
   }
 
+  // 가진 것을 알고 나서 다시 푼다 — `꿀` 처럼 짧게 친 것은 가진 것에서 찾는다.
+  const { keys, unknown } = readSlots(interaction, account?.items ?? {});
+  if (unknown.length) {
+    const lines = unknown.map(({ raw, near }) => `**${raw}**${near.length ? ` — 혹시 ${near.map((i) => i.name).join(' · ')}?` : ''}`);
+    await refuse(`어떤 재료인지 모르겠어요. 자동완성에서 골라 주세요.\n${lines.join('\n')}`);
+    return;
+  }
+  if (!keys.length) { await refuse('재료를 하나는 넣어 주세요.'); return; }
+
   const counts = tally(keys);
+  names = namesOf(counts);
   const short = Object.entries(counts)
     .filter(([k, n]) => Number(account?.items?.[k] ?? 0) < n)
     .map(([k, n]) => `**${ITEM_BY_KEY[k].name}** ${n}개 (가진 것 ${Number(account?.items?.[k] ?? 0)})`);
   if (short.length) {
-    await interaction.editReply({ embeds: [fail(`재료가 모자라요.\n${short.join('\n')}`)] });
+    await refuse(`재료가 모자라요.\n${short.join('\n')}`);
     return;
   }
   if ((account?.crafts?.length ?? 0) >= MAX_CRAFTS) {
-    await interaction.editReply({
-      embeds: [fail(`만든 것이 가득이에요(${MAX_CRAFTS}개). \`/상점\` 에서 팔거나 \`/사용\` 으로 먹어 주세요.`)],
-    });
+    await refuse(`만든 것이 가득이에요(${MAX_CRAFTS}개). \`/상점\` 에서 팔거나 \`/사용\` 으로 먹어 주세요.`);
     return;
   }
 
@@ -229,9 +294,7 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
   const dice = rollDice(rand);
   const answer = await judge(mode, { name, process, counts, dice });
   if (!answer.ok) {
-    await interaction.editReply({
-      embeds: [fail(`판정을 못 했어요 — **재료는 그대로예요.**\n${answer.error}`)],
-    });
+    await refuse(`판정을 못 했어요 — **재료는 그대로예요.**\n${answer.error}`);
     return;
   }
 
@@ -272,22 +335,15 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
     bump: { [me]: bump },
   });
   if (!saved.ok) {
-    await interaction.editReply({
-      embeds: [fail('저장하지 못했어요 — **재료는 그대로예요.** 그 사이에 재료를 팔았거나 서버가 잠깐 쉬는 중일 수 있어요.')],
-    });
+    await refuse('저장하지 못했어요 — **재료는 그대로예요.** 그 사이에 재료를 팔았거나 서버가 잠깐 쉬는 중일 수 있어요.');
     return;
   }
 
   forgetCrafts(me);          // /사용 자동완성이 새 요리를 보게
 
-  const who = displayOf(me, { user: interaction.user, member: interaction.member }).name;
-  await interaction.editReply({
-    embeds: [resultEmbed(mode, { ...craft, verdict: answer.judged.verdict }, {
-      parts, total, capped, by, poison, who,
-      // 같은 재료를 여러 칸에 넣었으면 `멧돼지 갈비 ×2` 로 묶는다.
-      names: Object.entries(counts).map(([k, n]) => `${ITEM_BY_KEY[k].name}${n > 1 ? ` ×${n}` : ''}`),
-    })],
-  });
+  await show([resultEmbed(mode, { ...craft, verdict: answer.judged.verdict }, {
+    parts, total, capped, by, poison, who, names,
+  })]);
 
   // 새 칭호. 만들기 전 계정과 견준다 — 칭호는 저장하지 않고 전적에서 계산하므로.
   const held = earned(saved.accounts[me]);

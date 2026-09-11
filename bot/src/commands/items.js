@@ -19,8 +19,7 @@ import {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder,
 } from 'discord.js';
-import { POISON } from '../casino/crafts.js';
-import { ITEMS, ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
+import { ITEMS, ITEM_BY_KEY } from '../casino/items.js';
 import { base, trunc, THEME_COLOR } from '../embeds.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
@@ -47,15 +46,11 @@ const iconOf = (item) => KINDS.find((k) => k.key !== 'all' && k.of(item))?.icon 
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 
-/** 회복력 한 줄. `15 ~ 20` · `+5` · `−15` · `없음` */
-function healText(heal) {
-  if (Array.isArray(heal)) return `${heal[0]} ~ ${heal[1]}`;
-  if (!heal) return '없음';
-  return heal > 0 ? `+${heal}` : `−${Math.abs(heal)}`;
-}
-
-/** 목록 칸에 들어갈 짧은 회복력. 부호만 보여도 뜻이 통한다. */
-const healShort = (heal) => (Array.isArray(heal) ? `${heal[0]}~${heal[1]}` : String(heal));
+/*
+ * **먹으면 체력이 얼마나 오르내리는지는 도감에 안 적는다.** 독이 든 것도 이쁘니 버섯처럼
+ * 애매한 이름을 달아 두었는데, 여기서 −70 이 보이면 이름이 무슨 소용인가. 먹어 봐야 안다.
+ * (명부에는 그대로 있다 — `/사용` 과 `/요리` 가 읽는다.)
+ */
 
 /**
  * 사고팔기 한 줄.
@@ -95,8 +90,7 @@ function listPayload(kindKey, page) {
   // 표가 들썩인다. 걸러 낸 목록 전체에서 재고, 폭은 칸 수로 잰다(한글은 두 칸).
   const w = Math.min(NAME_W, Math.max(...all.map((i) => width(i.name)), 1));
   const rows = slice.map((i) => padEndW(clipW(i.name, w), w + 2)
-    + padStartW(i.price ? `${num(i.price)}골드` : '—', 10)
-    + padStartW(healShort(i.heal), 8));
+    + padStartW(i.price ? `${num(i.price)}골드` : '—', 10));
 
   const embed = base({
     title: `${kind.icon} 아이템 도감 — ${kind.label}`,
@@ -144,20 +138,17 @@ function itemPayload(key, kindKey = 'all', page = 0) {
   const item = ITEM_BY_KEY[key];
   if (!item) return listPayload(kindKey, page);
 
-  // 독과 괴식은 `/요리` 에서 뜻이 있다. 요리하기 전에 알 수 있어야 고를 수 있다.
-  const tags = [
-    item.poison ? `☠️ **독 — ${POISON[item.poison].label}** · 요리에 넣으면 먹을 때 탈이 날 수 있어요` : '',
-    item.monster ? '🪱 **괴식** · 잘 요리하면 「던전밥」' : '',
-  ].filter(Boolean);
+  // 괴식은 알려 준다 — 생김새만 봐도 아는 것이고, 「던전밥」 칭호를 노릴 수 있어야 한다.
+  // **독은 안 알려 준다.** 먹어 봐야 안다.
+  const tags = [item.monster ? '🪱 **괴식** · 잘 요리하면 「던전밥」' : ''].filter(Boolean);
   const embed = base({
     title: `${iconOf(item)} ${item.name}`,
     description: `_${item.desc}_\n\n${tags.length ? `${tags.join('\n')}\n\n` : ''}${tradeText(item)}`,
     color: THEME_COLOR,
-    footer: item.heal ? `먹었을 때 · 최대 체력은 ${MAX_HP}` : '먹어도 아무 일 없어요',
+    footer: '먹으면 어떻게 될지는 먹어 봐야 알아요',
   }).addFields(
     { name: '갈래', value: item.kind, inline: true },
     { name: '값', value: item.price ? `${num(item.price)}골드` : '_없음_', inline: true },
-    { name: '회복', value: healText(item.heal), inline: true },
   );
 
   return {

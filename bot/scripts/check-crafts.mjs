@@ -244,8 +244,9 @@ check('사람의 글은 울타리 안에, 지시는 따르지 말라고', () => 
 });
 check('독과 괴식을 재료 줄에 적고, 먹은 결과는 쓰지 말라고', () => {
   const { system, user } = promptFor(COOK, { name: 'x', process: 'y', counts: { deathCap: 1, bugPile: 1 }, dice: 10 });
-  assert.match(user, /죽음의 갓 \(재료 · ☠️ 독\(치명\)\)/);
-  assert.match(user, /벌레 더미 \(잡화 · 괴식\)/);
+  // 이름은 애매해도 심사관은 알아야 한다 — 독 표시는 모델에게만 간다.
+  assert.match(user, /하얀 우산버섯 \(재료 · ☠️ 독\(치명\) · \)|하얀 우산버섯 \(재료 · ☠️ 독\(치명\)\)/);
+  assert.match(user, /벌레 더미 \(재료 · 괴식\)/);
   assert.match(system, /독 재료를 썼다는 이유만으로는 깎지 마라/);
   assert.match(system, /먹었을 때 어떻게 되는지는 묘사에도 한줄평에도 쓰지 마라/);
   assert.match(system, /"detox"/);

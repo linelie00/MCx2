@@ -165,7 +165,7 @@ function listPayload(side, owner, account, shelfKey = 'potion', page = 0) {
     description: table(stock.map((i) => [clipW(i.name, 24), `${num(i.price)}골드`]))
       + (dead
         ? '\n💀 _쓰러져 있어서 부활의 영약만 보여요._'
-        : `\n_먹으면 어떻게 되는지는 ${'`'}/아이템 정보${'`'} 에서 볼 수 있어요._`),
+        : (shelf.key === 'potion' ? '\n_회복약만 효능이 적혀 있어요. 재료는 먹어 봐야 알아요._' : '')),
     color: THEME_COLOR,
     footer: '산 것은 /사용 으로 먹습니다',
   }).addFields({ name: '가진 골드', value: `**${num(gold)}**`, inline: true });
@@ -194,7 +194,8 @@ function listPayload(side, owner, account, shelfKey = 'potion', page = 0) {
         .addOptions(stock.map((i) => ({
           label: trunc(i.name, 100),
           value: i.key,
-          description: trunc(`${num(i.price)}골드 · 먹으면 ${healText(i.heal)}`, 100),
+          // 회복약에만 효능을 적는다(`/사용` 과 같은 원칙). 재료는 먹어 봐야 안다.
+          description: trunc(i.kind === '소비' ? `${num(i.price)}골드 · 먹으면 ${healText(i.heal)}` : `${num(i.price)}골드`, 100),
         }))),
     ),
     sideRow('buy', owner),
@@ -327,7 +328,7 @@ function cardPayload(side, key, owner, account) {
 
   const lines = [`_${item.desc}_`, ''];
   lines.push(side === 'buy'
-    ? `개당 **${num(item.price)}골드** · 먹으면 **${healText(item.heal)}**`
+    ? `개당 **${num(item.price)}골드**${item.kind === '소비' ? ` · 먹으면 **${healText(item.heal)}**` : ''}`
     : `개당 **${num(item.price)}골드** · 가진 것 **${num(have)}개**`);
   if (!most) {
     lines.push('', side === 'buy' ? '_골드가 모자라요._' : '_팔 게 없어요._');

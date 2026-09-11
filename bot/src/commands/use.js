@@ -84,8 +84,13 @@ async function autocomplete(interaction) {
     .filter((c) => c.kind === '요리' && match(c.name))
     // 얼마나 차는지는 **안 보여 준다** — 먹을 때까지 비밀이다.
     .map((c) => ({ name: trunc(`${craftLabel(c)} · 만든 요리`, 100), value: `${CRAFT_VALUE}${c.id}` }));
+  // **회복약만 효능을 적는다.** 약병에는 라벨이 붙어 있지만, 버섯에는 없다 — 독이 든 것을
+  // 애매한 이름으로 숨겨 뒀는데 여기서 (−70) 이 보이면 소용없다.
   const hit = ITEMS.filter((i) => usable(i) && match(i.name, i.key))
-    .map((i) => ({ name: trunc(`${i.name} (${[i.heal].flat().map(sign).join('~')})`, 100), value: i.key }));
+    .map((i) => ({
+      name: trunc(i.kind === '소비' ? `${i.name} (${[i.heal].flat().map(sign).join('~')})` : i.name, 100),
+      value: i.key,
+    }));
   await interaction.respond([...made, ...hit].slice(0, 25));
 }
 

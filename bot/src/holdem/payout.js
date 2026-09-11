@@ -221,6 +221,19 @@ export async function settleOverflow(game, { rand = Math.random } = {}) {
 export const TOURNEY_MT = [2, 1];
 
 /**
+ * 등수(1위 먼저) → `{ id: MT }`. **모브도 등수에 든다** — 모브가 1위면 1위 몫은 사라지고
+ * 2위(사람)는 2위 몫만 받는다. 모브가 1·2위를 다 차지하면 그 판에는 MT 가 없다.
+ * 사람이 모브를 밀어내고 한 칸 올라가는 일은 없다.
+ */
+export function tourneyMt(order) {
+  const mt = {};
+  order.slice(0, TOURNEY_MT.length).forEach((id, i) => {
+    if (id && !id.startsWith('mob:')) mt[id] = TOURNEY_MT[i];
+  });
+  return mt;
+}
+
+/**
  * 토너먼트 정산. `{ deltas, pool }` — **판 시작 대비 칩 증감이 곧 골드 증감이다**(`net()`).
  *
  * **모브 칩도 따면 골드가 된다.** 모브는 지갑이 없어서 모브가 들고 앉은 칩은 아무도 안 낸
@@ -248,10 +261,7 @@ export function tourneyDeltas(game) {
 export async function finishTourney(game, order = []) {
   expect(game, 'gold');
   const { deltas, pool } = tourneyDeltas(game);
-  const mt = {};
-  order.slice(0, TOURNEY_MT.length).forEach((id, i) => {
-    if (id && !id.startsWith('mob:')) mt[id] = TOURNEY_MT[i];
-  });
+  const mt = tourneyMt(order);
   const saved = await apply({ deltas, mt });
   if (saved.ok) game.gold.rebase();
   return { ...saved, deltas, mt, pool };
@@ -302,5 +312,5 @@ export const dungeonLost = (id, died = id) => apply({
 export const metEnemy = (id, foe) => apply({ enemies: { [id]: { [foe]: { met: 1 } } } });
 
 export default {
-  hand, finishTourney, tourneyDeltas, TOURNEY_MT, dungeonWon, dungeonLost, metEnemy, settleOverflow, overOf, capOf, OVER_RATE, ALLY_HEAL_SHARE,
+  hand, finishTourney, tourneyDeltas, tourneyMt, TOURNEY_MT, dungeonWon, dungeonLost, metEnemy, settleOverflow, overOf, capOf, OVER_RATE, ALLY_HEAL_SHARE,
 };

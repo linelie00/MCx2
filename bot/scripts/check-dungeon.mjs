@@ -18,7 +18,7 @@
 import assert from 'node:assert/strict';
 import * as hold from '../src/holdem/state.js';
 import { ledger } from '../src/casino/wallet.js';
-import { overOf, capOf, OVER_RATE, tourneyDeltas, TOURNEY_MT } from '../src/holdem/payout.js';
+import { overOf, capOf, OVER_RATE, tourneyDeltas, tourneyMt, TOURNEY_MT } from '../src/holdem/payout.js';
 import { boardEmbed } from '../src/holdem/render.js';
 import { DUNGEON, STAKES, atLevel } from '../src/casino/stakes.js';
 import { MAX_HP } from '../src/casino/items.js';
@@ -579,8 +579,14 @@ check('중간에 접으면 그 시점 칩 그대로 — 모브에게서 딴 몫�
   hold.remove('tm-cut');
 });
 
-check('MT 는 1위 둘 · 2위 하나', () => {
+check('MT 는 1위 둘 · 2위 하나 — 모브도 등수에 들고, 모브 자리 몫은 사라진다', () => {
   assert.deepEqual(TOURNEY_MT, [2, 1]);
+  const a = '100000000000000001';
+  const b = 'npc:migel';
+  assert.deepEqual(tourneyMt([a, b, 'mob:0']), { [a]: 2, [b]: 1 }, '사람 1·2위');
+  assert.deepEqual(tourneyMt(['mob:0', a, b]), { [a]: 1 }, '모브 1위 — 사람 2위는 2위 몫만');
+  assert.deepEqual(tourneyMt([a, 'mob:0', b]), { [a]: 2 }, '모브 2위 — 3위는 안 받는다');
+  assert.deepEqual(tourneyMt(['mob:0', 'mob:1', a]), {}, '모브 1·2위 — 그 판에 MT 는 없다');
 });
 
 check('탈락 순서가 인원과 맞는다', () => {

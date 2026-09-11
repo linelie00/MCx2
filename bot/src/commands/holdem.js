@@ -848,9 +848,14 @@ async function openDungeon(interaction) {
 
   game.message = await room.send(payloadFor(game));
   // 도감에 이름과 설명이 열린다. **판을 막지 않는다** — 못 적으면 다음에 만날 때 적힌다.
+  // 들어간 횟수도 여기서 늘어나므로(titles.dungeonRuns) `모험가` 는 **들어가는 순간** 알린다.
   payout.metEnemy(me, mob.name)
-    .then((r) => { if (r.ok) forgetBook(me); })
-    .catch(() => {});
+    .then(async (r) => {
+      if (!r.ok) return;
+      forgetBook(me);
+      await announceTitles(game, r.accounts);
+    })
+    .catch((err) => console.warn('[홀덤] 도감 기록 실패:', err.message));
   kick(game);
 }
 

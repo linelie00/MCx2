@@ -35,6 +35,9 @@ async function accountFor(id, { wait = WAIT_MS } = {}) {
   }
 }
 
+/** 그 사람의 계정 통째로(골드·창고·만든 것). **못 읽으면 `null`.** `/양도` 자동완성이 쓴다. */
+export const walletFor = (id, opts) => accountFor(id, opts);
+
 /** 그 사람의 만든 것. 못 읽으면 빈 목록. */
 export async function craftsFor(id, opts) {
   return (await accountFor(id, opts))?.crafts ?? [];

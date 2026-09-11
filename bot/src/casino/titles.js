@@ -18,6 +18,14 @@ import { CATEGORIES } from './poker.js';
 /** 전적이 비어 있어도 안전하게 읽는다. 처음 보는 계정은 stats 가 통째로 없다. */
 const n = (s, k) => Number(s?.[k] ?? 0);
 
+/**
+ * 던전에 들어간 횟수. **따로 세지 않고 에너미 도감에서 읽는다** — 판을 열 때마다 그 에너미에
+ * `met` 이 하나씩 붙으니, 다 더하면 들어간 횟수다(`payout.metEnemy`). 도감이 생기기 전의
+ * 던전은 안 센다.
+ */
+export const dungeonRuns = (account) => Object.values(account?.enemies ?? {})
+  .reduce((a, r) => a + Number(r?.met ?? 0), 0);
+
 /** 최소 표본을 걸고 재는 비율. 열 판에서 6승은 60% 지만 아무 뜻이 없다. */
 const rate = (s, min) => (n(s, 'hands') >= min ? n(s, 'won') / n(s, 'hands') : 0);
 
@@ -94,6 +102,7 @@ export const TITLES = [
   { key: 'masterSmith', name: '명장', tier: 3, cond: '다이아몬드 제작품', group: '제작', desc: '이름을 새겨 넣어도 부끄럽지 않다.', when: (s) => n(s, 'bestCraft') >= 5 },
 
   // ---- 던전 — /홀덤 던전 이 쌓는 전적. 처치는 지원군이 대신 싸웠어도 주인 몫으로 센다
+  { key: 'adventurer', name: '모험가', tier: 1, cond: '던전 5회', group: '던전', desc: '다섯 번 내려갔고, 다섯 번 올라왔다.', when: (s, a) => dungeonRuns(a) >= 5 },
   { key: 'dungeonRose', name: '던전 속에 피어난 장미', tier: 1, cond: '던전에서 쓰러지면', group: '던전', desc: '붉은 것이 피었다. 꽃은 아니었다.', when: (s) => n(s, 'dungeonDied') >= 1 },
   { key: 'soloPlay', name: '솔플', tier: 2, cond: '지원군 없이 혼자 에너미 처치', group: '던전', desc: '미겔도 마티암도 부르지 않았다. 부를 걸 그랬나.', when: (s) => n(s, 'soloWon') >= 1 },
   { key: 'hunter', name: '사냥꾼', tier: 2, cond: '에너미 20회 처치', group: '던전', desc: '던전 입구의 발자국 절반이 이 사람 것이다.', when: (s) => n(s, 'dungeonWon') >= 20 },

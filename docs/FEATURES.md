@@ -401,6 +401,7 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/홀덤 토너먼트` | 누구나 | `POST /deltas` (끝에 한 번 + MT) |
 | `/홀덤 던전` | 누구나 | `POST /deltas` (핸드마다 체력, 이기면 아이템 · 열 때 도감에 만남) |
 | `/에너미 도감` | 누구나 | `GET /api/accounts` (만난 에너미만 이름이 열린다) |
+| `/양도` | 누구나 | `GET /api/accounts` · `POST /deltas` (보내는 쪽 −, 받는 쪽 + 한 번에) |
 | `/출첵` | 누구나 | `POST /api/accounts/claim` |
 | `/급여` | 누구나 | `POST /api/accounts/deltas` |
 | `/프로필` | 누구나 | `GET /api/accounts` · `POST /accounts/title` (카드·전적·칭호·아이템 탭) |

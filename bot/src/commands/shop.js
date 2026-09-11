@@ -221,7 +221,7 @@ function sideRow(side, owner) {
       .setStyle(side === 'sell' ? ButtonStyle.Primary : ButtonStyle.Secondary)
       .setDisabled(side === 'sell'),
     new ButtonBuilder().setCustomId(cid('made', 'list', '-', 't', owner))
-      .setLabel('만든 것').setEmoji('🍽️')
+      .setLabel('요리 · 제작').setEmoji('🍽️')
       .setStyle(side === 'made' ? ButtonStyle.Primary : ButtonStyle.Secondary)
       .setDisabled(side === 'made'),
   );
@@ -238,7 +238,7 @@ function madePayload(owner, account) {
   const worth = crafts.reduce((a, c) => a + c.price, 0);
 
   const embed = base({
-    title: '🍽️ 상점 — 만든 것',
+    title: '🍽️ 상점 — 요리 · 제작',
     description: crafts.length
       ? table(crafts.map((c) => [clipW(craftLabel(c), 26), `${num(c.price)}골드`]))
         + `\n_다 팔면_ **${num(worth)}골드**`

@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 
 const {
   GRADES, GRADE_BY_KEY, MODES, MAX_CRAFTS, POISON, roll, scoreOf, gradeOf, priceOf, effectOf, worthOf,
-  dicePoints, poisonOf, monstrous, newId,
+  dicePoints, poisonOf, monstrous, flatShare, newId,
 } = await import('../src/casino/crafts.js');
 const { promptFor, parseJudgement } = await import('../src/ai/judge.js');
 
@@ -36,7 +36,7 @@ function check(name, fn) {
 
 const COOK = MODES.요리;
 const CRAFT = MODES.제작;
-const full = { fit: 999, craft: 999, look: 999 };        // 글로 부풀린 점수
+const full = { fit: 999, craft: 999, harmony: 999 };        // 글로 부풀린 점수
 
 console.log('\n점수');
 check('두 가지 다 합쳐서 100', () => {
@@ -46,10 +46,10 @@ check('두 가지 다 합쳐서 100', () => {
 });
 check('제미나이가 적어 온 점수는 칸의 만점에서 자른다', () => {
   const { parts, total } = scoreOf(COOK, full, 20);
-  assert.deepStrictEqual(parts, { fit: 30, craft: 30, look: 10, dice: 30 });
+  assert.deepStrictEqual(parts, { fit: 30, craft: 30, harmony: 10, dice: 30 });
   assert.equal(total, 100);
-  assert.deepStrictEqual(scoreOf(COOK, { fit: -5, craft: 'x', look: null }, 1).parts,
-    { fit: 0, craft: 0, look: 0, dice: 0 });
+  assert.deepStrictEqual(scoreOf(COOK, { fit: -5, craft: 'x', harmony: null }, 1).parts,
+    { fit: 0, craft: 0, harmony: 0, dice: 0 });
 });
 check('주사위는 1 이면 0, 20 이면 만점', () => {
   assert.equal(dicePoints(1, 30), 0);
@@ -92,20 +92,27 @@ check('주사위를 고르게 굴리면 스톤은 5% 쯤', () => {
 });
 
 console.log('\n값');
-check('판매가는 재료값 × 배수 + 등급 고정값, 브론즈가 본전', () => {
-  const keys = ['boarRib', 'honey'];                       // 15 + 12
-  assert.equal(worthOf(keys), 27);
-  // 스톤 0 · 브론즈 27 · 실버 27×1.2+10 · 골드 27×1.5+30 · 플래티넘 27×2+80 · 다이아 27×2.5+150
-  assert.deepStrictEqual(GRADES.map((g) => priceOf(keys, g)), [0, 27, 42, 71, 134, 218]);
+check('판매가는 재료값 × 배수 + 고정값 × 가짓수 몫, 브론즈가 본전', () => {
+  const three = ['boarRib', 'honey', 'rosemary'];          // 15 + 12 + 3, 세 가지 → 고정값 전부
+  assert.equal(worthOf(three), 30);
+  assert.deepStrictEqual(GRADES.map((g) => priceOf(three, g)), [0, 30, 46, 75, 140, 225]);
+  const two = ['boarRib', 'honey'];                         // 두 가지 → 고정값의 ⅔
+  assert.deepStrictEqual(GRADES.map((g) => priceOf(two, g)), [0, 27, 39, 61, 107, 168]);
 });
-check('등급이 값을 갖는다 — 싼 재료로 잘 만들어도 받는다', () => {
-  assert.equal(priceOf(['twig'], GRADE_BY_KEY.diamond), 153);
-  assert.equal(priceOf(['twig'], GRADE_BY_KEY.bronze), 1);
+check('고정값은 가짓수만큼 — 한 가지 ⅓ · 두 가지 ⅔ · 셋 이상 전부', () => {
+  assert.deepStrictEqual([['a'], ['a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'c', 'd', 'e']].map(flatShare),
+    [1 / 3, 2 / 3, 1, 1]);
+  assert.equal(flatShare(['potato', 'potato', 'potato']), 1 / 3, '같은 것을 세 칸에 넣어도 한 가지');
+});
+check('감자 하나로 골드를 찍어낼 수 없다', () => {
+  // 고정값을 통째로 주던 때는 감자(2골드) 하나로 만든 골드 요리가 33골드였다.
+  assert.equal(priceOf(['potato'], GRADE_BY_KEY.gold), 13);
+  assert.equal(priceOf(['potato', 'potato', 'potato'], GRADE_BY_KEY.gold), 19, '세 칸에 넣어도 한 가지');
+  assert.equal(priceOf(['potato', 'carrot', 'onion'], GRADE_BY_KEY.gold), 39, '세 가지를 조합하면 제값');
 });
 check('비싼 재료가 등급 차이를 끝없이 벌리지 않는다', () => {
-  // 예전(배수만 ×7)엔 사프란 다섯 개 다이아몬드가 2100골드였다.
-  const saffron = Array(5).fill('saffron');
-  assert.equal(priceOf(saffron, GRADE_BY_KEY.diamond), 900);
+  // 예전(배수만 ×7)엔 사프란 다섯 개 다이아몬드가 2100골드였다. 이제 한 가지라 고정값 ⅓.
+  assert.equal(priceOf(Array(5).fill('saffron'), GRADE_BY_KEY.diamond), 800);
 });
 check('값이 0 인 재료만 써도 스톤이 아니면 1골드', () => {
   assert.equal(priceOf(['wetMoss'], GRADE_BY_KEY.bronze), 1);
@@ -204,19 +211,19 @@ check('만든 것은 25개까지 — 셀렉트 한 칸', () => assert.equal(MAX_
 
 console.log('\n판정 읽기');
 check('JSON 그대로', () => {
-  const j = parseJudgement(COOK, '{"fit":26,"craft":24,"look":8,"heal":28,"desc":"윤이 난다.","verdict":"좋다"}');
-  assert.deepStrictEqual(j, { fit: 26, craft: 24, look: 8, heal: 28, detox: null, desc: '윤이 난다.', verdict: '좋다' });
+  const j = parseJudgement(COOK, '{"fit":26,"craft":24,"harmony":8,"heal":28,"desc":"윤이 난다.","verdict":"좋다"}');
+  assert.deepStrictEqual(j, { fit: 26, craft: 24, harmony: 8, heal: 28, detox: null, desc: '윤이 난다.', verdict: '좋다' });
 });
 check('손질 점수는 있으면 읽고, 없어도 판정은 산다', () => {
-  assert.equal(parseJudgement(COOK, '{"fit":1,"craft":1,"look":1,"heal":1,"detox":7,"desc":"x"}').detox, 7);
-  assert.equal(parseJudgement(COOK, '{"fit":1,"craft":1,"look":1,"heal":1,"desc":"x"}').detox, null);
+  assert.equal(parseJudgement(COOK, '{"fit":1,"craft":1,"harmony":1,"heal":1,"detox":7,"desc":"x"}').detox, 7);
+  assert.equal(parseJudgement(COOK, '{"fit":1,"craft":1,"harmony":1,"heal":1,"desc":"x"}').detox, null);
 });
 check('코드 울타리와 앞뒤 말은 떼고 읽는다', () => {
   const j = parseJudgement(CRAFT, '여기 있어요\n```json\n{"fit": 40, "craft": 15, "desc": "반짝인다."}\n```');
   assert.deepStrictEqual([j.fit, j.craft, j.desc, j.verdict], [40, 15, '반짝인다.', '']);
 });
 check('숫자 칸이 비면 실패 — 0 점으로 치지 않는다', () => {
-  assert.equal(parseJudgement(COOK, '{"fit":26,"craft":24,"desc":"x"}'), null, 'look·heal 이 없다');
+  assert.equal(parseJudgement(COOK, '{"fit":26,"craft":24,"desc":"x"}'), null, 'harmony·heal 이 없다');
   assert.equal(parseJudgement(CRAFT, '{"fit":"많이","craft":10,"desc":"x"}'), null);
 });
 check('묘사가 없으면 실패', () => {
@@ -250,6 +257,9 @@ check('독과 괴식을 재료 줄에 적고, 먹은 결과는 쓰지 말라고'
   assert.match(system, /독 재료를 썼다는 이유만으로는 깎지 마라/);
   assert.match(system, /먹었을 때 어떻게 되는지는 묘사에도 한줄평에도 쓰지 마라/);
   assert.match(system, /"detox"/);
+  assert.match(system, /harmony \(0~10\): 맛의 조화/);
+  assert.match(system, /길이가 아니라 핵심 공정을 짚었는지 본다/);
+  assert.equal(/"look"/.test(system), false, '모양 칸이 남았다');
   // 실제로 "주사위의 도움 덕분인지" 라고 쓴 적이 있다. 이야기 속 인물은 주사위를 모른다.
   assert.match(system, /"주사위"·"점수"·"등급" 같은 말을 쓰지 마라/);
 });

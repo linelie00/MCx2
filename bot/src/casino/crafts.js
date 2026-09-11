@@ -26,7 +26,10 @@ import { ITEM_BY_KEY } from './items.js';
  *   mult   판매가 = 재료값 × mult + flat. 브론즈가 **본전**이다
  *   flat   등급마다 **고정으로 얹는 값.** 배수만 두면 비싼 재료를 쓸수록 등급 차이가
  *          벌어지고(사프란 다섯 개 다이아몬드 = 2100골드였다), 싼 재료로 잘 만든 것은
- *          값을 못 받았다. 배수를 낮추고 이것을 얹어 **등급 자체가 값을 갖게** 했다
+ *          값을 못 받았다. 배수를 낮추고 이것을 얹어 **등급 자체가 값을 갖게** 했다.
+ *          다만 **서로 다른 재료 가짓수만큼만** 준다(`FLAT_FULL`) — 감자 하나(2골드)로
+ *          만든 골드 요리가 33골드에 팔려서, 스톤만 아니면 절대 손해가 안 나는 골드
+ *          수도꼭지가 됐다
  *   mt     `/mt상점` 에 팔면 받는 MT
  *   heal   탈 없는 요리를 먹었을 때의 범위. 제미나이가 이 안에서 고른다
  */
@@ -46,11 +49,13 @@ export const GRADE_BY_KEY = Object.fromEntries(GRADES.map((g, rank) => [g.key, {
  *   fit    재료 → 결과물이 합당한가
  *   craft  요리: 잘 조리했나(익힐 것은 익혔나, 독을 그냥 쓰진 않았나)
  *          제작: 과정이 말이 되나
- *   look   요리만. 지문으로 봐서 맛있어 보이나
+ *   harmony 요리만. 맛의 조화 — 재료끼리 어울리나, 비린내·쓴맛을 잡을 것이 있나, 간을 맞췄나.
+ *          처음엔 "모양"(지문으로 봐서 맛있어 보이나)이었는데, 그 지문을 쓰는 게 제미나이
+ *          자신이라 **자기 글을 채점하는 셈**이었다. 사람의 선택이 점수에 닿게 바꿨다
  *   dice   주사위. 봇이 굴린다
  */
 export const MODES = {
-  요리: { key: 'cook', verb: '요리', icon: '🍳', parts: { fit: 30, craft: 30, look: 10, dice: 30 }, edible: true },
+  요리: { key: 'cook', verb: '요리', icon: '🍳', parts: { fit: 30, craft: 30, harmony: 10, dice: 30 }, edible: true },
   제작: { key: 'craft', verb: '제작', icon: '🔨', parts: { fit: 50, craft: 20, dice: 30 }, edible: false },
 };
 
@@ -82,7 +87,7 @@ export const monstrous = (keys) => keys.some((k) => ITEM_BY_KEY[k]?.monster);
  * 점수 칸의 이름. **굴림 칸은 "실력" 이라 부른다** — 화면에 "주사위 27/30" 이 뜨면 운으로
  * 점수를 받은 것처럼 읽힌다. 굴림은 그날의 손놀림이다. 🎲 아이콘과 숫자는 그대로 보여 준다.
  */
-export const PART_LABEL = { fit: '합당함', craft: '조리', look: '모양', dice: '실력' };
+export const PART_LABEL = { fit: '합당함', craft: '조리', harmony: '조화', dice: '실력' };
 export const partLabel = (mode, part) => (mode.key === 'craft' && part === 'craft' ? '과정' : PART_LABEL[part]);
 
 /** 한 사람이 들고 있을 수 있는 만든 것. **서버의 MAX_CRAFTS 와 같아야 한다**(셀렉트 한 칸 = 25). */
@@ -151,16 +156,25 @@ export function gradeOf(total, d, { poisoned = false } = {}) {
   return { grade, capped, by };
 }
 
+/**
+ * 등급 고정값을 다 받는 재료 가짓수. 한 가지면 ⅓, 두 가지면 ⅔, 셋 이상이면 전부.
+ * **개수가 아니라 가짓수다** — 같은 감자를 세 칸에 넣어도 한 가지다.
+ */
+export const FLAT_FULL = 3;
+
+/** 고정값을 얼마나 받는지. 0~1. */
+export const flatShare = (keys) => Math.min(1, new Set(keys).size / FLAT_FULL);
+
 /** 재료값. 값이 0 인 것(젖은 이끼 같은)은 0 으로 센다. */
 export const worthOf = (keys) => keys.reduce((a, k) => a + (ITEM_BY_KEY[k]?.price ?? 0), 0);
 
 /**
- * 판매가. 스톤은 0, 나머지는 **재료값 × 배수 + 등급의 고정값**이고 적어도 1골드.
+ * 판매가. 스톤은 0, 나머지는 **재료값 × 배수 + 등급 고정값 × 가짓수 몫**이고 적어도 1골드.
  * 값이 0 인 재료만 써도 브론즈 이상이면 팔 수는 있어야 한다.
  */
 export function priceOf(keys, grade) {
   if (!grade.mult) return 0;
-  return Math.max(1, Math.round(worthOf(keys) * grade.mult + grade.flat));
+  return Math.max(1, Math.round(worthOf(keys) * grade.mult + grade.flat * flatShare(keys)));
 }
 
 /**
@@ -201,5 +215,6 @@ export const newId = () => randomBytes(8).toString('hex').slice(0, 12);
 
 export default {
   GRADES, GRADE_BY_KEY, MODES, POISON, POISON_CAP, poisonOf, monstrous, PART_LABEL, partLabel,
-  MAX_CRAFTS, DICE, roll, diceMeaning, dicePoints, scoreOf, gradeOf, worthOf, priceOf, effectOf, newId,
+  MAX_CRAFTS, DICE, roll, diceMeaning, dicePoints, scoreOf, gradeOf, worthOf, FLAT_FULL, flatShare,
+  priceOf, effectOf, newId,
 };

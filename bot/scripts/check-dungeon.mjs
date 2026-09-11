@@ -24,7 +24,9 @@ import { DUNGEON, STAKES, atLevel } from '../src/casino/stakes.js';
 import { MAX_HP } from '../src/casino/items.js';
 import { POOL, TIER, roll, listText } from '../src/casino/loot.js';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
-import { MOBS, NORMALS, drawEnemy, hpOf, ELITE_CHANCE } from '../src/holdem/mobs.js';
+import {
+  MOBS, NORMALS, drawEnemy, drawMobs, hpOf, ELITE_CHANCE, ELITE_LOOSE_BONUS,
+} from '../src/holdem/mobs.js';
 
 const ROUNDS = Number(process.argv[2]) || 120;
 
@@ -239,12 +241,19 @@ check('던전도 블라인드가 오른다', () => {
   // 넉넉히 들고 앉혀 판이 도중에 안 끝나게 한다. 여기서 보려는 것은 블라인드뿐이다.
   assert.equal(hold.start(game, { [ME]: 100000, [mob.id]: 100000 }), null);
 
+  // **무작위로 두면 안 된다.** 올인이 한 번 나오면 스택이 얼마든 7핸드 전에 판이
+  // 끝나 블라인드가 오를 차례가 안 온다 — 이 검사가 그렇게 여섯에 다섯 번 흔들렸다.
+  // 매 핸드를 첫 수에 접어 블라인드만 오가게 한다.
   const seen = new Map();
   for (let i = 0; i < 20 && game.phase !== 'done'; i += 1) {
     seen.set(game.handNo, game.stakes.bb);
-    if (!playHand(game)) break;
+    const legal = hold.actionsFor(game);
+    hold.act(game, legal.has('fold') ? 'fold' : 'check', 0);
+    if (!['showdown', 'settled'].includes(game.phase)) throw new Error('접었는데 핸드가 안 끝났다');
+    hold.settle(game);
     if (!hold.beginHand(game)) break;
   }
+  assert.ok(seen.size >= 13, `${seen.size}핸드밖에 못 돌았다`);
   for (const [hand, bb] of seen) {
     const want = atLevel(DUNGEON, Math.floor((hand - 1) / 6)).bb;
     assert.equal(bb, want, `${hand}핸드에서 빅블라인드가 ${bb} (기대 ${want})`);
@@ -260,10 +269,16 @@ check('현금 판은 블라인드가 안 오른다', () => {
   hold.addSeat(game, hold.humanSeat(user(2), '사람2'));
   const bb = game.stakes.bb;
   assert.equal(hold.start(game, { [user(1).id]: 1e6, [user(2).id]: 1e6 }), null);
+  // 위와 같은 까닭으로 접기만 한다. 판이 일찍 끝나면 **아무것도 안 보고 통과한다.**
+  let hands = 0;
   for (let i = 0; i < 14 && game.phase !== 'done'; i += 1) {
-    if (!playHand(game)) break;
+    const legal = hold.actionsFor(game);
+    hold.act(game, legal.has('fold') ? 'fold' : 'check', 0);
+    hold.settle(game);
+    hands += 1;
     if (!hold.beginHand(game)) break;
   }
+  assert.ok(hands >= 13, `${hands}핸드밖에 못 돌았다`);
   assert.equal(game.stakes.bb, bb, `현금 판 블라인드가 ${bb} 에서 ${game.stakes.bb} 로 올랐다`);
   hold.remove('dcash');
 });
@@ -325,6 +340,27 @@ check('두 통을 따로 뽑는다', () => {
   for (let i = 0; i < 5000; i += 1) names.add(drawEnemy().name);
   assert.ok(MOBS.some((m) => names.has(m.name)), '엘리트가 한 번도 안 나왔다');
   assert.ok(NORMALS.some((m) => names.has(m.name)), '일반이 한 번도 안 나왔다');
+});
+
+check('던전 엘리트만 무르게, 표는 그대로', () => {
+  // 더한 값이 표에 새면 현금 판 모브까지 물러진다.
+  const raw = new Map(MOBS.map((m) => [m.name, m.loose]));
+  let elites = 0;
+  for (let i = 0; i < 4000; i += 1) {
+    const e = drawEnemy();
+    if (!e.elite) continue;
+    elites += 1;
+    assert.equal(e.loose, raw.get(e.name) + ELITE_LOOSE_BONUS, `${e.name}: ${e.loose}`);
+  }
+  assert.ok(elites > 0, '엘리트가 한 번도 안 나왔다');
+  for (const m of MOBS) assert.equal(m.loose, raw.get(m.name), `${m.name} 의 표가 바뀌었다`);
+  for (const m of drawMobs(8)) assert.equal(m.loose, raw.get(m.name), `현금 판 ${m.name} 이 물러졌다`);
+
+  // 더해도 일반보다는 단단해야 엘리트다.
+  const avg = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const elite = avg(MOBS.map((m) => m.loose + ELITE_LOOSE_BONUS));
+  const normal = avg(NORMALS.map((m) => m.loose));
+  assert.ok(elite < normal, `던전 엘리트 ${elite.toFixed(3)} 가 일반 ${normal.toFixed(3)} 보다 무르다`);
 });
 
 console.log('\n떨구는 것');

@@ -140,6 +140,22 @@ function pickOne(taken, rand) {
  */
 export const ELITE_CHANCE = 0.2;
 
+/**
+ * 던전 엘리트의 `loose` 에 **더하는** 값. 현금 판(`/홀덤 시작 모브:`)에는 안 붙는다.
+ *
+ * 엘리트의 `loose` 는 뽑기 가중 평균이 0.03 이라 미겔(0.08)보다도 단단하다. 체력이
+ * 두꺼운데 실수도 안 하니 **닳지를 않는다.** 여기에 더해 평균을 0.12 쯤으로 올린다.
+ *
+ * 표를 고치지 않고 더하는 것은 **성향 차이를 지키려는 것이다.** 「모험 일지」 설명에서
+ * 뽑은 값이라 −0.10 부터 0.15 까지 저마다 다른데, 한 값으로 덮으면 그게 다 사라진다.
+ * 더해도 일반(0.14~0.35, 평균 0.24)보다는 여전히 단단하다.
+ *
+ * 재 보니(블라인드 2/4 + 6핸드마다) 판 절반이 끝나는 핸드가 10 → 8 로 줄었다.
+ * **승률은 측정 오차 안에서 거의 그대로였다** — 적과 같은 엔진으로 두는 가상의
+ * 사람에게는 loose 가 승패를 가르지 않았다. 실제 사람에게는 다를 수 있다.
+ */
+export const ELITE_LOOSE_BONUS = 0.09;
+
 /** 그 에너미의 체력. 엘리트는 두껍다. 자주 마주친 놈일수록 조금 더 두껍다. */
 export const hpOf = (e) => (e.elite
   ? Math.max(60, Math.min(120, 60 + e.seen * 10))
@@ -156,11 +172,13 @@ export function drawEnemy(rand = Math.random) {
   const pool = elite ? MOBS : NORMALS;
   const total = pool.reduce((a, m) => a + m.seen, 0);
   let n = rand() * total;
+  let hit = pool[pool.length - 1];
   for (const m of pool) {
     n -= m.seen;
-    if (n <= 0) return { ...m, elite };
+    if (n <= 0) { hit = m; break; }
   }
-  return { ...pool[pool.length - 1], elite };
+  // 던전 엘리트만 조금 무르게. 표는 안 건드린다 — 현금 판 모브는 원래 성향 그대로다.
+  return { ...hit, elite, loose: elite ? hit.loose + ELITE_LOOSE_BONUS : hit.loose };
 }
 
 /** 서로 다른 에너미 `count` 마리. 가중치대로 뽑는다. **현금 판의 `모브:` 는 엘리트다.** */
@@ -176,4 +194,4 @@ export function drawMobs(count, rand = Math.random) {
   return out;
 }
 
-export default { MOBS, NORMALS, drawMobs, drawEnemy, hpOf, ELITE_CHANCE, TOTAL };
+export default { MOBS, NORMALS, drawMobs, drawEnemy, hpOf, ELITE_CHANCE, ELITE_LOOSE_BONUS, TOTAL };

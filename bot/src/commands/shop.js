@@ -271,7 +271,8 @@ function madeCard(id, owner, account) {
   const g = GRADE_BY_KEY[c.grade];
   const lines = [c.desc ? `_${c.desc}_` : '', ''];
   lines.push(`${g?.emoji ?? ''} **${g?.label ?? c.grade}** ${c.kind}`
-    + (c.kind === '요리' ? ` · 먹으면 **${c.heal > 0 ? '+' : ''}${c.heal}**` : '')
+    // 먹으면 얼마나 차는지는 **먹을 때까지 비밀이다**(`/요리` 머리말).
+    + (c.kind === '요리' ? ' · 먹으면 **❔**' : '')
     + ` · 팔면 **${num(c.price)}골드**`);
   if (c.mt) lines.push(`_\`/mt상점\` 에서 팔면 **${c.mt} MT** 예요 — 골드와 MT 중 한쪽만 받아요._`);
 

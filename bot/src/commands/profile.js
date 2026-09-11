@@ -187,6 +187,7 @@ function titlesTab(account, page, npc) {
   const worn = account.title ? TITLE_BY_KEY[account.title] : null;
   const lines = [`**수집** ${gauge(held.length, TITLE_TOTAL, { percent: false })} **${held.length}** / ${TITLE_TOTAL}`];
 
+  let folded = false;
   for (const group of GROUPS) {
     const all = TITLES.filter((t) => t.group === group && (t.npc !== false || !npc));
     if (!all.length) continue;
@@ -195,8 +196,11 @@ function titlesTab(account, page, npc) {
     const head = `**■ ${group}**　\`${mine.length}/${all.length}\``;
 
     // 하나도 없는 갈래는 **제목 한 줄로 접는다.** 자물쇠를 줄줄이 놓아 봐야 알 것이
-    // 없는데, 아직 아무것도 안 모은 사람은 그 줄이 여섯이라 화면을 통째로 먹는다.
-    if (!mine.length) { lines.push('', `${head}　🔒`); continue; }
+    // 없는데, 아직 아무것도 안 모은 사람은 그 줄이 여덟이라 화면을 통째로 먹는다.
+    // **연달아 접힌 것끼리는 빈 줄 없이 붙인다** — 갈래가 요리·제작으로 늘며 빈 줄만
+    // 여덟이 되어 한 화면을 넘겼다.
+    if (!mine.length) { lines.push(...(folded ? [] : ['']), `${head}　🔒`); folded = true; continue; }
+    folded = false;
 
     lines.push('', head);
     for (const t of mine) {

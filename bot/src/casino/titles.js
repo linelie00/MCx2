@@ -77,6 +77,21 @@ export const TITLES = [
   { key: 'bjCollector', name: '블랙잭의 수집가', tier: 3, cond: '블랙잭 25회', group: '블랙잭', desc: '스물다섯 번이나 그랬다.', when: (s) => n(s, 'blackjacks') >= 25 },
   { key: 'wallOf21', name: '21의 벽', tier: 1, cond: '블랙잭 누적 100핸드', group: '블랙잭', desc: '백 판을 넘겼다. 21은 아직도 멀다.', when: (s) => n(s, 'blackjackHands') >= 100 },
   { key: 'fearless', name: '겁 없는 베팅', tier: 2, cond: '한 손에 1,000 베팅', group: '블랙잭', desc: '한 손에 천을 걸었다.', when: (s) => n(s, 'bestBet') >= 1000 },
+
+  // ---- 요리 — /요리 와 /사용 이 쌓는 전적. bestCook 은 등급의 순번이다(crafts.GRADES: 스톤 0 … 다이아몬드 5)
+  { key: 'apprenticeCook', name: '견습 요리사', tier: 1, cond: '요리 1회', group: '요리', desc: '처음으로 불 앞에 섰다.', when: (s) => n(s, 'cooked') >= 1 },
+  { key: 'charcoal', name: '숯덩이', tier: 1, cond: '요리를 태우면 (주사위 1)', group: '요리', desc: '불 조절은 다음에 배우기로 했다.', when: (s) => n(s, 'burnt') >= 1 },
+  { key: 'foodPoisoning', name: '식중독', tier: 1, cond: '만든 요리를 먹고 탈이 나면', group: '요리', desc: '맛은 있었다. 그게 문제였다.', when: (s) => n(s, 'foodSick') >= 1 },
+  { key: 'dungeonMeshi', name: '던전밥', tier: 2, cond: '괴식 재료로 골드 이상 요리', group: '요리', desc: '벌레든 지네든, 잘 익히면 밥이 된다.', when: (s) => n(s, 'monsterDish') >= 1 },
+  { key: 'dungeonChef', name: '던전의 셰프', tier: 2, cond: '요리 20회', group: '요리', desc: '모험단의 끼니는 이제 이 사람 손에 달렸다.', when: (s) => n(s, 'cooked') >= 20 },
+  { key: 'attemptedPoisoning', name: '독살 미수', tier: 2, cond: '남에게 먹인 요리가 탈을 내면', group: '요리', desc: '일부러 그런 건 아니었다. 아마도.', when: (s) => n(s, 'fedBad') >= 1 },
+  { key: 'lastSupper', name: '최후의 만찬', tier: 2, cond: '만든 요리를 먹고 쓰러지면', group: '요리', desc: '마지막 한 입까지 맛있었다.', when: (s) => n(s, 'diedEating') >= 1 },
+  { key: 'goldenTongue', name: '황금의 혀', tier: 3, cond: '다이아몬드 요리', group: '요리', desc: '한 입에 모험단이 조용해졌다.', when: (s) => n(s, 'bestCook') >= 5 },
+
+  // ---- 제작
+  { key: 'apprenticeSmith', name: '견습 장인', tier: 1, cond: '제작 1회', group: '제작', desc: '처음으로 무언가를 제 손으로 만들었다.', when: (s) => n(s, 'crafted') >= 1 },
+  { key: 'shattered', name: '산산조각', tier: 1, cond: '제작하다 부수면 (주사위 1)', group: '제작', desc: '재료값은 수업료로 치자.', when: (s) => n(s, 'craftBroke') >= 1 },
+  { key: 'masterSmith', name: '명장', tier: 3, cond: '다이아몬드 제작품', group: '제작', desc: '이름을 새겨 넣어도 부끄럽지 않다.', when: (s) => n(s, 'bestCraft') >= 5 },
 ];
 
 /**

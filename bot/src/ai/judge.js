@@ -12,15 +12,22 @@
  */
 import { generate, noteCall } from './client.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
-import { diceMeaning } from '../casino/crafts.js';
+import { diceMeaning, POISON } from '../casino/crafts.js';
 
 const sign = (n) => (n > 0 ? `+${n}` : String(n));
 
-/** 재료 한 줄. 명부의 설명과 **날로 먹었을 때**를 같이 준다 — 날고기·독을 알아보라고. */
+/**
+ * 재료 한 줄. 명부의 설명과 **날로 먹었을 때**, 독·괴식 표시를 같이 준다 —
+ * 날고기를 익혔는지, 독을 손질했는지 알아보라고.
+ */
 function ingredientLine(key, n) {
   const i = ITEM_BY_KEY[key];
   const raw = Array.isArray(i.heal) ? `${i.heal[0]}~${i.heal[1]}` : sign(i.heal);
-  return `- ${i.name}${n > 1 ? ` ×${n}` : ''} (${i.kind}) — ${i.desc} [날로 먹으면 체력 ${raw}]`;
+  const tags = [
+    i.poison ? `☠️ 독(${POISON[i.poison].label})` : '',
+    i.monster ? '괴식' : '',
+  ].filter(Boolean).join(' · ');
+  return `- ${i.name}${n > 1 ? ` ×${n}` : ''} (${i.kind}${tags ? ` · ${tags}` : ''}) — ${i.desc} [날로 먹으면 체력 ${raw}]`;
 }
 
 const SYSTEM = {
@@ -30,11 +37,16 @@ const SYSTEM = {
     '',
     '채점 항목(정수):',
     '- fit (0~30): 재료로 그 요리를 만드는 게 합당한가. 재료와 결과물이 동떨어지면 낮게.',
-    '- craft (0~30): 재료를 제대로 다뤘나. 익혀야 할 것(날고기·날가루 등)은 익혔나,',
-    '  독이 있거나 먹으면 안 되는 재료([날로 먹으면 체력] 이 크게 음수인 것, 광물·금속 등)를',
-    '  제대로 처리하지 않고 넣었나. 제대로 안 다뤘으면 크게 깎는다.',
+    '- craft (0~30): 솜씨. 손질·불 조절·익힘이 알맞았나. 익혀야 할 것(날고기·날가루 등)을',
+    '  안 익혔으면 크게 깎는다. 광물·금속처럼 먹을 수 없는 것을 넣었으면 크게 깎는다.',
+    '  **☠️ 독 재료를 썼다는 이유만으로는 깎지 마라** — 독은 아래 detox 로 따로 본다.',
+    '  독버섯으로도 솜씨 좋은 요리는 만들 수 있다.',
     '- look (0~10): 네가 쓴 묘사로 봤을 때 맛있어 보이나.',
-    '- heal (-30~80): 먹었을 때 체력이 얼마나 오를지. 독이나 날것이 문제면 음수.',
+    '- heal (-30~80): 독을 뺀, 음식 자체가 몸에 좋은 정도. 날것·설익음·상한 것이면 음수',
+    '  (식중독). 독은 여기에 넣지 마라.',
+    '- detox (0~10): ☠️ 독 재료가 있을 때, 과정이 그 독을 얼마나 잘 없앴나. 독샘·독 있는',
+    '  부위를 떼어 냈나, 여러 번 삶아 물을 버렸나, 독이 빠지는 방법을 썼나. 손질을 안 적었으면',
+    '  0~2. 독 재료가 없으면 10.',
     '',
     '주사위는 조리 솜씨다. 결과 묘사에 **반드시** 반영하라. 대실패면 타 버리거나 망가진 결과를',
     '묘사하고, 대성공이면 기막힌 결과를 묘사한다. 점수(fit·craft·look)는 주사위와 따로,',
@@ -67,13 +79,17 @@ const COMMON = [
   '부실하다고 보고 점수에 반영하라.',
   '',
   '묘사(desc)는 한국어로 2~4문장, 결과물이 어떻게 나왔는지 눈앞에 보이듯이. 300자 이내.',
+  '**먹었을 때 어떻게 되는지는 묘사에도 한줄평에도 쓰지 마라** — 몸에 좋을지, 탈이 날지,',
+  '독이 남았을지는 먹기 전엔 아무도 모른다. 겉모습·향·만드는 순간만 쓴다.',
+  '"배탈 날 것", "먹으면 위험", "독이 남았을지도", "기운이 날 것" 같은 **예측과 경고도 금지다.**',
+  '한줄평은 솜씨·모양·정성에 대한 평만 한다.',
   '한줄평(verdict)은 심사관의 한마디, 40자 이내.',
   '',
   'JSON 하나로만 답하라. 다른 말은 쓰지 마라.',
 ];
 
 const SHAPE = {
-  cook: '{"fit": 정수, "craft": 정수, "look": 정수, "heal": 정수, "desc": "…", "verdict": "…"}',
+  cook: '{"fit": 정수, "craft": 정수, "look": 정수, "heal": 정수, "detox": 정수, "desc": "…", "verdict": "…"}',
   craft: '{"fit": 정수, "craft": 정수, "desc": "…", "verdict": "…"}',
 };
 
@@ -116,6 +132,12 @@ export function parseJudgement(mode, text) {
     const v = Number(obj?.[k]);
     if (!Number.isFinite(v)) return null;
     out[k] = Math.round(v);
+  }
+  // 손질 점수는 **없어도 된다** — 독 재료가 없는 요리에 모델이 빼먹기 쉽고, 그렇다고
+  // 판정을 통째로 버리면 아깝다. 없으면 null 이고, 독이 있을 때 서툴게 본다(crafts.effectOf).
+  if (mode.key === 'cook') {
+    const d = Number(obj?.detox);
+    out.detox = Number.isFinite(d) ? Math.round(d) : null;
   }
   const desc = String(obj?.desc ?? '').trim();
   if (!desc) return null;

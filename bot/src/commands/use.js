@@ -13,7 +13,12 @@
  * 그것도 자기한테만 쓸 수 있다.
  *
  * **`/요리` 로 만든 것도 먹는다.** 명부에 없는 물건이라 자동완성 값이 `craft:<id>` 이고,
- * 한 번에 하나를 통째로 먹는다. 회복량은 만들 때 정해졌다(`casino/crafts.js`).
+ * 한 번에 하나를 통째로 먹는다. 얼마나 차는지는 만들 때 굴려 뒀고(`crafts.effectOf`)
+ * **먹는 순간에 처음 드러난다.** 탈이 날 수도 있다 — 탔거나, 독이 남았거나, 식중독.
+ *
+ * 만든 요리는 **남에게도 먹일 수 있다.** 명부의 물건은 회복되는 것만 넘기지만, 요리는
+ * 먹기 전엔 아무도 모르므로 "이건 못 넘긴다" 고 거절하는 순간 비밀이 샌다. 누구에게
+ * 먹이든 운이다. 같은 까닭으로 체력이 가득해도 막지 않는다.
  *
  * **판에 앉아 있으면 못 쓴다.** 판이 도는 동안 체력은 인메모리 장부에만 있고 서버는
  * 판 시작 시점 값을 든다 — 그 사이에 서버를 고치면 정산 증감이 얹혀 체력이 생기거나
@@ -30,6 +35,9 @@ import { ITEMS, ITEM_BY_KEY, MAX_HP, healOf } from '../casino/items.js';
 import { isDead, forget, deadEmbed } from '../casino/alive.js';
 import { craftsFor, forgetCrafts, craftLabel, CRAFT_VALUE } from '../casino/bag.js';
 import { GRADE_BY_KEY } from '../casino/crafts.js';
+import { earned, gained } from '../casino/titles.js';
+import { awardCard } from '../casino/titleCard.js';
+import { displayOf } from '../casino/accounts.js';
 
 /** 한 번에 먹을 수 있는 개수. 열 개면 회복약도 넉넉하고, 실수로 창고를 비울 일도 없다. */
 const MOST = 10;
@@ -73,16 +81,24 @@ async function autocomplete(interaction) {
     || key.toLowerCase().includes(typed);
 
   const made = (await craftsFor(interaction.user.id))
-    .filter((c) => c.kind === '요리' && c.heal !== 0 && match(c.name))
-    .map((c) => ({ name: trunc(`${craftLabel(c)} (${sign(c.heal)}) · 만든 요리`, 100), value: `${CRAFT_VALUE}${c.id}` }));
+    .filter((c) => c.kind === '요리' && match(c.name))
+    // 얼마나 차는지는 **안 보여 준다** — 먹을 때까지 비밀이다.
+    .map((c) => ({ name: trunc(`${craftLabel(c)} · 만든 요리`, 100), value: `${CRAFT_VALUE}${c.id}` }));
   const hit = ITEMS.filter((i) => usable(i) && match(i.name, i.key))
     .map((i) => ({ name: trunc(`${i.name} (${[i.heal].flat().map(sign).join('~')})`, 100), value: i.key }));
   await interaction.respond([...made, ...hit].slice(0, 25));
 }
 
+/** 탈이 났을 때의 한 줄. 무엇 때문인지는 **먹고 나서야** 알려 준다. */
+const HARM_TEXT = {
+  burnt: '🔥 쓴 숯 맛이 난다. 탄 걸 먹은 대가다.',
+  poison: '☠️ **독이 남아 있었다!** 온몸이 저려 온다.',
+  sick: '🤢 **식중독이다.** 덜 익은 게 탈을 냈다.',
+};
+
 /**
- * 만든 요리를 먹는다. 명부의 물건과 규칙이 같다 — 쓰러져 있으면 못 먹고, 남에게는
- * 회복되는 것만, 판에 앉아 있으면 안 된다. 다른 것은 **하나를 통째로** 먹는다는 것뿐.
+ * 만든 요리를 먹는다. 쓰러져 있으면 못 먹고 판에 앉아 있으면 안 되는 것은 명부의
+ * 물건과 같다. 다른 것은 **하나를 통째로** 먹고, 결과를 **먹고 나서야** 안다는 것.
  *
  * 이름을 쳐도 찾는다(자동완성을 안 골랐을 때). 같은 이름이 여럿이면 먼저 만든 것.
  */
@@ -111,31 +127,28 @@ async function eatCraft(interaction, who, raw) {
     });
     return;
   }
-  if (craft.kind !== '요리' || !craft.heal) {
+  if (craft.kind !== '요리') {
     await interaction.editReply({ embeds: [fail(`**${craft.name}** 은(는) 먹어도 아무 일 없어요.`)] });
     return;
   }
   if (isDead(mine)) { await interaction.editReply({ embeds: [deadEmbed()] }); return; }
-  if (!self && craft.heal < 0) {
-    await interaction.editReply({
-      embeds: [fail(`**${craft.name}** 은(는) 남에게 먹일 수 없어요. 회복되는 것만 넘길 수 있어요.`)],
-    });
-    return;
-  }
   for (const [id, name] of [[me, '그쪽'], [who.id, who.name]]) {
     const at = seatedAt(id);
     if (at) { await interaction.editReply({ embeds: [fail(seatedMessage(name, at))] }); return; }
   }
   const was = Number(target?.hp ?? MAX_HP);
   if (was <= 0) { await interaction.editReply({ embeds: [fail(`${who.name}은(는) 쓰러져 있어요. 부활의 영약만 들어가요.`)] }); return; }
-  if (was >= MAX_HP && craft.heal > 0) {
-    await interaction.editReply({ embeds: [fail(`${who.name}의 체력이 이미 가득이에요. 아껴 두세요.`)] });
-    return;
-  }
+
+  // 전적 — 먹은 사람과 먹인 사람이 다를 수 있다. 칭호가 읽는다(요리 갈래).
+  const bad = craft.heal < 0;
+  const dies = was + craft.heal <= 0;
+  const bump = { [who.id]: { ateMade: 1, ...(bad ? { foodSick: 1 } : {}), ...(dies ? { diedEating: 1 } : {}) } };
+  if (!self && bad) bump[me] = { ...(bump[me] ?? {}), fedBad: 1 };
 
   const saved = await apply({
     crafts: { [me]: { remove: [craft.id] } },
     hp: { [who.id]: craft.heal },
+    bump,
   });
   if (!saved.ok) {
     await interaction.editReply({ embeds: [fail('저장하지 못했어요. 잠시 뒤에 다시 해 주세요.')] });
@@ -151,17 +164,36 @@ async function eatCraft(interaction, who, raw) {
     self ? `**${craft.name}** 을(를) 먹었어요.` : `${who.name}에게 **${craft.name}** 을(를) 먹였어요.`,
     craft.desc ? `_${craft.desc}_` : '',
     '',
-    `**체력** ${gauge(now, MAX_HP, { percent: false })} ${was} → **${now}** / ${MAX_HP}`,
   ];
+  if (craft.harm) lines.push(HARM_TEXT[craft.harm] ?? '🤢 탈이 났다.', '');
+  lines.push(`**체력** ${gauge(now, MAX_HP, { percent: false })} ${was} → **${now}** / ${MAX_HP}`);
   if (now <= 0) lines.push('', `💀 **${who.name}이(가) 쓰러졌어요.**`);
   await interaction.editReply({
     embeds: [base({
       title: `${g?.emoji ?? '🍽️'} ${craft.name}`,
       description: lines.join('\n'),
-      color: g?.color ?? THEME_COLOR,
-      footer: `${sign(now - was)} · ${g?.label ?? ''} 요리`,
+      color: craft.harm ? 0x6b5b5b : (g?.color ?? THEME_COLOR),
+      footer: `${now === was ? '±0' : sign(now - was)} · ${g?.label ?? ''} 요리`,
     })],
   });
+
+  // 새 칭호 — 먹은 사람(식중독·최후의 만찬)과 먹인 사람(독살 미수)이 따로 받는다.
+  for (const id of Object.keys(bump)) {
+    const before = accounts[id];
+    const after = saved.accounts[id];
+    if (!before || !after) continue;
+    const npc = id.startsWith('npc:');
+    const held = earned(after, { npc });
+    const fresh = gained(earned(before, { npc }).map((t) => t.key), held);
+    if (!fresh.length) continue;
+    const face = id === me
+      ? { name: displayOf(me, { user: interaction.user, member: interaction.member }).name,
+        avatar: interaction.user.displayAvatarURL?.({ size: 256 }) ?? null, avatarFile: null }
+      : { name: who.name, ...displayOf(id) };
+    await interaction.followUp(awardCard({
+      name: face.name, avatar: face.avatar ?? null, avatarFile: face.avatarFile ?? null, fresh, held: held.length,
+    })).catch((err) => console.warn('[사용] 칭호 알림 실패:', err.message));
+  }
 }
 
 async function execute(interaction) {

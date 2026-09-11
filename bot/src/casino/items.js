@@ -16,6 +16,9 @@
  *   loot   `false` 면 **던전에서 안 나온다.** 안 적으면 나온다. 이야기용 물건(피·수배지·
  *          열쇠)과 가공이 끝난 보석이 여기 든다 — 던전 바닥에 루비가 굴러다니면 안 된다.
  *          가게에서만 파는 재료(밀가루·후추…)도 여기 든다
+ *   poison 독. 1 약함(배탈) · 2 강함 · 3 치명. `/요리` 에 넣으면 **먹을 때까지 모른다** —
+ *          잘 손질했으면 멀쩡하고, 아니면 아프거나 죽는다(`casino/crafts.js`)
+ *   monster 괴식. 벌레·지네·도마뱀 눈 같은 것. 이걸로 잘 만들면 「던전밥」
  *   heal   먹었을 때 HP 증감. 숫자 하나면 그만큼, `[a, b]` 면 a~b 사이에서 무작위.
  *          **음수는 깎인다** — 원석이나 열쇠를 먹으면 아픈 게 당연하다
  *
@@ -52,13 +55,13 @@ export const ITEMS = [
   { key: 'potionMedium',    name: '중형 회복약',              kind: '소비', price:  550, sell: false, heal: [20, 40],   desc: '젤린의 어쩌구에서 만든 더 좋은 상처 치유 영약.' },
   { key: 'potionLarge',     name: '고급 회복약',              kind: '소비', price:  600, sell: false, heal: [40, 60],   desc: '젤린인가 뭔가가 만든 탁월한 치유력의 영약.' },
   { key: 'potionRevive',    name: '부활의 영약',              kind: '소비', price: 1000, sell: false, heal: [100, 100], desc: '한 번 마시면 3일 동안 밤을 샌 사람도 말짱해지고 전신 골절도 단번에 치료하는 탁월한 피로회복과 치유 효과를 가진 영약. 죽은 사람도 살려낼 수 있다. (물론, 사망 방지 마법이 걸려 있다면!)' },
-  { key: 'prettyMushroom',  name: '이쁘니 버섯',              kind: '잡화', price:   10, sell: true,  heal: -15,        desc: '알록달록하고 예쁘다. 포자를 들이키면 요정들이 나타나 머리 속에서 흥얼거리는 것 같다. 랄랄라... 다 함께 버섯 춤을 춰 봐요.' },
+  { key: 'prettyMushroom',  name: '이쁘니 버섯',              kind: '잡화', price:   10, sell: true,  heal: -15,        poison: 1, desc: '알록달록하고 예쁘다. 포자를 들이키면 요정들이 나타나 머리 속에서 흥얼거리는 것 같다. 랄랄라... 다 함께 버섯 춤을 춰 봐요.' },
   { key: 'twig',            name: '나뭇가지',                 kind: '잡화', price:    1, sell: true,  heal: -1,         desc: '쉽게 부러지는 나뭇가지. 상점에 팔면 무려 1골드를 얻을 수 있다!' },
   { key: 'redFeather',      name: '새빨간 깃털',              kind: '잡화', price:    5, sell: true,  heal: 0,          desc: '깃펜으로 자주 쓰이는, 정열적인 색깔의 깃털. 미친딱부리도요새의 것이다.' },
   { key: 'acorn',           name: '도토리',                   kind: '잡화', price:    1, sell: true,  heal: 1,          desc: '동글동글.' },
   { key: 'wetMoss',         name: '젖은 이끼',                kind: '잡화', price:    0, sell: false, heal: 3,          desc: '스튜로 끓여 먹으면 그런대로 먹을만 하다.' },
   { key: 'dandelion',       name: '민들레',                   kind: '잡화', price:    1, sell: true,  heal: 2,          desc: '평범한 민들레. 하지만 누군가는 특별한 무언가를 느낄 수 있을지도 모른다. 잎과 뿌리는 모두 식용 가능.' },
-  { key: 'earthworm',       name: '꿈틀지렁이',               kind: '잡화', price:    1, sell: true,  heal: 1,          desc: '꿈틀거리며 생명력을 자랑한다. 미끼로 쓸 수 있으려나.' },
+  { key: 'earthworm',       name: '꿈틀지렁이',               kind: '잡화', price:    1, sell: true,  heal: 1,          monster: true, desc: '꿈틀거리며 생명력을 자랑한다. 미끼로 쓸 수 있으려나.' },
   { key: 'bitterHerb',      name: '고고초',                   kind: '잡화', price:    2, sell: true,  heal: 5,          desc: '이름답게 매우, 매우 쓴 풀. 먹으면 나쁜 기운이 빠져나가는 느낌이 든다.' },
   { key: 'tearCrystal',     name: '눈물 결정',                kind: '잡화', price:    5, sell: true,  heal: 0,          desc: '눈 요정이 남긴 반짝거리는 결정 조각. 피부에 닿으면 무척 차갑다. 열 식히기에 딱!' },
   { key: 'crackleStone',    name: '파삭돌',                   kind: '잡화', price:    1, sell: true,  heal: 2,          desc: '돌을 문지르면 파삭거리는 소리와 함께 작은 스파크가 튄다. 신기하게 따갑진 않다.' },
@@ -112,10 +115,10 @@ export const ITEMS = [
   { key: 'teaLeaf',         name: '찻잎',                     kind: '잡화', price:    6, sell: true,  heal: 5,          desc: '향긋한 찻잎. 따뜻한 물에 우려내면 피로를 풀어준다.' },
   { key: 'banditPoster',    name: '도적단의 수배지',          kind: '잡화', price:    0, sell: false, heal: -5,         loot: false, desc: '이걸 왜 가지고 싶었는진 잘 모르겠다. 팔 수도 없다.' },
   { key: 'scratchedGem',    name: '흠집난 빨간 보석',         kind: '잡화', price:   30, sell: true,  heal: 0,          desc: '원석을 가공한 것. 다만 험하게 다뤘는지, 흠집이 나 가치가 떨어졌다.' },
-  { key: 'bugPile',         name: '벌레 더미',                kind: '잡화', price:    0, sell: false, heal: 3,          desc: '우글우글. 매우 많은 벌레입니다.' },
+  { key: 'bugPile',         name: '벌레 더미',                kind: '잡화', price:    0, sell: false, heal: 3,          monster: true, desc: '우글우글. 매우 많은 벌레입니다.' },
   { key: 'blueMist',        name: '푸른 안개',                kind: '잡화', price:   40, sell: true,  heal: 0,          loot: false, desc: '수면 및 마취 효과가 있는 안개. 부작용으론... 조금 멍청해진다.' },
   { key: 'prisonKey',       name: '감옥 열쇠',                kind: '잡화', price:    0, sell: false, heal: -10,        loot: false, desc: '두꺼운 철제 열쇠.' },
-  { key: 'lizardEye',       name: '도마뱀 눈',                kind: '잡화', price:    2, sell: true,  heal: 8,          desc: '금방이라도 살아 움직일 것 같은 도마뱀의 눈.' },
+  { key: 'lizardEye',       name: '도마뱀 눈',                kind: '잡화', price:    2, sell: true,  heal: 8,          monster: true, desc: '금방이라도 살아 움직일 것 같은 도마뱀의 눈.' },
   { key: 'voidLump',        name: '공허 덩어리',              kind: '잡화', price:   15, sell: false, heal: -100,       desc: '순수한 어둠으로 이루어진 물컹한 덩어리.' },
   { key: 'redApple',        name: '새빨간 사과',              kind: '잡화', price:    5, sell: true,  heal: 10,         desc: '마녀의 집에서 주운, 새빨간 사과. ...진짜 사과일까?' },
   { key: 'ruby',            name: '루비',                     kind: '잡화', price:  200, sell: true,  heal: 0,          loot: false, desc: '붉은 원석을 가공한, 아름다운 보석. ...어째서인지 루비가 되었다.' },
@@ -133,10 +136,10 @@ export const ITEMS = [
   { key: 'adventureToken',  name: '모험의 증표',              kind: '잡화', price:    0, sell: false, heal: 50,         loot: false, desc: '당신이야말로 진정한 모험가! 10장 모으면 선물이 있을지도 모른다.' },
   { key: 'vampireBlood',    name: '흡혈귀의 피',              kind: '잡화', price:    0, sell: false, heal: -50,        loot: false, desc: '아는 흡혈귀의 피입니다.' },
   { key: 'humElfBlood',     name: '훔-엘프의 피',             kind: '잡화', price:    0, sell: false, heal: 5,          loot: false, desc: '아는 훔의 피입니다. 어라? 조금 엘프가 섞인 것 같은데요.' },
-  { key: 'bobSponge',       name: '밥르퐁지',                 kind: '잡화', price:    5, sell: true,  heal: -10,        desc: '해면을 닮았지만, 이건 말을 할 수 있다. 무슨 말을 하는 지 알고 싶다면 귀를 대 보자.' },
-  { key: 'starGari',        name: '별가리',                   kind: '잡화', price:    5, sell: true,  heal: -10,        desc: '불가사리와 닮았지만, 이건 말을 할 수 있다. 무슨 말을 하는 지 알고 싶으면 귀를 대 보자.' },
-  { key: 'waterCentipede',  name: '물지네',                   kind: '잡화', price:    5, sell: true,  heal: -50,        desc: '수십 개의 다리로 헤엄친다. 지네의 친척. 독이 있다.' },
-  { key: 'hollowEye',       name: '할로우아이',               kind: '잡화', price:    1, sell: true,  heal: 15,         desc: '살이 다 녹아 없어진, 뼈만 남은 물고기.' },
+  { key: 'bobSponge',       name: '밥르퐁지',                 kind: '잡화', price:    5, sell: true,  heal: -10,        monster: true, desc: '해면을 닮았지만, 이건 말을 할 수 있다. 무슨 말을 하는 지 알고 싶다면 귀를 대 보자.' },
+  { key: 'starGari',        name: '별가리',                   kind: '잡화', price:    5, sell: true,  heal: -10,        monster: true, desc: '불가사리와 닮았지만, 이건 말을 할 수 있다. 무슨 말을 하는 지 알고 싶으면 귀를 대 보자.' },
+  { key: 'waterCentipede',  name: '물지네',                   kind: '잡화', price:    5, sell: true,  heal: -50,        poison: 2, monster: true, desc: '수십 개의 다리로 헤엄친다. 지네의 친척. 독이 있다.' },
+  { key: 'hollowEye',       name: '할로우아이',               kind: '잡화', price:    1, sell: true,  heal: 15,         monster: true, desc: '살이 다 녹아 없어진, 뼈만 남은 물고기.' },
   { key: 'hardJaw',         name: '단단턱',                   kind: '잡화', price:    5, sell: true,  heal: -10,        desc: '이빨이 날카로워 줄이 끊어질 뻔했다.' },
   { key: 'clearFish',       name: '투명물고기',               kind: '잡화', price:    3, sell: true,  heal: 0,          desc: '투명한 물고기. 관상용으로는 아주 좋다.' },
   { key: 'minnow',          name: '피라미',                   kind: '잡화', price:    1, sell: true,  heal: 1,          desc: '아아... 실망스럽다.' },
@@ -187,6 +190,15 @@ export const ITEMS = [
   { key: 'vinegar',         name: '식초',                     kind: '재료', cat: 'spice', price:    5, sell: true,  heal: -3,  shop: true,  loot: false, desc: '포도주가 되다 만 것. 절임에 쓴다.' },
   { key: 'cheapWine',       name: '싸구려 포도주',            kind: '재료', cat: 'spice', price:    8, sell: true,  heal: 2,   shop: true,  loot: false, desc: '요리에 넣으면 그럴듯하고, 마시면 그럴듯하지 않다.' },
   { key: 'spirits',         name: '독한 증류주',              kind: '재료', cat: 'spice', price:   20, sell: true,  heal: -10, shop: true,  loot: false, desc: '마시면 목이 타고, 지네를 담그면 지네가 운다.' },
+  // 독 — 전부 던전에서만 난다. 요리에 넣으면 먹을 때까지 모른다
+  { key: 'sproutPotato',    name: '싹 난 감자',               kind: '재료', cat: 'veg',   price:    1, sell: true,  heal: -8,  poison: 1,              desc: '싹 난 자리에 독이 있다. 도려내면 먹을 수 있다… 아마도.' },
+  { key: 'flyAgaric',       name: '붉은 광대버섯',            kind: '재료', cat: 'veg',   price:    8, sell: true,  heal: -30, poison: 2,              desc: '동화책에 나오는 그 버섯. 먹으면 동화 속으로 간다. 돌아올 수 있을지는 모른다.' },
+  { key: 'belladonna',      name: '벨라돈나 열매',            kind: '재료', cat: 'veg',   price:    6, sell: true,  heal: -25, poison: 2,              desc: '까맣고 반들반들한 열매. 달콤한 향이 난다. 그게 함정이다.' },
+  { key: 'thornApple',      name: '흰독말풀 씨',              kind: '재료', cat: 'spice', price:    5, sell: true,  heal: -25, poison: 2,              desc: '가시투성이 열매 속의 씨. 향신료 흉내를 내지만 향신료가 아니다.' },
+  { key: 'deathCap',        name: '죽음의 갓',                kind: '재료', cat: 'veg',   price:   12, sell: true,  heal: -70, poison: 3,              desc: '평범한 버섯처럼 생겼다. 그래서 더 무섭다. 끓여도 독이 안 빠진다고 한다.' },
+  { key: 'hemlock',         name: '독미나리',                 kind: '재료', cat: 'veg',   price:    6, sell: true,  heal: -60, poison: 3,              desc: '미나리와 똑 닮았다. 모험단 요리사가 제일 조심하는 풀.' },
+  { key: 'wolfsbane',       name: '투구꽃 뿌리',              kind: '재료', cat: 'spice', price:   10, sell: true,  heal: -60, poison: 3,              desc: '보랏빛 투구꽃의 뿌리. 늑대도 피해 간다고 해서 붙은 이름.' },
+  { key: 'puffer',          name: '복어',                     kind: '재료', cat: 'meat',  price:   20, sell: true,  heal: -80, poison: 3,              desc: '독샘만 잘 떼어 내면 최고의 별미. 잘못 떼어 내면 최후의 만찬.' },
 ];
 
 export const ITEM_BY_KEY = Object.fromEntries(ITEMS.map((i) => [i.key, i]));

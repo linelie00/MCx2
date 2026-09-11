@@ -81,6 +81,11 @@ const ITEM_KEY_RE = /^[a-z][A-Za-z0-9]{0,39}$/;
 const GRADE_KEYS = new Set(['stone', 'bronze', 'silver', 'gold', 'platinum', 'diamond']);
 const CRAFT_KINDS = new Set(['요리', '제작']);
 const CRAFT_ID_RE = /^[a-z0-9]{8,16}$/;
+/**
+ * 먹으면 탈이 나는 까닭. **화면에 안 나온다** — 먹기 전까지 아무도 모르게 하는 것이
+ * 요리의 재미라, 봇이 먹을 때만 꺼내 읽는다. burnt 탔다 · poison 독 · sick 식중독(날것).
+ */
+const HARMS = new Set(['burnt', 'poison', 'sick']);
 
 /**
  * 한 사람이 들고 있을 수 있는 만든 것의 수. **디스코드 셀렉트 한 칸이 25 라서** 이 이상이면
@@ -106,10 +111,12 @@ function craftOf(c) {
   }
   if (c.dice !== undefined && !int(c.dice, 1, 20)) return `주사위가 범위 밖입니다: ${c.dice}`;
   if (c.score !== undefined && !int(c.score, 0, 100)) return `점수가 범위 밖입니다: ${c.score}`;
+  if (c.harm !== undefined && c.harm !== null && !HARMS.has(c.harm)) return `모르는 탈: ${c.harm}`;
   // 받은 것을 그대로 두지 않고 **아는 칸만** 골라 담는다. 모르는 칸이 파일에 쌓이지 않게.
   return {
     id: c.id, kind: c.kind, name: c.name.trim(), grade: c.grade, heal: c.heal, price: c.price,
-    mt: c.mt ?? 0, desc: c.desc ?? '', from: [...from], dice: c.dice, score: c.score, at: now(),
+    mt: c.mt ?? 0, desc: c.desc ?? '', from: [...from], dice: c.dice, score: c.score,
+    harm: c.harm ?? null, at: now(),
   };
 }
 
@@ -286,6 +293,9 @@ const BUMP_KEYS = new Set([
   'handStraight', 'handFlush', 'handFullHouse', 'handQuads', 'handStraightFlush',
   'dungeonWon', 'dungeonLost',                     // 던전 — 골드 전적과 섞지 않는다
   'cooked', 'crafted',                             // /요리 · /제작 한 번
+  // 요리·제작 칭호가 읽는다. 태웠다 · 부쉈다 · 괴식으로 골드 이상 · 만든 요리를 먹었다 ·
+  // 먹고 탈이 났다 · 먹고 쓰러졌다 · 남에게 먹인 것이 탈을 냈다
+  'burnt', 'craftBroke', 'monsterDish', 'ateMade', 'foodSick', 'diedEating', 'fedBad',
 ]);
 
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */

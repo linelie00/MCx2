@@ -372,7 +372,8 @@ check('잡화·재료만, 막은 것은 안 나온다', () => {
   }
   assert.ok(POOL.some((i) => i.key === 'oreBlue'), '원석이 빠졌다');
   assert.ok(POOL.some((i) => i.key === 'raspberry'), '재료가 안 나온다');
-  assert.equal(POOL.length, 100, `풀이 ${POOL.length}종이다 (잡화 76 + 재료 24)`);
+  assert.equal(POOL.length, 108, `풀이 ${POOL.length}종이다 (잡화 76 + 재료 32)`);
+  assert.ok(POOL.some((i) => i.key === 'deathCap'), '독이 안 나온다');
 });
 
 check('재료가 실제로 떨어진다', () => {
@@ -384,7 +385,7 @@ check('재료가 실제로 떨어진다', () => {
       if (ITEM_BY_KEY[key].kind === '재료') food += n;
     }
   }
-  // 풀에서 재료가 차지하는 몫(24/100)과 비슷하게 나온다 — 재보니 일반 23% · 엘리트 24%.
+  // 풀에서 재료가 차지하는 몫(32/108)과 비슷하게 나온다.
   const share = food / all;
   assert.ok(share > 0.15 && share < 0.45, `재료가 ${(share * 100).toFixed(1)}% 나왔다`);
 });

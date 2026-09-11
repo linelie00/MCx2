@@ -15,15 +15,20 @@
  * 거절되면(그 사이 재료를 팔았다든가) 결과물도 안 들어간다.
  *
  * 결과는 **모두가 보는** 메시지로 낸다. 잘 만든 요리는 자랑하라고 있는 것이다.
+ *
+ * **먹으면 얼마나 차는지는 안 보여 준다.** 만들 때 굴려 두고(`crafts.effectOf`) `/사용` 이
+ * 먹는 순간에만 꺼낸다. 독이 든 재료를 넣었으면 그것만 알려 준다 — 넣은 사람은 아니까.
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import { getAccounts } from '../api.js';
 import { apply } from '../casino/wallet.js';
 import { ITEMS, ITEM_BY_KEY, findItem } from '../casino/items.js';
 import {
-  MODES, GRADE_BY_KEY, MAX_CRAFTS, partLabel, roll as rollDice, scoreOf, gradeOf, priceOf,
-  healOf, newId,
+  MODES, GRADE_BY_KEY, MAX_CRAFTS, POISON, POISON_CAP, partLabel, roll as rollDice, scoreOf, gradeOf,
+  priceOf, effectOf, poisonOf, monstrous, newId,
 } from '../casino/crafts.js';
+import { earned, gained } from '../casino/titles.js';
+import { awardCard } from '../casino/titleCard.js';
 import { judge as askJudge } from '../ai/judge.js';
 import { checkRate } from '../ai/client.js';
 import { base, fail, trunc } from '../embeds.js';
@@ -37,7 +42,6 @@ const COOLDOWN = 10_000;
 const lastAt = new Map();
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
-const sign = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 
 // ---------------------------------------------------------------- 명령 모양
 
@@ -87,7 +91,7 @@ function autocompleteFor(mode) {
  * 점수가 어디서 왔는지 다 보여 준다 — 등급만 보여 주면 왜 브론즈인지 알 길이 없다.
  * 주사위가 막아서 한 등급 내려앉았으면 그것도 적는다.
  */
-export function resultEmbed(mode, craft, { parts, total, capped, who, names }) {
+export function resultEmbed(mode, craft, { parts, total, capped, by, poison, who, names }) {
   const g = GRADE_BY_KEY[craft.grade];
   const score = Object.entries(parts)
     .map(([k, v]) => `${partLabel(mode, k)} ${v}/${mode.parts[k]}`).join(' · ');
@@ -99,13 +103,19 @@ export function resultEmbed(mode, craft, { parts, total, capped, who, names }) {
     `_${craft.desc}_`,
   ];
   if (craft.verdict) lines.push('', `> ${craft.verdict}`);
-  if (capped) {
+  if (capped && by === 'dice') {
     lines.push('', `_점수는 ${capped.emoji} ${capped.label}감이었지만 주사위가 모자랐어요`
       + ` (${capped.dice} 이상이어야 해요)._`);
   }
+  if (capped && by === 'poison') {
+    const cap = GRADE_BY_KEY[POISON_CAP];
+    lines.push('', `_점수는 ${capped.emoji} ${capped.label}감이었지만 독이 든 요리는 ${cap.emoji} ${cap.label}까지예요._`);
+  }
+  if (poison) lines.push('', `☠️ **독이 든 재료가 들어갔어요**(${POISON[poison].label}). 먹어 봐야 알아요.`);
 
   const worth = [];
-  if (mode.edible) worth.push(`먹으면 **${sign(craft.heal)}**`);
+  // 얼마나 차는지는 **먹을 때까지 비밀이다.**
+  if (mode.edible) worth.push('먹으면 **❔**');
   worth.push(craft.price ? `팔면 **${num(craft.price)}골드**` : '팔아도 **0골드**');
   if (craft.mt) worth.push(`\`/mt상점\` 에서 **${craft.mt} MT**`);
 
@@ -199,13 +209,17 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
   }
 
   const { parts, total } = scoreOf(mode, answer.judged, dice);
-  const { grade, capped } = gradeOf(total, dice);
+  // 독은 요리에만 따진다. 제작에 독초를 넣는 것은 그냥 재료다(먹을 게 아니니까).
+  const poison = mode.edible ? poisonOf(keys) : 0;
+  const { grade, capped, by } = gradeOf(total, dice, { poisoned: poison > 0 });
+  const { heal, harm } = effectOf(mode, grade, answer.judged, keys, rand);
   const craft = {
     id: newId(),
     kind: mode.verb,
     name,
     grade: grade.key,
-    heal: healOf(mode, grade, answer.judged.heal),
+    heal,
+    harm,
     price: priceOf(keys, grade),
     mt: grade.mt,
     desc: answer.judged.desc,
@@ -214,12 +228,21 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
     score: total,
   };
 
+  // 전적. 칭호가 읽는다(casino/titles.js 의 요리·제작).
+  const stone = grade.key === 'stone';
+  const bump = mode.key === 'cook'
+    ? {
+      cooked: 1,
+      bestCook: grade.rank,
+      ...(stone ? { burnt: 1 } : {}),
+      ...(monstrous(keys) && grade.rank >= GRADE_BY_KEY.gold.rank ? { monsterDish: 1 } : {}),
+    }
+    : { crafted: 1, bestCraft: grade.rank, ...(stone ? { craftBroke: 1 } : {}) };
+
   const saved = await apply({
     items: { [me]: Object.fromEntries(Object.entries(counts).map(([k, n]) => [k, -n])) },
     crafts: { [me]: { add: [craft] } },
-    bump: { [me]: mode.key === 'cook'
-      ? { cooked: 1, bestCook: grade.rank }
-      : { crafted: 1, bestCraft: grade.rank } },
+    bump: { [me]: bump },
   });
   if (!saved.ok) {
     await interaction.editReply({
@@ -233,9 +256,19 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
   const who = displayOf(me, { user: interaction.user, member: interaction.member }).name;
   await interaction.editReply({
     embeds: [resultEmbed(mode, { ...craft, verdict: answer.judged.verdict }, {
-      parts, total, capped, who, names: keys.map((k) => ITEM_BY_KEY[k].name),
+      parts, total, capped, by, poison, who, names: keys.map((k) => ITEM_BY_KEY[k].name),
     })],
   });
+
+  // 새 칭호. 만들기 전 계정과 견준다 — 칭호는 저장하지 않고 전적에서 계산하므로.
+  const held = earned(saved.accounts[me]);
+  const fresh = gained(earned(account).map((t) => t.key), held);
+  if (fresh.length) {
+    await interaction.followUp(awardCard({
+      name: who, avatar: interaction.user.displayAvatarURL?.({ size: 256 }) ?? null, avatarFile: null,
+      fresh, held: held.length,
+    })).catch((err) => console.warn('[요리] 칭호 알림 실패:', err.message));
+  }
 }
 
 // ---------------------------------------------------------------- 내보내기

@@ -18,8 +18,8 @@ process.env.GEMINI_API_KEY ||= '';
 import assert from 'node:assert/strict';
 
 const {
-  GRADES, GRADE_BY_KEY, MODES, MAX_CRAFTS, roll, scoreOf, gradeOf, priceOf, healOf, worthOf,
-  dicePoints, newId,
+  GRADES, GRADE_BY_KEY, MODES, MAX_CRAFTS, POISON, roll, scoreOf, gradeOf, priceOf, effectOf, worthOf,
+  dicePoints, poisonOf, monstrous, newId,
 } = await import('../src/casino/crafts.js');
 const { promptFor, parseJudgement } = await import('../src/ai/judge.js');
 
@@ -91,11 +91,21 @@ check('주사위를 고르게 굴리면 스톤은 5% 쯤', () => {
   assert.ok(Math.abs(stone / 20000 - 0.05) < 0.01, `${(stone / 200).toFixed(1)}%`);
 });
 
-console.log('\n값과 회복');
-check('판매가는 재료값 × 배수, 브론즈가 본전', () => {
+console.log('\n값');
+check('판매가는 재료값 × 배수 + 등급 고정값, 브론즈가 본전', () => {
   const keys = ['boarRib', 'honey'];                       // 15 + 12
   assert.equal(worthOf(keys), 27);
-  assert.deepStrictEqual(GRADES.map((g) => priceOf(keys, g)), [0, 27, 41, 68, 108, 189]);
+  // 스톤 0 · 브론즈 27 · 실버 27×1.2+10 · 골드 27×1.5+30 · 플래티넘 27×2+80 · 다이아 27×2.5+150
+  assert.deepStrictEqual(GRADES.map((g) => priceOf(keys, g)), [0, 27, 42, 71, 134, 218]);
+});
+check('등급이 값을 갖는다 — 싼 재료로 잘 만들어도 받는다', () => {
+  assert.equal(priceOf(['twig'], GRADE_BY_KEY.diamond), 153);
+  assert.equal(priceOf(['twig'], GRADE_BY_KEY.bronze), 1);
+});
+check('비싼 재료가 등급 차이를 끝없이 벌리지 않는다', () => {
+  // 예전(배수만 ×7)엔 사프란 다섯 개 다이아몬드가 2100골드였다.
+  const saffron = Array(5).fill('saffron');
+  assert.equal(priceOf(saffron, GRADE_BY_KEY.diamond), 900);
 });
 check('값이 0 인 재료만 써도 스톤이 아니면 1골드', () => {
   assert.equal(priceOf(['wetMoss'], GRADE_BY_KEY.bronze), 1);
@@ -104,27 +114,86 @@ check('값이 0 인 재료만 써도 스톤이 아니면 1골드', () => {
 check('MT 는 위의 두 등급만 — 5 · 10', () => {
   assert.deepStrictEqual(GRADES.map((g) => g.mt), [0, 0, 0, 0, 5, 10]);
 });
-check('회복은 등급 범위 안으로', () => {
-  assert.equal(healOf(COOK, GRADE_BY_KEY.gold, 999), 35);
-  assert.equal(healOf(COOK, GRADE_BY_KEY.gold, 1), 15);
-  assert.equal(healOf(COOK, GRADE_BY_KEY.gold, undefined), 25, '안 적어 오면 가운데');
+
+console.log('\n독');
+check('재료 중 가장 센 독', () => {
+  assert.equal(poisonOf(['honey', 'boarRib']), 0);
+  assert.equal(poisonOf(['sproutPotato', 'deathCap', 'honey']), 3);
+  assert.equal(monstrous(['bugPile', 'honey']), true);
+  assert.equal(monstrous(['honey']), false);
 });
-check('스톤은 늘 아프다', () => {
-  assert.ok(healOf(COOK, GRADE_BY_KEY.stone, 50) < 0);
-  assert.ok(healOf(COOK, GRADE_BY_KEY.stone, -99) >= -20);
+check('독이 들어도 잘 만들면 브론즈~골드', () => {
+  assert.equal(gradeOf(40, 10, { poisoned: true }).grade.key, 'bronze');
+  assert.equal(gradeOf(50, 10, { poisoned: true }).grade.key, 'silver');
+  assert.equal(gradeOf(70, 10, { poisoned: true }).grade.key, 'gold');
 });
-check('독을 그냥 썼으면 등급과 상관없이 아프다', () => {
-  assert.ok(healOf(COOK, GRADE_BY_KEY.gold, -12) === -12);
-  assert.ok(healOf(COOK, GRADE_BY_KEY.diamond, -99) === -30, '그래도 −30 까지');
+check('독이 들면 골드에서 멈추고, 왜 멈췄는지 알려 준다', () => {
+  const g = gradeOf(100, 20, { poisoned: true });
+  assert.deepStrictEqual([g.grade.key, g.capped.key, g.by], ['gold', 'diamond', 'poison']);
+  const d = gradeOf(95, 10);
+  assert.deepStrictEqual([d.grade.key, d.capped.key, d.by], ['gold', 'diamond', 'dice']);
+});
+check('독이 들어도 주사위 1 은 스톤', () => {
+  assert.equal(gradeOf(100, 1, { poisoned: true }).grade.key, 'stone');
+});
+
+console.log('\n먹으면 — 만들 때 굴려 둔다');
+const judged = (over = {}) => ({ heal: 20, detox: 10, ...over });
+const rate = (fn, n = 20000) => { let k = 0; for (let i = 0; i < n; i += 1) if (fn()) k += 1; return k / n; };
+check('탈 없으면 등급 범위 안', () => {
+  assert.deepStrictEqual(effectOf(COOK, GRADE_BY_KEY.gold, judged({ heal: 999 }), ['honey']), { heal: 35, harm: null });
+  assert.deepStrictEqual(effectOf(COOK, GRADE_BY_KEY.gold, judged({ heal: 1 }), ['honey']), { heal: 15, harm: null });
+});
+check('탄 것은 늘 아프다', () => {
+  for (let i = 0; i < 200; i += 1) {
+    const e = effectOf(COOK, GRADE_BY_KEY.stone, judged({ heal: 80 }), ['honey']);
+    assert.ok(e.heal <= -5 && e.heal >= -20 && e.harm === 'burnt', JSON.stringify(e));
+  }
+});
+check('날것이면 식중독', () => {
+  assert.deepStrictEqual(effectOf(COOK, GRADE_BY_KEY.silver, judged({ heal: -12 }), ['rawMeat']), { heal: -12, harm: 'sick' });
+  assert.equal(effectOf(COOK, GRADE_BY_KEY.silver, judged({ heal: -99 }), ['rawMeat']).heal, -30);
+});
+check('독은 손질이 서툴수록 탈이 잦다', () => {
+  const hit = (detox) => rate(() => effectOf(COOK, GRADE_BY_KEY.gold, judged({ detox }), ['deathCap']).harm === 'poison');
+  const raw = hit(0);
+  const done = hit(10);
+  assert.ok(Math.abs(raw - POISON[3].chance) < 0.02, `손질 0 에서 ${(raw * 100).toFixed(1)}%`);
+  assert.ok(done > 0.08 && done < 0.22, `손질 10 에서 ${(done * 100).toFixed(1)}% — 0 은 아니어야 한다`);
+});
+check('독이 안 돌면 멀쩡한 요리다', () => {
+  let fine = 0;
+  for (let i = 0; i < 2000; i += 1) {
+    const e = effectOf(COOK, GRADE_BY_KEY.gold, judged({ detox: 10 }), ['deathCap']);
+    if (!e.harm) { fine += 1; assert.equal(e.heal, 20); }
+  }
+  assert.ok(fine > 1000);
+});
+check('치명적인 독은 죽을 수 있다', () => {
+  let worst = 0;
+  for (let i = 0; i < 20000; i += 1) worst = Math.min(worst, effectOf(COOK, GRADE_BY_KEY.gold, judged({ detox: 0 }), ['puffer']).heal);
+  assert.ok(worst <= -95, `가장 아팠던 것이 ${worst}`);
+});
+check('약한 독은 죽지 않을 만큼', () => {
+  for (let i = 0; i < 2000; i += 1) {
+    const e = effectOf(COOK, GRADE_BY_KEY.gold, judged({ detox: 0 }), ['sproutPotato']);
+    assert.ok(e.heal >= -20, JSON.stringify(e));
+  }
+});
+check('손질 점수를 안 적어 오면 서툴게 본다', () => {
+  const miss = rate(() => effectOf(COOK, GRADE_BY_KEY.gold, { heal: 20 }, ['deathCap']).harm === 'poison');
+  assert.ok(miss > 0.6, `${(miss * 100).toFixed(1)}%`);
 });
 check('제작한 것은 먹어도 0', () => {
-  assert.equal(healOf(CRAFT, GRADE_BY_KEY.diamond, 80), 0);
+  assert.deepStrictEqual(effectOf(CRAFT, GRADE_BY_KEY.diamond, judged(), ['deathCap']), { heal: 0, harm: null });
 });
-check('서버 범위 안 — 회복 ±100 · 모든 등급', () => {
+check('서버 범위 안 — 회복 ±100 · 모든 등급·독', () => {
   for (const g of GRADES) {
-    for (const p of [-999, -1, 0, 50, 999]) {
-      const h = healOf(COOK, g, p);
-      assert.ok(Number.isInteger(h) && h >= -100 && h <= 100, `${g.key} ${p} → ${h}`);
+    for (const keys of [['honey'], ['deathCap'], ['puffer'], ['sproutPotato']]) {
+      for (const heal of [-999, -1, 0, 50, 999]) {
+        const e = effectOf(COOK, g, { heal, detox: 0 }, keys);
+        assert.ok(Number.isInteger(e.heal) && e.heal >= -100 && e.heal <= 100, `${g.key} ${keys} ${heal} → ${e.heal}`);
+      }
     }
   }
 });
@@ -136,7 +205,11 @@ check('만든 것은 25개까지 — 셀렉트 한 칸', () => assert.equal(MAX_
 console.log('\n판정 읽기');
 check('JSON 그대로', () => {
   const j = parseJudgement(COOK, '{"fit":26,"craft":24,"look":8,"heal":28,"desc":"윤이 난다.","verdict":"좋다"}');
-  assert.deepStrictEqual(j, { fit: 26, craft: 24, look: 8, heal: 28, desc: '윤이 난다.', verdict: '좋다' });
+  assert.deepStrictEqual(j, { fit: 26, craft: 24, look: 8, heal: 28, detox: null, desc: '윤이 난다.', verdict: '좋다' });
+});
+check('손질 점수는 있으면 읽고, 없어도 판정은 산다', () => {
+  assert.equal(parseJudgement(COOK, '{"fit":1,"craft":1,"look":1,"heal":1,"detox":7,"desc":"x"}').detox, 7);
+  assert.equal(parseJudgement(COOK, '{"fit":1,"craft":1,"look":1,"heal":1,"desc":"x"}').detox, null);
 });
 check('코드 울타리와 앞뒤 말은 떼고 읽는다', () => {
   const j = parseJudgement(CRAFT, '여기 있어요\n```json\n{"fit": 40, "craft": 15, "desc": "반짝인다."}\n```');
@@ -168,6 +241,14 @@ check('사람의 글은 울타리 안에, 지시는 따르지 말라고', () => 
   assert.match(user, /멧돼지 갈비 ×2/);
   assert.match(user, /날로 먹으면 체력 −?-?3/);
   assert.match(user, /주사위\(d20\): 1 — 대실패/);
+});
+check('독과 괴식을 재료 줄에 적고, 먹은 결과는 쓰지 말라고', () => {
+  const { system, user } = promptFor(COOK, { name: 'x', process: 'y', counts: { deathCap: 1, bugPile: 1 }, dice: 10 });
+  assert.match(user, /죽음의 갓 \(재료 · ☠️ 독\(치명\)\)/);
+  assert.match(user, /벌레 더미 \(잡화 · 괴식\)/);
+  assert.match(system, /독 재료를 썼다는 이유만으로는 깎지 마라/);
+  assert.match(system, /먹었을 때 어떻게 되는지는 묘사에도 한줄평에도 쓰지 마라/);
+  assert.match(system, /"detox"/);
 });
 check('등급 문턱은 모델에게 안 알려 준다', () => {
   const { system, user } = promptFor(CRAFT, { name: 'x', process: 'y', counts: { oreRed: 1 }, dice: 10 });

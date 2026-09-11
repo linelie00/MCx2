@@ -19,6 +19,7 @@ import {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder,
 } from 'discord.js';
+import { POISON } from '../casino/crafts.js';
 import { ITEMS, ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
 import { base, trunc, THEME_COLOR } from '../embeds.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
@@ -143,9 +144,14 @@ function itemPayload(key, kindKey = 'all', page = 0) {
   const item = ITEM_BY_KEY[key];
   if (!item) return listPayload(kindKey, page);
 
+  // 독과 괴식은 `/요리` 에서 뜻이 있다. 요리하기 전에 알 수 있어야 고를 수 있다.
+  const tags = [
+    item.poison ? `☠️ **독 — ${POISON[item.poison].label}** · 요리에 넣으면 먹을 때 탈이 날 수 있어요` : '',
+    item.monster ? '🪱 **괴식** · 잘 요리하면 「던전밥」' : '',
+  ].filter(Boolean);
   const embed = base({
     title: `${iconOf(item)} ${item.name}`,
-    description: `_${item.desc}_\n\n${tradeText(item)}`,
+    description: `_${item.desc}_\n\n${tags.length ? `${tags.join('\n')}\n\n` : ''}${tradeText(item)}`,
     color: THEME_COLOR,
     footer: item.heal ? `먹었을 때 · 최대 체력은 ${MAX_HP}` : '먹어도 아무 일 없어요',
   }).addFields(

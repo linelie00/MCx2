@@ -77,6 +77,15 @@ const LEVELS = [1, 2, 3, 5, 8, 12, 20, 30, 50, 80, 120, 200];
 export const LEVEL_EVERY = 6;
 
 /**
+ * 토너먼트 — 다음 칸에서 **남은 사람 평균 스택**이 이 BB 아래로 떨어지면 블라인드를 멈춘다.
+ * 15BB 면 올인·폴드만이 아니라 레이즈·콜의 판단이 남는다(holdem/state.js 의 stepTourney).
+ */
+export const TOURNEY_FLOOR_BB = 15;
+
+/** 멈춘 동안에도 이만큼마다는 한 칸 오른다. 안 그러면 헤드업이 안 끝날 수 있다. */
+export const TOURNEY_SLOW_EVERY = 15;
+
+/**
  * `level` 단계의 블라인드. **`sb`·`bb` 와 `level` 만 바뀐다.**
  *
  * `stack`·`minBuyIn` 은 판을 열 때만 쓰이므로 1단계 값 그대로 두고, `unit`·`minBet`·
@@ -105,5 +114,5 @@ export function tooPoor(stakes, gold, who = '그쪽') {
 
 export default {
   STAKES, DEFAULT_STAKES, stakesOf, STAKES_CHOICES, tooPoor,
-  DUNGEON, atLevel, LEVEL_EVERY, TOP_LEVEL,
+  DUNGEON, atLevel, LEVEL_EVERY, TOP_LEVEL, TOURNEY_FLOOR_BB, TOURNEY_SLOW_EVERY,
 };

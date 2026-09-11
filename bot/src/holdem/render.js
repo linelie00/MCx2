@@ -16,7 +16,9 @@ import { MAX_SEATS } from './rules.js';
 import {
   currentSeat, actionsFor, raisesFor, toCallFor, pot, standings, rising,
 } from './state.js';
-import { atLevel, LEVEL_EVERY, TOP_LEVEL } from '../casino/stakes.js';
+import {
+  atLevel, LEVEL_EVERY, TOP_LEVEL, TOURNEY_FLOOR_BB, TOURNEY_SLOW_EVERY,
+} from '../casino/stakes.js';
 import { base, THEME_COLOR } from '../embeds.js';
 import { padEndW, padStartW, clipW } from '../text.js';
 
@@ -280,6 +282,17 @@ export function boardEmbed(game) {
  */
 function nextBlinds(game) {
   if (!rising(game) || !game.base || game.handNo < 1) return '';
+  // 토너먼트는 칩의 양에 묶여 오른다(state.stepTourney). 멈췄으면 그렇다고 적는다 —
+  // 안 적으면 "왜 안 오르지" 가 되거나, 곧 오를 줄 알고 버틴다.
+  if (game.mode === 'tourney') {
+    const cur = game.stakes.level ?? 0;
+    if (cur >= TOP_LEVEL) return '';
+    const next = atLevel(game.base, cur + 1);
+    const every = game.blindsPaused ? TOURNEY_SLOW_EVERY : LEVEL_EVERY;
+    const left = Math.max(1, every - (game.handNo - (game.levelAt ?? 1)));
+    const when = `${left === 1 ? '다음 핸드부터' : `${left}핸드 뒤`} ${next.sb}/${next.bb}`;
+    return game.blindsPaused ? ` · 평균 ${TOURNEY_FLOOR_BB}BB 아래라 천천히 — ${when}` : ` · ${when}`;
+  }
   const level = Math.floor((game.handNo - 1) / LEVEL_EVERY);
   if (level >= TOP_LEVEL) return '';
   const next = atLevel(game.base, level + 1);

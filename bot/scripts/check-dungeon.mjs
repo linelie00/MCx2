@@ -545,12 +545,60 @@ check('탈락 순서가 인원과 맞는다', () => {
   }
 });
 
-check('블라인드가 오른다', () => {
-  const { game } = runTourney('tb-x', [1, 2, 3, 4]);
-  assert.ok(game.handNo >= 1);
-  const want = atLevel({ ...STAKES.low, level: 0 }, Math.floor((game.handNo - 1) / 6));
-  assert.equal(game.stakes.bb, want.bb, `${game.handNo}핸드에서 블라인드가 ${game.stakes.bb}`);
-  assert.equal(game.stakes.stack, STAKES.low.stack, '스택까지 같이 올랐다');
+check('블라인드가 오른다 — 칩 양에 묶여서', () => {
+  // 6핸드마다 한 칸. 단 다음 칸에서 남은 사람 평균이 15BB 밑이면 멈추고 15핸드마다만 한 칸
+  // (state.stepTourney). 칸이 바뀔 때마다 그 규칙을 지켰는지 본다.
+  let sawPause = false;
+  let sawRise = false;
+  for (let i = 0; i < 40; i += 1) {
+    const channelId = `tb-${i}`;
+    const gold = Object.fromEntries([1, 2, 3, 4].map((n) => [user(n).id, 1000]));
+    const game = hold.create({ channelId, homeChannelId: channelId, guildId: 'g', starterId: user(1).id, mode: 'tourney' });
+    for (const n of [1, 2, 3, 4]) hold.addSeat(game, hold.humanSeat(user(n), `사람${n}`));
+    hold.start(game, gold);
+    let lastAt = 1;
+    let level = game.stakes.level ?? 0;
+    for (let h = 0; h < 400; h += 1) {
+      if (!playHand(game)) break;
+      if (!hold.beginHand(game)) break;
+      const now = game.stakes.level ?? 0;
+      if (game.blindsPaused) sawPause = true;
+      if (now === level) continue;
+      assert.equal(now, level + 1, `${game.handNo}핸드에 블라인드가 ${now - level}칸 뛰었다`);
+      const gap = game.handNo - lastAt;
+      const alive = game.seats.filter((x) => !x.out);
+      const avg = alive.reduce((a, x) => a + x.gold + x.committed, 0) / alive.length;
+      if (gap < 15) {
+        assert.ok(gap >= 6, `${gap}핸드 만에 올랐다`);
+        assert.ok(avg / game.stakes.bb >= 15, `평균 ${(avg / game.stakes.bb).toFixed(1)}BB 인데 멈추지 않고 올랐다`);
+      }
+      sawRise = true;
+      lastAt = game.handNo;
+      level = now;
+    }
+    assert.equal(game.stakes.stack, STAKES.low.stack, '스택까지 같이 올랐다');
+    hold.remove(channelId);
+  }
+  assert.ok(sawRise, '한 번도 안 올랐다');
+  assert.ok(sawPause, '한 번도 안 멈췄다 — 바닥이 안 걸린다');
+});
+
+check('칩이 모자라도 결국 끝난다 — 멈춘 동안에도 15핸드마다 한 칸', () => {
+  const game = hold.create({ channelId: 'tb-slow', homeChannelId: 'tb-slow', guildId: 'g', starterId: user(1).id, mode: 'tourney' });
+  for (const n of [1, 2]) hold.addSeat(game, hold.humanSeat(user(n), `사람${n}`));
+  // 둘이 합쳐 400(= 로우 20BB) — 첫 칸부터 바닥 아래다
+  hold.start(game, { [user(1).id]: 200, [user(2).id]: 200 });
+  assert.equal(game.blindsPaused, true, '처음부터 멈춰 있어야 한다');
+  // 핸드를 두지 않고 번호만 넘긴다 — 오르는 시점만 본다
+  const rises = [];
+  for (let h = 0; h < 40; h += 1) {
+    for (const x of game.seats) { x.gold += x.committed; x.committed = 0; x.bet = 0; }
+    const before = game.stakes.level ?? 0;
+    if (!hold.beginHand(game)) break;
+    if ((game.stakes.level ?? 0) > before) rises.push(game.handNo);
+  }
+  assert.deepEqual(rises.slice(0, 2), [16, 31], `오른 핸드: ${rises.join(', ')}`);
+  hold.remove('tb-slow');
 });
 
 check('등급 원본이 안 바뀐다', () => {

@@ -14,7 +14,9 @@
 import { randomBytes } from 'node:crypto';
 import { newShoe, shuffle, draw } from '../casino/cards.js';
 import { ledger } from '../casino/wallet.js';
-import { stakesOf, DEFAULT_STAKES, atLevel, LEVEL_EVERY } from '../casino/stakes.js';
+import {
+  stakesOf, DEFAULT_STAKES, atLevel, LEVEL_EVERY, TOP_LEVEL, TOURNEY_FLOOR_BB, TOURNEY_SLOW_EVERY,
+} from '../casino/stakes.js';
 import {
   MAX_SEATS, BOARD_AT,
   newSeat, live, actionable, nextActor, blindSeats, put, firstToAct,
@@ -210,6 +212,40 @@ export function swapFighter(game, seat, who) {
 /** 블라인드가 오르는 판인지. 현금 판은 판 내내 그대로다. */
 export const rising = (game) => game.mode === 'tourney' || game.mode === 'dungeon';
 
+/**
+ * 토너먼트 블라인드를 한 칸 올릴지. `beginHand` 가 핸드 번호를 올린 뒤 부른다.
+ *
+ * **남은 칩의 양에 묶는다.** 예전에는 던전처럼 6핸드마다 무조건 올렸는데, 판의 칩은 처음
+ * 앉은 만큼(사람 수 × 50BB)으로 정해져 있어서, 둘이 남을 즈음이면 평균이 3BB 밑이었다 —
+ * 블라인드 한 바퀴에 판 칩의 20% 가 오가고 폴드만으로 칩 리더가 휙휙 바뀌었다(마이크로
+ * 넷이서 60/120). 그건 포커가 아니라 동전 던지기다.
+ *
+ *   - 다음 칸에서 **남은 사람 평균 스택이 `TOURNEY_FLOOR_BB`(15BB) 이상**이면 6핸드마다 한 칸
+ *   - 아니면 **멈춘다** — 그래도 안 끝나면 곤란하니 `TOURNEY_SLOW_EVERY`(15)핸드마다 한 칸씩만
+ *
+ * 누가 탈락해 평균이 커지면 다시 6핸드마다 오른다. 한 번에 한 칸 넘게는 안 오른다.
+ * `game.floorBB` 는 검사가 끼우는 자리다(0 이면 예전처럼 무조건 오른다).
+ */
+function stepTourney(game, playing) {
+  const cur = game.stakes.level ?? 0;
+  if (cur >= TOP_LEVEL) { game.blindsPaused = false; return; }
+  const floor = game.floorBB ?? TOURNEY_FLOOR_BB;
+  const roomyAt = (level) => {
+    const next = atLevel(game.base, level);
+    const avg = playing.reduce((a, s) => a + s.gold, 0) / Math.max(1, playing.length);
+    return avg / next.bb >= floor;
+  };
+  const since = game.handNo - (game.levelAt ?? 1);
+  const roomy = roomyAt(cur + 1);
+  if ((roomy && since >= LEVEL_EVERY) || (!roomy && since >= TOURNEY_SLOW_EVERY)) {
+    game.stakes = atLevel(game.base, cur + 1);
+    game.levelAt = game.handNo;
+  }
+  // 화면(render.nextBlinds)이 "멈춤" 을 적는다 — 올리고 난 뒤의 다음 칸 기준.
+  const now = game.stakes.level ?? 0;
+  game.blindsPaused = now < TOP_LEVEL && !roomyAt(now + 1);
+}
+
 export const hasNpc = (game, character) =>
   game.seats.some((s) => s.kind === 'npc' && s.character === character);
 
@@ -287,7 +323,10 @@ export function beginHand(game) {
   // 판 도중에 바뀌면 이미 건 돈의 뜻이 달라진다. `sb`·`bb` 와 표시용 `level` 만 갈고,
   // `stack`·`minBuyIn` 은 판을 열 때만 쓰이므로 1단계 값 그대로 둔다.
   // 던전도 오른다. 1:1 이라 안 올리면 둘 다 기다리기만 해서 판이 안 끝난다(stakes.js).
-  if (rising(game)) {
+  if (game.mode === 'tourney') {
+    stepTourney(game, playing);
+    game.minRaise = game.stakes.bb;
+  } else if (rising(game)) {
     const level = Math.floor((game.handNo - 1) / LEVEL_EVERY);
     if (level !== (game.stakes.level ?? 0)) game.stakes = atLevel(game.base, level);
     game.minRaise = game.stakes.bb;

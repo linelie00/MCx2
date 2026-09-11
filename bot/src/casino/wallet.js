@@ -121,7 +121,9 @@ export async function load(guildId, userIds) {
  *
  * 거르는 일은 `applyBody` 로 따로 빼 뒀다 — HTTP 없이 검사할 수 있게.
  */
-export function applyBody({ deltas = {}, mt = {}, hp = {}, items = {}, bump = {} } = {}) {
+export function applyBody({
+  deltas = {}, mt = {}, hp = {}, items = {}, bump = {}, crafts = {},
+} = {}) {
   const clean = (map) => Object.fromEntries(
     Object.entries(map).filter(([id, n]) => n !== 0 && isPersistent(id)),
   );
@@ -140,10 +142,16 @@ export function applyBody({ deltas = {}, mt = {}, hp = {}, items = {}, bump = {}
     bump: Object.fromEntries(
       Object.entries(bump).filter(([id, c]) => isPersistent(id) && Object.keys(c).length),
     ),
+    // 만든 것(`/요리`·`/제작`)은 증감이 아니라 **넣고 빼기**다. 빈 것은 거른다.
+    crafts: Object.fromEntries(
+      Object.entries(crafts)
+        .filter(([id, op]) => isPersistent(id) && ((op?.add?.length ?? 0) + (op?.remove?.length ?? 0)) > 0)
+        .map(([id, op]) => [id, { add: op.add ?? [], remove: op.remove ?? [] }]),
+    ),
   };
 }
 
-/** 보낼 것이 하나라도 있는지. 다섯이 다 비면 굳이 서버를 부르지 않는다. */
+/** 보낼 것이 하나라도 있는지. 여섯이 다 비면 굳이 서버를 부르지 않는다. */
 export const hasMoves = (body) => Object.values(body).some((m) => Object.keys(m).length);
 
 export async function apply(moves = {}) {

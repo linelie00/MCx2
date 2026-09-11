@@ -10,7 +10,7 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, mt, hp, title, items, stats, refilledAt, healedAt, updatedAt }
+ * account shape: { gold, mt, hp, title, items, crafts, stats, refilledAt, healedAt, updatedAt }
  *
  * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
  * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
@@ -71,6 +71,48 @@ const START_MT = 0;
  */
 const ITEM_KEY_RE = /^[a-z][A-Za-z0-9]{0,39}$/;
 
+/**
+ * `/요리`·`/제작` 이 만든 것. **명부에 없는 물건**이라 `items` 처럼 개수로 못 센다 —
+ * 이름·등급·회복량이 하나하나 다르다. 그래서 한 줄씩 담는다.
+ *
+ * 무엇이 좋은 요리인지는 봇이 안다(제미나이 판정 + 공식). 서버는 **모양과 범위만** 본다
+ * — 칭호·아이템 키와 같은 원칙이다.
+ */
+const GRADE_KEYS = new Set(['stone', 'bronze', 'silver', 'gold', 'platinum', 'diamond']);
+const CRAFT_KINDS = new Set(['요리', '제작']);
+const CRAFT_ID_RE = /^[a-z0-9]{8,16}$/;
+
+/**
+ * 한 사람이 들고 있을 수 있는 만든 것의 수. **디스코드 셀렉트 한 칸이 25 라서** 이 이상이면
+ * `/상점` 에서 한 번에 못 보여 준다. 가득 차면 팔거나 먹어야 또 만든다.
+ */
+const MAX_CRAFTS = 25;
+
+/** 만든 것 하나를 검사한다. 이상하면 사유(문자열), 멀쩡하면 저장할 모양. */
+function craftOf(c) {
+  if (!c || typeof c !== 'object' || Array.isArray(c)) return '만든 것이 객체가 아닙니다';
+  if (!CRAFT_ID_RE.test(String(c.id))) return `만든 것 id 모양이 아닙니다: ${c.id}`;
+  if (!CRAFT_KINDS.has(c.kind)) return `요리/제작이 아닙니다: ${c.kind}`;
+  if (typeof c.name !== 'string' || !c.name.trim() || c.name.length > 40) return '이름은 1~40자여야 합니다';
+  if (!GRADE_KEYS.has(c.grade)) return `모르는 등급: ${c.grade}`;
+  const int = (v, lo, hi) => Number.isSafeInteger(v) && v >= lo && v <= hi;
+  if (!int(c.heal, -MAX_HP, MAX_HP)) return `회복량이 범위 밖입니다: ${c.heal}`;
+  if (!int(c.price, 0, 1_000_000)) return `값이 범위 밖입니다: ${c.price}`;
+  if (!int(c.mt ?? 0, 0, 100)) return `MT 가 범위 밖입니다: ${c.mt}`;
+  if (c.desc !== undefined && (typeof c.desc !== 'string' || c.desc.length > 500)) return '지문은 500자까지입니다';
+  const from = c.from ?? [];
+  if (!Array.isArray(from) || from.length > 5 || !from.every((k) => ITEM_KEY_RE.test(String(k)))) {
+    return '재료는 아이템 키 다섯까지입니다';
+  }
+  if (c.dice !== undefined && !int(c.dice, 1, 20)) return `주사위가 범위 밖입니다: ${c.dice}`;
+  if (c.score !== undefined && !int(c.score, 0, 100)) return `점수가 범위 밖입니다: ${c.score}`;
+  // 받은 것을 그대로 두지 않고 **아는 칸만** 골라 담는다. 모르는 칸이 파일에 쌓이지 않게.
+  return {
+    id: c.id, kind: c.kind, name: c.name.trim(), grade: c.grade, heal: c.heal, price: c.price,
+    mt: c.mt ?? 0, desc: c.desc ?? '', from: [...from], dice: c.dice, score: c.score, at: now(),
+  };
+}
+
 /** 한 번에 다룰 수 있는 계정 수. 자리는 넷이지만 넉넉히 둔다. */
 const MAX_IDS = 16;
 
@@ -88,6 +130,7 @@ const blank = () => ({
   hp: MAX_HP,
   title: null,
   items: {},
+  crafts: [],           // /요리·/제작 이 만든 것. 명부에 없는 물건이라 한 줄씩 담는다
   stats: {},
   refilledAt: null,
   healedAt: null,       // 오늘 체력을 되찾았는지. 골드 도장(refilledAt)과 **따로** 센다
@@ -111,6 +154,7 @@ const normalize = (raw) => {
   if (!Number.isFinite(acct.mt)) acct.mt = START_MT;
   if (!Number.isFinite(acct.hp)) acct.hp = MAX_HP;
   if (!acct.items || typeof acct.items !== 'object') acct.items = {};
+  if (!Array.isArray(acct.crafts)) acct.crafts = [];
   return acct;
 };
 
@@ -121,6 +165,7 @@ const publicView = (acct) => ({
   hp: acct.hp,
   title: acct.title,
   items: acct.items,
+  crafts: acct.crafts,
   stats: acct.stats,
   refilledAt: acct.refilledAt,
 });
@@ -240,15 +285,20 @@ const BUMP_KEYS = new Set([
   // "그 족보를 직접 만들어 봤나" 라서, 최댓값으로 두면 아래가 전부 딸려 온다.
   'handStraight', 'handFlush', 'handFullHouse', 'handQuads', 'handStraightFlush',
   'dungeonWon', 'dungeonLost',                     // 던전 — 골드 전적과 섞지 않는다
+  'cooked', 'crafted',                             // /요리 · /제작 한 번
 ]);
 
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
-const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet']);
+const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet', 'bestCook', 'bestCraft']);
 
 /**
  * POST /api/accounts/deltas — 계정 하나의 네 가지를 **한 번에** 옮긴다.
  *
- * `{ deltas: {id: ±n}, mt: {id: ±n}, hp: {id: ±n}, items: {id: {키: ±n}}, bump: {id: {카운터: n}} }`
+ * `{ deltas: {id: ±n}, mt: {id: ±n}, hp: {id: ±n}, items: {id: {키: ±n}}, bump: {id: {카운터: n}},
+ *    crafts: {id: { add: [만든 것], remove: [만든 것 id] }} }`
+ *
+ * `crafts` 는 증감이 아니라 **넣고 빼기**다. 요리는 "재료 빼기 + 결과물 넣기" 가,
+ * 팔기는 "결과물 빼기 + 골드 넣기" 가 한 번의 쓰기여야 한다.
  *
  * **다섯 다 선택이다.** 상점은 골드를 빼고 아이템을 넣는 **한 번의 쓰기**여야 하고,
  * 던전은 체력과 아이템을 같이 써야 한다. 둘로 나누면 락 없는 이 스토어에서 두 번째
@@ -273,10 +323,29 @@ exports.applyDeltas = (req, res) => {
     return res.status(400).json({ error: 'bump 는 객체여야 합니다' });
   }
 
+  const craftOps = body.crafts || {};
+  if (typeof craftOps !== 'object' || Array.isArray(craftOps)) {
+    return res.status(400).json({ error: 'crafts 는 객체여야 합니다' });
+  }
+  const adds = {};
+  for (const [id, op] of Object.entries(craftOps)) {
+    if (!op || typeof op !== 'object' || Array.isArray(op)) return res.status(400).json({ error: `crafts.${id} 가 객체가 아닙니다` });
+    const add = op.add ?? [];
+    const remove = op.remove ?? [];
+    if (!Array.isArray(add) || !Array.isArray(remove)) return res.status(400).json({ error: `crafts.${id} 의 add/remove 는 배열이어야 합니다` });
+    if (!remove.every((r) => CRAFT_ID_RE.test(String(r)))) return res.status(400).json({ error: `crafts.${id}.remove 에 이상한 id 가 있습니다` });
+    adds[id] = [];
+    for (const c of add) {
+      const got = craftOf(c);
+      if (typeof got === 'string') return res.status(400).json({ error: `crafts.${id}: ${got}` });
+      adds[id].push(got);
+    }
+  }
+
   // **bump 도 합집합에 넣는다.** 토너먼트는 핸드마다 전적만 적고 골드는 끝에 한 번
-  // 옮기므로, 카운터만 있는 쓰기가 실제로 온다.
+  // 옮기므로, 카운터만 있는 쓰기가 실제로 온다. 만든 것만 넣고 빼는 쓰기도 마찬가지.
   const ids = parseIds([...new Set(
-    [...Object.values(maps), bump].flatMap((m) => Object.keys(m)),
+    [...Object.values(maps), bump, craftOps].flatMap((m) => Object.keys(m)),
   )]);
   if (typeof ids === 'string') return res.status(400).json({ error: ids });
 
@@ -344,6 +413,22 @@ exports.applyDeltas = (req, res) => {
       else items[key] = have + n;
     }
 
+    // 만든 것 — **빼고 나서 넣는다.** 가득 찬 사람이 하나를 팔고 하나를 만드는 쓰기가
+    // 거꾸로 돌면 25 에 걸린다. 이것도 복사해서 고친다(위의 items 와 같은 까닭).
+    const crafts = [...acct.crafts];
+    for (const rid of craftOps[id]?.remove ?? []) {
+      const at = crafts.findIndex((c) => c.id === rid);
+      if (at < 0) return res.status(409).json({ error: `없는 것을 뺍니다: ${id} ${rid}` });
+      crafts.splice(at, 1);
+    }
+    for (const c of adds[id] ?? []) {
+      if (crafts.some((x) => x.id === c.id)) return res.status(409).json({ error: `이미 있는 id: ${c.id}` });
+      crafts.push(c);
+    }
+    if (crafts.length > MAX_CRAFTS) {
+      return res.status(409).json({ error: `만든 것이 가득입니다(${MAX_CRAFTS}개): ${id}` });
+    }
+
     // 최고 잔액은 **서버가 알아서** 센다. 봇은 새 잔액을 모르는 채로 증감만 보내므로
     // (그게 이 설계의 핵심이다) 여기서 재는 것이 유일하게 맞는 자리다.
     const stats = { ...acct.stats, peak: Math.max(acct.stats?.peak ?? 0, gold) };
@@ -351,7 +436,7 @@ exports.applyDeltas = (req, res) => {
       stats[k] = MAX_KEYS.has(k) ? Math.max(stats[k] ?? 0, v) : (stats[k] ?? 0) + v;
     }
 
-    next[id] = { ...acct, gold, mt, hp, items, stats, updatedAt: now() };
+    next[id] = { ...acct, gold, mt, hp, items, crafts, stats, updatedAt: now() };
   }
 
   Object.assign(data.accounts, next);
@@ -438,3 +523,4 @@ exports.claim = (req, res) => {
 module.exports.START_GOLD = START_GOLD;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;
 module.exports.DAILY_HEAL = DAILY_HEAL;
+module.exports.MAX_CRAFTS = MAX_CRAFTS;

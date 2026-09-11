@@ -265,9 +265,18 @@ check('전적은 골드가 안 움직여도 살아남는다', () => {
   assert.deepStrictEqual(body.bump, { a: { dungeonWon: 1 } });
   assert.equal(hasMoves(body), true, '전적만 있는 쓰기를 접어 버렸다');
 });
-check('다섯이 다 비면 안 보낸다', () => {
+check('만든 것만 넣고 빼는 쓰기도 보낸다', () => {
+  // 요리의 결과물은 증감이 아니라 넣고 빼기라 따로 거른다. 빈 것은 버리고, 모브는 뺀다.
+  const body = applyBody({
+    crafts: { a: { add: [{ id: 'x' }] }, b: { remove: [] }, 'mob:0': { add: [{ id: 'y' }] } },
+  });
+  assert.deepStrictEqual(body.crafts, { a: { add: [{ id: 'x' }], remove: [] } });
+  assert.equal(hasMoves(body), true, '만든 것만 있는 쓰기를 접어 버렸다');
+});
+check('여섯이 다 비면 안 보낸다', () => {
   assert.equal(hasMoves(applyBody({})), false);
   assert.equal(hasMoves(applyBody({ deltas: { a: 0 }, items: { 'mob:1': { twig: 1 } } })), false);
+  assert.equal(hasMoves(applyBody({ crafts: { a: { add: [], remove: [] } } })), false);
 });
 
 console.log(failed ? `\n실패 ${failed}건` : '\n전부 통과');

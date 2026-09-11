@@ -198,6 +198,7 @@ const server = app.listen(0, async () => {
   eq('나머지 필드는 그대로', old.body.accounts['1000009'].title, 'crown');
   eq('전적도 그대로', old.body.accounts['1000009'].stats.hands, 5);
   eq('chips 는 응답에 안 나온다', old.body.accounts['1000009'].chips, undefined);
+  eq('옛 기록에는 만든 것이 빈 배열', old.body.accounts['1000009'].crafts, []);
   eq('둘 다 있으면 gold 가 이긴다', old.body.accounts['1000010'].gold, 200);
   // null 은 `null <= 0` 이 참이라 그냥 두면 멀쩡한 계정이 죽은 것으로 읽힌다.
   eq('hp: null 은 죽음이 아니다', old.body.accounts['1000011'].hp, 100);
@@ -271,6 +272,61 @@ const server = app.listen(0, async () => {
   eq('그날 다쳐도 회복이 안 끼어든다', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].hp, 70);
   const w3 = await post('/deltas', { hp: { 'npc:migel': -5 } });
   eq('다음 쓰기에서도 안 끼어든다', w3.body.accounts['npc:migel'].hp, 65);
+
+  // --- 만든 것 — 넣고 빼기. 요리는 "재료 빼기 + 결과물 넣기" 가 한 번의 쓰기다
+  const CK = '3000001';
+  const dish = (id, over = {}) => ({
+    id, kind: '요리', name: '꿀 바른 멧돼지 구이', grade: 'gold', heal: 28, price: 85,
+    mt: 0, desc: '윤이 난다.', from: ['boarRib', 'honey'], dice: 14, score: 79, ...over,
+  });
+  await post('/deltas', { items: { [CK]: { boarRib: 1, honey: 1 } } });
+  const k1 = await post('/deltas', {
+    items: { [CK]: { boarRib: -1, honey: -1 } },
+    crafts: { [CK]: { add: [dish('aaaa1111')] } },
+    bump: { [CK]: { cooked: 1, bestCook: 3 } },
+  });
+  eq('재료가 빠지고 결과물이 들어온다',
+    [k1.status, k1.body.accounts[CK].items, k1.body.accounts[CK].crafts.map((c) => c.name)],
+    [200, {}, ['꿀 바른 멧돼지 구이']]);
+  eq('만든 날은 서버가 찍는다', typeof k1.body.accounts[CK].crafts[0].at, 'string');
+  eq('전적이 쌓인다', [k1.body.accounts[CK].stats.cooked, k1.body.accounts[CK].stats.bestCook], [1, 3]);
+  eq('모르는 칸은 안 담는다',
+    (await post('/deltas', { crafts: { [CK]: { add: [dish('aaaa2222', { hax: 1 })] } } })).body.accounts[CK].crafts[1].hax,
+    undefined);
+
+  // 재료가 모자라면 결과물도 안 들어간다 — **한 번의 쓰기**라서다
+  const k2 = await post('/deltas', {
+    items: { [CK]: { boarRib: -1 } },
+    crafts: { [CK]: { add: [dish('aaaa3333')] } },
+  });
+  eq('재료가 없으면 409', k2.status, 409);
+  eq('결과물도 안 들어갔다', (await hit(`?ids=${CK}`)).body.accounts[CK].crafts.length, 2);
+
+  // 팔기 — 빼고 골드
+  const g = (await hit(`?ids=${CK}`)).body.accounts[CK].gold;
+  const k3 = await post('/deltas', { deltas: { [CK]: 85 }, crafts: { [CK]: { remove: ['aaaa1111'] } } });
+  eq('팔면 빠지고 골드가 는다',
+    [k3.body.accounts[CK].crafts.map((c) => c.id), k3.body.accounts[CK].gold], [['aaaa2222'], g + 85]);
+  const k4 = await post('/deltas', { deltas: { [CK]: 85 }, crafts: { [CK]: { remove: ['aaaa1111'] } } });
+  eq('없는 것을 두 번 팔면 409', k4.status, 409);
+  eq('골드도 안 들어갔다', (await hit(`?ids=${CK}`)).body.accounts[CK].gold, g + 85);
+
+  eq('같은 id 둘은 409', (await post('/deltas', { crafts: { [CK]: { add: [dish('aaaa2222')] } } })).status, 409);
+  eq('이상한 등급은 400', (await post('/deltas', { crafts: { [CK]: { add: [dish('bbbb1111', { grade: 'mythic' })] } } })).status, 400);
+  eq('회복량 범위 밖은 400', (await post('/deltas', { crafts: { [CK]: { add: [dish('bbbb1112', { heal: 500 })] } } })).status, 400);
+  eq('이상한 id 는 400', (await post('/deltas', { crafts: { [CK]: { add: [dish('BAD!')] } } })).status, 400);
+  eq('재료가 여섯이면 400', (await post('/deltas', { crafts: { [CK]: { add: [dish('bbbb1113', { from: ['a', 'b', 'c', 'd', 'e', 'f'] })] } } })).status, 400);
+
+  // 가득 차면 못 만든다. **빼고 나서 넣으므로** 하나 팔며 하나 만드는 것은 된다.
+  const { MAX_CRAFTS } = require('../src/controllers/accountController');
+  const fill = Array.from({ length: MAX_CRAFTS - 1 }, (_, i) => dish(`cccc${String(i).padStart(4, '0')}`));
+  eq('가득 채운다', (await post('/deltas', { crafts: { [CK]: { add: fill } } })).body.accounts[CK].crafts.length, MAX_CRAFTS);
+  eq('가득이면 409', (await post('/deltas', { crafts: { [CK]: { add: [dish('dddd0001')] } } })).status, 409);
+  const swap = await post('/deltas', { crafts: { [CK]: { remove: ['cccc0000'], add: [dish('dddd0001')] } } });
+  eq('하나 빼며 하나 넣기는 된다', [swap.status, swap.body.accounts[CK].crafts.length], [200, MAX_CRAFTS]);
+
+  // 옛 기록에는 칸이 없다 — 빈 배열로 읽는다
+  eq('만든 것만 넣는 쓰기도 id 로 친다', (await post('/deltas', { crafts: { 3000002: { add: [dish('eeee0001')] } } })).status, 200);
 
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');

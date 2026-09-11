@@ -13,8 +13,11 @@
  * 잘 나오고, 골드도 MT 확률도 높다. 표를 따로 만들지 않고 `soft` 하나로 기울기를 바꾼다.
  *
  * **빼는 것은 명부에 `loot: false` 로 적는다**(`sell` 과 같은 결). 이야기용 물건과
- * 가공이 끝난 보석이 거기 든다 — 던전 바닥에 루비가 굴러다니면 안 된다.
- * `소비`(회복약)는 갈래로 통째로 뺀다. 그건 상점 물건이다.
+ * 가공이 끝난 보석, 가게에서만 파는 재료(밀가루·후추)가 거기 든다 — 던전 바닥에 루비나
+ * 밀가루 포대가 굴러다니면 안 된다. `소비`(회복약)는 갈래로 통째로 뺀다. 그건 상점 물건이다.
+ *
+ * **재료도 나온다.** 베리·송이·날고기처럼 들에서 나는 것들이다. 전리품 가운데
+ * 넷에 하나꼴이다 — 풀에서 차지하는 몫(24/100)과 비슷하다.
  */
 import { ITEMS } from './items.js';
 
@@ -33,8 +36,11 @@ export const TIER = {
   elite: { least: 4, most: 8, soft: 60, gold: [100, 500], mt: 0.15 },
 };
 
-/** 뽑기 풀. 잡화이고 명부가 막지 않은 것. */
-export const POOL = ITEMS.filter((i) => i.kind === '잡화' && i.loot !== false);
+/** 뽑기 풀에 드는 갈래. */
+export const LOOT_KINDS = ['잡화', '재료'];
+
+/** 뽑기 풀. 잡화·재료이고 명부가 막지 않은 것. */
+export const POOL = ITEMS.filter((i) => LOOT_KINDS.includes(i.kind) && i.loot !== false);
 
 /** 등급마다 가중치표를 미리 만들어 둔다. 뽑을 때마다 다시 재면 아깝다. */
 const TABLE = Object.fromEntries(Object.entries(TIER).map(([key, t]) => {
@@ -89,4 +95,4 @@ export function listText(drops, byKey) {
   return out.join(' · ');
 }
 
-export default { POOL, TIER, one, roll, listText };
+export default { POOL, LOOT_KINDS, TIER, one, roll, listText };

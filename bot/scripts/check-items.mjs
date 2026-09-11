@@ -9,7 +9,9 @@
  * 명부를 보여 주는 `/아이템` 도 같이 본다. 서버를 안 부르는 명령이라 가짜 인터랙션만
  * 있으면 끝까지 돌아서, 따로 띄울 것이 없다.
  */
-import { ITEMS, ITEM_BY_KEY, MAX_HP, forSale, healOf, findItem } from '../src/casino/items.js';
+import {
+  ITEMS, ITEM_BY_KEY, MAX_HP, CATS, forSale, healOf, findItem,
+} from '../src/casino/items.js';
 
 process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
@@ -24,11 +26,11 @@ const eq = (name, got, want) => {
 };
 
 console.log('\n모양');
-eq('95종', ITEMS.length, 95);
+eq('137종 — 시트 95 + 재료 42', ITEMS.length, 137);
 eq('키가 안 겹친다', Object.keys(ITEM_BY_KEY).length, ITEMS.length);
 eq('이름이 안 겹친다', new Set(ITEMS.map((i) => i.name)).size, ITEMS.length);
 eq('키는 영문 카멜케이스', ITEMS.filter((i) => !/^[a-z][A-Za-z0-9]*$/.test(i.key)).map((i) => i.key), []);
-eq('용도는 둘뿐', [...new Set(ITEMS.map((i) => i.kind))].sort(), ['소비', '잡화']);
+eq('갈래는 셋', [...new Set(ITEMS.map((i) => i.kind))].sort(), ['소비', '잡화', '재료']);
 eq('값은 0 이상 정수', ITEMS.filter((i) => !Number.isInteger(i.price) || i.price < 0).map((i) => i.key), []);
 eq('sell 은 참/거짓', ITEMS.filter((i) => typeof i.sell !== 'boolean').map((i) => i.key), []);
 eq('팔 수 있으면 값이 있다', ITEMS.filter((i) => i.sell && i.price <= 0).map((i) => i.key), []);
@@ -39,6 +41,20 @@ eq('줄바꿈이 없다', ITEMS.filter((i) => /\n/.test(i.desc)).map((i) => i.ke
 eq('트위터 핸들이 없다', ITEMS.filter((i) => i.desc.includes('@')).map((i) => i.key), []);
 eq('임베드 한 칸에 들어간다', ITEMS.filter((i) => i.desc.length > 200).map((i) => i.key), []);
 
+console.log('\n재료');
+const FOOD = ITEMS.filter((i) => i.kind === '재료');
+eq('재료 마흔둘', FOOD.length, 42);
+eq('진열대가 다 있다', FOOD.filter((i) => !CATS.some((c) => c.key === i.cat)).map((i) => i.key), []);
+eq('진열대는 재료만', ITEMS.filter((i) => i.kind !== '재료' && (i.cat || i.shop)).map((i) => i.key), []);
+eq('재료는 전부 팔 수 있고 값이 있다', FOOD.filter((i) => !i.sell || i.price <= 0).map((i) => i.key), []);
+eq('상점 서른둘', FOOD.filter((i) => i.shop).length, 32);
+eq('던전 스물넷', FOOD.filter((i) => i.loot !== false).length, 24);
+eq('어디서도 안 나는 재료는 없다', FOOD.filter((i) => !i.shop && i.loot === false).map((i) => i.key), []);
+// 셀렉트 한 칸이 25 가 한도다. 넘으면 그 진열대가 통째로 안 뜬다.
+eq('진열대마다 25 이하', CATS.filter((c) => FOOD.filter((i) => i.cat === c.key && i.shop).length > 25).map((c) => c.key), []);
+eq('가게 물건은 던전에 안 굴러다닌다', ['flour', 'sugar', 'oil', 'pepper', 'saffron'].filter((k) => ITEM_BY_KEY[k].loot !== false), []);
+eq('들에서 나는 것은 상점에 없다', ['raspberry', 'pineMushroom', 'rawMeat', 'keeperBerry'].filter((k) => ITEM_BY_KEY[k].shop), []);
+
 console.log('\n회복력');
 const shape = (h) => (Array.isArray(h)
   ? h.length === 2 && h.every(Number.isInteger) && h[0] <= h[1]
@@ -47,7 +63,7 @@ eq('숫자 아니면 [a, b]', ITEMS.filter((i) => !shape(i.heal)).map((i) => i.k
 eq('최대치를 안 넘는다', ITEMS.filter((i) => Math.max(...[i.heal].flat()) > MAX_HP).map((i) => i.key), []);
 eq('HP 최대치는 100', MAX_HP, 100);
 eq('범위로 적힌 것은 넷', ITEMS.filter((i) => Array.isArray(i.heal)).length, 4);
-eq('먹으면 깎이는 것 스물다섯', ITEMS.filter((i) => i.heal < 0).length, 25);
+eq('먹으면 깎이는 것 서른여섯 — 날고기·날가루·향신료 열하나가 늘었다', ITEMS.filter((i) => i.heal < 0).length, 36);
 
 const small = ITEM_BY_KEY.potionSmall;
 const rolled = new Set(Array.from({ length: 500 }, () => healOf(small)));
@@ -124,18 +140,18 @@ const lines = (body) => body.split(String.fromCharCode(10)).filter((l) => l && !
 
 console.log('\n/아이템 — 목록');
 let c = read(await show(null));
-eq('전체 95종', c.fields[0], '종류=**95**');
-eq('다섯 쪽', c.fields[1], '쪽=1 / 5');
+eq('전체 137종', c.fields[0], '종류=**137**');
+eq('일곱 쪽', c.fields[1], '쪽=1 / 7');
 eq('한 쪽에 스무 줄', lines(c.body).length, 20);
-eq('갈래 버튼 셋', c.labels.slice(0, 3), ['전체', '소비', '잡화']);
-eq('넘김 버튼', c.labels.slice(3), ['◀', '▶']);
+eq('갈래 버튼 넷', c.labels.slice(0, 4), ['전체', '소비', '잡화', '재료']);
+eq('넘김 버튼', c.labels.slice(4), ['◀', '▶']);
 eq('셀렉트도 스물', c.options.length, 20);
 eq('셀렉트 값은 키', c.options[0], 'potionSmall');
 
 console.log('\n/아이템 — 갈래와 쪽');
 c = read(await click('item:list:use:0'));
 eq('소비는 넷', c.fields[0], '종류=**4**');
-eq('한 쪽뿐이면 넘김 버튼이 없다', c.labels, ['전체', '소비', '잡화']);
+eq('한 쪽뿐이면 넘김 버튼이 없다', c.labels, ['전체', '소비', '잡화', '재료']);
 eq('회복약이 보인다', /소형 회복약/.test(c.body), true);
 eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
 
@@ -165,7 +181,15 @@ eq('상점에 없는 것', /상점에 없어요/.test(c.body), true);
 eq('값 칸은 비운다', c.fields[1], '값=_없음_');
 
 eq('회복이 0 이면 푸터가 다르다', read(await show('redFeather')).footer, '먹어도 아무 일 없어요');
-eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**95**');
+eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**137**');
+
+console.log('\n/아이템 — 재료');
+c = read(await click('item:list:food:0'));
+eq('재료 탭', [c.fields[0], c.fields[1]], ['종류=**42**', '쪽=1 / 3']);
+eq('재료가 보인다', /밀 이삭/.test(c.body), true);
+eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
+c = read(await show('honey'));
+eq('재료 한 장', [c.title, c.fields[0]], ['🧺 꿀 한 병', '갈래=재료']);
 
 console.log('\n/아이템 — 고르고 돌아오기');
 c = read(await click('item:pick:misc:3', ['ruby']));
@@ -178,8 +202,8 @@ eq('돌아가면 그 쪽이다', read(await click(c.ids[0])).fields[1], '쪽=4 /
 // 넘어가면 안 걸린다 — 갈래마다 모든 쪽을 다 그려 본다.
 console.log('\n/아이템 — customId 중복');
 const dups = [];
-for (const kind of ['all', 'use', 'misc']) {
-  for (let n = 0; n < 6; n += 1) {
+for (const kind of ['all', 'use', 'misc', 'food']) {
+  for (let n = 0; n < 8; n += 1) {
     const got = read(click2(`item:list:${kind}:${n}`)).ids;
     const twice = got.filter((v, i) => got.indexOf(v) !== i);
     if (twice.length) dups.push(`${kind}:${n} → ${twice.join(', ')}`);
@@ -190,8 +214,8 @@ eq('한 장에서도 안 겹친다', ['potionSmall', 'ruby', 'twig'].flatMap((k)
   const got = read(click2('item:pick:all:0', [k])).ids;
   return got.filter((v, i) => got.indexOf(v) !== i);
 }), []);
-eq('탭 버튼은 쪽 자리에 t 를 쓴다', read(click2('item:list:all:0')).ids.slice(0, 3),
-  ['item:list:all:t', 'item:list:use:t', 'item:list:misc:t']);
+eq('탭 버튼은 쪽 자리에 t 를 쓴다', read(click2('item:list:all:0')).ids.slice(0, 4),
+  ['item:list:all:t', 'item:list:use:t', 'item:list:misc:t', 'item:list:food:t']);
 eq('t 로 눌러도 첫 쪽', read(click2('item:list:misc:t')).fields[1], '쪽=1 / 5');
 
 console.log('\n/아이템 — 자동완성');

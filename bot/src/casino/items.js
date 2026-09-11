@@ -7,23 +7,45 @@
  * **key 는 바꾸지 않는다.** 저장되는 것이 이 문자열이라, 고치면 사람들이 가진 물건이
  * 통째로 사라진다. 이름은 얼마든지 고쳐도 된다.
  *
- *   kind   소비 · 잡화
+ *   kind   소비 · 잡화 · 재료
+ *   cat    재료만. 진열대(`CATS`) — 상점이 이걸로 칸을 나눈다
  *   price  **상점 값 하나로 사고 판다.** 살 때 내는 돈이자 팔 때 받는 돈이다.
  *          0 이면 상점에 아예 안 나온다
  *   sell   플레이어가 **팔 수** 있는가. 회복약처럼 살 수는 있어도 못 파는 것이 있다
+ *   shop   재료만. `true` 면 **상점에서 판다.** 밀가루·설탕처럼 가게에서 사는 물건이다
  *   loot   `false` 면 **던전에서 안 나온다.** 안 적으면 나온다. 이야기용 물건(피·수배지·
- *          열쇠)과 가공이 끝난 보석이 여기 든다 — 던전 바닥에 루비가 굴러다니면 안 된다
+ *          열쇠)과 가공이 끝난 보석이 여기 든다 — 던전 바닥에 루비가 굴러다니면 안 된다.
+ *          가게에서만 파는 재료(밀가루·후추…)도 여기 든다
  *   heal   먹었을 때 HP 증감. 숫자 하나면 그만큼, `[a, b]` 면 a~b 사이에서 무작위.
  *          **음수는 깎인다** — 원석이나 열쇠를 먹으면 아픈 게 당연하다
  *
  * 시트에서 여덟을 뺐다. 회복력이 날짜꼴로 깨져 있던 셋(아이스크림·고고고·따꼼약)과
  * 값이 1.111111111 이던 하나는 시트가 값을 잃은 것이고, 값이 없던 요리 넷(전사의 스튜·
- * 바다 루비·지네 담금주·투명 드래곤 스튜)은 `/요리` 가 생길 때 다시 들인다.
+ * 바다 루비·지네 담금주·투명 드래곤 스튜)은 아예 뺐다.
+ *
+ * **재료 42종은 시트에 없던 것이다.** 곡물·고기·채소·꿀·향신료처럼 요리하기 좋은 것들로,
+ * 날로 먹으면 대개 조금만 차고 날고기·날가루·향신료는 오히려 아프다. 가게 물건(밀가루·
+ * 설탕·기름)은 상점에서만, 들에서 나는 것(베리·송이·날고기)은 던전에서만, 흔한 것
+ * (감자·꿀·마늘)은 양쪽에서 얻는다.
  * 설명 끝에 붙어 있던 트위터 핸들도 뺐다 — 남의 계정을 아이템 설명에 박아 둘 이유가 없다.
  */
 
 /** 모두의 HP 최대치. 아직 HP 를 쓰는 곳이 없다 — heal 을 읽을 때가 오면 이 값이 천장이다. */
 export const MAX_HP = 100;
+
+/**
+ * 재료의 진열대. 상점의 사기 목록이 이 순서로 칸을 나눈다.
+ *
+ * **셀렉트 한 칸에 25개가 한도라** 재료를 한 목록에 다 넣을 수 없다. 칸마다 25를 넘지
+ * 않게 묶었다(`check-items` 가 본다).
+ */
+export const CATS = [
+  { key: 'grain', label: '곡물·가루', icon: '🌾' },
+  { key: 'meat', label: '고기·알·해산물', icon: '🍖' },
+  { key: 'veg', label: '채소·과일', icon: '🥕' },
+  { key: 'sweet', label: '유제품·감미료', icon: '🍯' },
+  { key: 'spice', label: '향신료·조미료', icon: '🧂' },
+];
 
 export const ITEMS = [
   { key: 'potionSmall',     name: '소형 회복약',              kind: '소비', price:  450, sell: false, heal: [15, 20],   desc: "젤린의 제약과 연금술'에서 자랑스레 만들어 낸, 상처를 치유하는 영약." },
@@ -121,6 +143,50 @@ export const ITEMS = [
   { key: 'peacockFish',     name: '공작어',                   kind: '잡화', price:    5, sell: true,  heal: 20,         desc: '공작의 꼬리처럼 수백 개의 눈을 가진 물고기. 모두 한 곳을 쳐다본다.' },
   { key: 'waveTail',        name: '파도꼬리',                 kind: '잡화', price:   10, sell: true,  heal: 10,         desc: '꼬리 힘이 대단하여 바다에서는 이것 10마리로 파도를 만들 수 있다는 것 같다.' },
   { key: 'catfish',         name: '메기',                     kind: '잡화', price:    3, sell: true,  heal: 5,          desc: '수염이 있다.' },
+
+  // ---------------------------------------------------------------- 재료
+  { key: 'wheat',           name: '밀 이삭',                  kind: '재료', cat: 'grain', price:    2, sell: true,  heal: 1,   shop: true,               desc: '빻으면 가루, 안 빻으면 그냥 풀. 모험단은 주로 후자를 씹는다.' },
+  { key: 'flour',           name: '밀가루',                   kind: '재료', cat: 'grain', price:    5, sell: true,  heal: -2,  shop: true,  loot: false, desc: '한 줌 집어 먹으면 목이 막힌다. 반죽이 되기를 기다리는 가루.' },
+  { key: 'oats',            name: '귀리',                     kind: '재료', cat: 'grain', price:    3, sell: true,  heal: 3,   shop: true,               desc: '말에게 주던 것을 사람이 먹기 시작했다. 노숙 사흘째의 표준 아침.' },
+  { key: 'barley',          name: '보리',                     kind: '재료', cat: 'grain', price:    3, sell: true,  heal: 2,   shop: true,               desc: '스튜를 걸쭉하게 하거나, 잘 말리면 맥주가 된다. 대개 후자를 노린다.' },
+  { key: 'rice',            name: '쌀',                       kind: '재료', cat: 'grain', price:    6, sell: true,  heal: 1,   shop: true,  loot: false, desc: '먼 동쪽에서 온 곡식. 씻을 물이 귀한 노숙지에서는 사치다.' },
+  { key: 'hardtack',        name: '모험가 건빵',              kind: '재료', cat: 'grain', price:    4, sell: true,  heal: 5,   shop: true,  loot: false, desc: '이로 깨물면 이가 진다. 물에 불리면 그럭저럭.' },
+  { key: 'rawMeat',         name: '날고기',                   kind: '재료', cat: 'meat',  price:    5, sell: true,  heal: -5,                            desc: '마물 고기는 먼지가 되니, 이건 멀쩡한 짐승의 것이다. 굽기 전엔 먹지 말 것.' },
+  { key: 'boarRib',         name: '멧돼지 갈비',              kind: '재료', cat: 'meat',  price:   15, sell: true,  heal: -3,                            desc: '통째로 구우면 모험단 전원이 먹는다. 날로 뜯으면 한 명이 앓는다.' },
+  { key: 'chickenLeg',      name: '닭다리',                   kind: '재료', cat: 'meat',  price:    6, sell: true,  heal: -3,  shop: true,               desc: '어느 농가 닭의 것인지는 묻지 않기로 하자.' },
+  { key: 'egg',             name: '달걀',                     kind: '재료', cat: 'meat',  price:    3, sell: true,  heal: 1,   shop: true,  loot: false, desc: '열 개를 사면 하나는 꼭 깨져 있다.' },
+  { key: 'bacon',           name: '베이컨',                   kind: '재료', cat: 'meat',  price:    8, sell: true,  heal: 8,   shop: true,  loot: false, desc: '소금에 절여 훈연한 것. 이미 익어 있어서 날로 씹어도 괜찮다.' },
+  { key: 'shrimp',          name: '민물새우',                 kind: '재료', cat: 'meat',  price:    6, sell: true,  heal: -2,                            desc: '튀기면 바삭, 날로 먹으면 배가 뒤틀린다.' },
+  { key: 'seaweed',         name: '마른 해초',                kind: '재료', cat: 'meat',  price:    2, sell: true,  heal: 2,   shop: true,               desc: '바삭하게 부서진다. 국물을 내면 바다 맛이 난다.' },
+  { key: 'potato',          name: '감자',                     kind: '재료', cat: 'veg',   price:    2, sell: true,  heal: -1,  shop: true,               desc: '싹 난 건 버리자. 스튜의 기둥.' },
+  { key: 'carrot',          name: '당근',                     kind: '재료', cat: 'veg',   price:    2, sell: true,  heal: 3,   shop: true,               desc: '말이 좋아한다. 말은 없지만.' },
+  { key: 'onion',           name: '양파',                     kind: '재료', cat: 'veg',   price:    2, sell: true,  heal: -2,  shop: true,               desc: '까다 보면 눈물이 나고, 날로 먹으면 입에서 난다.' },
+  { key: 'garlic',          name: '마늘',                     kind: '재료', cat: 'veg',   price:    3, sell: true,  heal: 1,   shop: true,               desc: '마물은 몰라도 흡혈귀는 싫어한다고 한다.' },
+  { key: 'cabbage',         name: '양배추',                   kind: '재료', cat: 'veg',   price:    3, sell: true,  heal: 3,   shop: true,  loot: false, desc: '한 통이면 일주일 간다. 일주일 내내 양배추다.' },
+  { key: 'pumpkin',         name: '늙은 호박',                kind: '재료', cat: 'veg',   price:    8, sell: true,  heal: 2,   shop: true,               desc: '들고 다니기엔 무겁고 버리기엔 아깝다.' },
+  { key: 'pineMushroom',    name: '향송이',                   kind: '재료', cat: 'veg',   price:   25, sell: true,  heal: 5,                             desc: '숲 깊은 곳에서만 난다. 이쁘니 버섯과 헷갈리지 말 것.' },
+  { key: 'raspberry',       name: '산딸기',                   kind: '재료', cat: 'veg',   price:    2, sell: true,  heal: 5,                             desc: '베리 파수꾼단이 이름값 하는 순간.' },
+  { key: 'blueberry',       name: '블루베리',                 kind: '재료', cat: 'veg',   price:    3, sell: true,  heal: 5,                             desc: '한 움큼 먹으면 혀가 보라색이 된다.' },
+  { key: 'grape',           name: '포도',                     kind: '재료', cat: 'veg',   price:    4, sell: true,  heal: 5,   shop: true,  loot: false, desc: '먹어도 되고, 밟아도 된다. 밟으면 나중에 술이 된다.' },
+  { key: 'lemon',           name: '레몬',                     kind: '재료', cat: 'veg',   price:    4, sell: true,  heal: 2,   shop: true,  loot: false, desc: '시다. 너무 시다. 생선에 뿌리면 비린내가 달아난다.' },
+  { key: 'keeperBerry',     name: '파수꾼 베리',              kind: '재료', cat: 'veg',   price:   30, sell: true,  heal: 15,                            desc: '단원들만 아는 덤불에서 딴 베리. 알이 굵고, 단장이 제일 먼저 집어 간다.' },
+  { key: 'milk',            name: '우유',                     kind: '재료', cat: 'sweet', price:    4, sell: true,  heal: 5,   shop: true,  loot: false, desc: '하루만 지나도 치즈 흉내를 낸다.' },
+  { key: 'butter',          name: '버터',                     kind: '재료', cat: 'sweet', price:    8, sell: true,  heal: 3,   shop: true,  loot: false, desc: '뭘 굽든 버터를 넣으면 맛있어진다. 그게 규칙이다.' },
+  { key: 'cheese',          name: '치즈 덩어리',              kind: '재료', cat: 'sweet', price:   10, sell: true,  heal: 10,  shop: true,               desc: '구멍은 쥐가 낸 것이다.' },
+  { key: 'honey',           name: '꿀 한 병',                 kind: '재료', cat: 'sweet', price:   12, sell: true,  heal: 12,  shop: true,               desc: '벌집째 들고 오느라 손등이 부었다.' },
+  { key: 'honeycomb',       name: '벌집 조각',                kind: '재료', cat: 'sweet', price:   15, sell: true,  heal: 8,                             desc: '밀랍 반, 꿀 반. 씹다 보면 밀랍만 남는다.' },
+  { key: 'sugar',           name: '설탕',                     kind: '재료', cat: 'sweet', price:   15, sell: true,  heal: 5,   shop: true,  loot: false, desc: '릴레인과 연락이 끊긴 뒤로 값이 뛰었다.' },
+  { key: 'pepper',          name: '통후추',                   kind: '재료', cat: 'spice', price:   25, sell: true,  heal: -3,  shop: true,  loot: false, desc: '한 알에 은화 한 닢이던 시절도 있었다. 지금이 그 시절이다.' },
+  { key: 'cinnamon',        name: '계피',                     kind: '재료', cat: 'spice', price:   20, sell: true,  heal: 0,   shop: true,  loot: false, desc: '나무껍질인데 비싸다. 향이 모든 걸 설명한다.' },
+  { key: 'saffron',         name: '사프란',                   kind: '재료', cat: 'spice', price:   60, sell: true,  heal: 0,   shop: true,  loot: false, desc: '꽃술 세 가닥. 금보다 비싸다는 소문이 있다.' },
+  { key: 'bayLeaf',         name: '월계수 잎',                kind: '재료', cat: 'spice', price:    3, sell: true,  heal: 0,   shop: true,               desc: '스튜에 넣고, 꼭 빼는 걸 잊는다.' },
+  { key: 'rosemary',        name: '로즈마리',                 kind: '재료', cat: 'spice', price:    3, sell: true,  heal: 1,                             desc: '고기 옆에 두면 고기가 고급이 된다.' },
+  { key: 'mint',            name: '박하',                     kind: '재료', cat: 'spice', price:    3, sell: true,  heal: 3,                             desc: '씹으면 입안이 한겨울이 된다.' },
+  { key: 'ginger',          name: '생강',                     kind: '재료', cat: 'spice', price:    4, sell: true,  heal: 4,   shop: true,               desc: '노숙한 다음 날 아침엔 이걸 끓인다.' },
+  { key: 'oil',             name: '식용유',                   kind: '재료', cat: 'spice', price:   10, sell: true,  heal: -5,  shop: true,  loot: false, desc: '병째 마실 생각은 하지 말자.' },
+  { key: 'vinegar',         name: '식초',                     kind: '재료', cat: 'spice', price:    5, sell: true,  heal: -3,  shop: true,  loot: false, desc: '포도주가 되다 만 것. 절임에 쓴다.' },
+  { key: 'cheapWine',       name: '싸구려 포도주',            kind: '재료', cat: 'spice', price:    8, sell: true,  heal: 2,   shop: true,  loot: false, desc: '요리에 넣으면 그럴듯하고, 마시면 그럴듯하지 않다.' },
+  { key: 'spirits',         name: '독한 증류주',              kind: '재료', cat: 'spice', price:   20, sell: true,  heal: -10, shop: true,  loot: false, desc: '마시면 목이 타고, 지네를 담그면 지네가 운다.' },
 ];
 
 export const ITEM_BY_KEY = Object.fromEntries(ITEMS.map((i) => [i.key, i]));

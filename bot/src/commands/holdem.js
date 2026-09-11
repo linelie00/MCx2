@@ -840,7 +840,7 @@ const dungeonHowto = (game, mob, hp) => ((tier) => base({
     '**던전 안에서는 회복약을 못 먹어요.** 체력이 판 안에만 있는 동안 계정을 고치면',
     '정산 때 어긋나거든요. 도망쳐서 고치고 다시 들어오는 것이 이 판의 선택지예요.',
     '',
-    `이기면 잡화 **${tier.least}~${tier.most}개**와 **${tier.gold[0]}~${tier.gold[1]}골드**를 주워 옵니다.`,
+    `이기면 잡화·재료 **${tier.least}~${tier.most}개**와 **${tier.gold[0]}~${tier.gold[1]}골드**를 주워 옵니다.`,
     mob.elite ? '엘리트라 더 좋은 것이 나오고, 🪙 **MT** 가 붙을 수도 있어요.' : '드물게 🪙 **MT** 가 붙기도 해요.',
   ].join('\n'),
   color: mob.elite ? 0xc9a227 : THEME_COLOR,

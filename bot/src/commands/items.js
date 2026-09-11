@@ -39,9 +39,10 @@ const KINDS = [
   { key: 'all', label: '전체', icon: '📚', of: () => true },
   { key: 'use', label: '소비', icon: '🍶', of: (i) => i.kind === '소비' },
   { key: 'misc', label: '잡화', icon: '🎒', of: (i) => i.kind === '잡화' },
+  { key: 'food', label: '재료', icon: '🧺', of: (i) => i.kind === '재료' },
 ];
 const kindOf = (key) => KINDS.find((k) => k.key === key) ?? KINDS[0];
-const iconOf = (item) => (item.kind === '소비' ? '🍶' : '🎒');
+const iconOf = (item) => KINDS.find((k) => k.key !== 'all' && k.of(item))?.icon ?? '🎒';
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 

@@ -364,12 +364,29 @@ check('던전 엘리트만 무르게, 표는 그대로', () => {
 });
 
 console.log('\n떨구는 것');
-check('잡화만, 막은 것은 안 나온다', () => {
-  assert.ok(POOL.every((i) => i.kind === '잡화' && i.loot !== false));
-  for (const key of ['ruby', 'dragonBlood', 'sinew', 'prisonKey', 'potionSmall']) {
+check('잡화·재료만, 막은 것은 안 나온다', () => {
+  assert.ok(POOL.every((i) => ['잡화', '재료'].includes(i.kind) && i.loot !== false));
+  // 가게에서만 파는 재료(밀가루·후추)도 막는다 — 던전 바닥에 밀가루 포대가 굴러다니면 안 된다.
+  for (const key of ['ruby', 'dragonBlood', 'sinew', 'prisonKey', 'potionSmall', 'flour', 'pepper']) {
     assert.ok(!POOL.some((i) => i.key === key), `${key} 가 풀에 있다`);
   }
   assert.ok(POOL.some((i) => i.key === 'oreBlue'), '원석이 빠졌다');
+  assert.ok(POOL.some((i) => i.key === 'raspberry'), '재료가 안 나온다');
+  assert.equal(POOL.length, 100, `풀이 ${POOL.length}종이다 (잡화 76 + 재료 24)`);
+});
+
+check('재료가 실제로 떨어진다', () => {
+  let food = 0;
+  let all = 0;
+  for (let i = 0; i < 4000; i += 1) {
+    for (const [key, n] of Object.entries(roll().items)) {
+      all += n;
+      if (ITEM_BY_KEY[key].kind === '재료') food += n;
+    }
+  }
+  // 풀에서 재료가 차지하는 몫(24/100)과 비슷하게 나온다 — 재보니 일반 23% · 엘리트 24%.
+  const share = food / all;
+  assert.ok(share > 0.15 && share < 0.45, `재료가 ${(share * 100).toFixed(1)}% 나왔다`);
 });
 check('가짓수가 등급대로', () => {
   for (const [key, t] of Object.entries(TIER)) {

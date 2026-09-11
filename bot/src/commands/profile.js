@@ -70,8 +70,11 @@ const TITLES_PER_PAGE = 24;
  */
 const NO_TITLE = '-';
 
-/** 한 페이지에 보여 줄 아이템 수. 임베드 한 칸에 넉넉히 들어가는 양. */
-const PER_PAGE = 12;
+/**
+ * 한 쪽에 보여 줄 아이템 수. 임베드 한 칸에 넉넉히 들어가는 양.
+ * 12 였는데 열다섯 가지만 모여도 쪽을 넘겨야 했다 — 조금 늘렸다.
+ */
+const PER_PAGE = 16;
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 
@@ -231,8 +234,8 @@ function titlesTab(account, page, npc) {
  * 그때도 개수는 보여 준다. 사라진 것처럼 보이는 편보다 낫다.
  */
 /**
- * 만든 것(`/요리`·`/제작`). 창고의 첫 쪽 맨 위에 둔다 — 개수가 아니라 하나하나라서
- * 표와 섞으면 읽기 나쁘다. 좋은 것부터 열 줄만, 나머지는 개수로.
+ * 만든 것(`/요리`·`/제작`). 창고 맨 위에 둔다 — 개수가 아니라 하나하나라서 표와 섞으면
+ * 읽기 나쁘다. 좋은 것부터 열 줄만, 나머지는 개수로.
  */
 const MADE_SHOWN = 10;
 function madeLines(account) {
@@ -269,8 +272,14 @@ function itemsTab(account, page) {
   // 팔 수 있는 것만 센다. 회복약처럼 값은 있어도 못 파는 물건이 있다.
   const worth = owned.reduce((a, [item, n]) => a + (item.sell ? item.price * n : 0), 0);
 
-  // 만든 것은 첫 쪽에만. 쪽을 넘길 때마다 되풀이하면 표가 밀려 내려간다.
-  const lines = [...(at === 0 ? made : []), table(slice.map(([item, n]) => [clipW(item.name, 24), `×${num(n)}`]))];
+  // **쪽을 넘기면 아이템 표만 바뀐다.** 만든 것·합계는 쪽마다 그대로 둔다. 예전에는 만든 것을
+  // 첫 쪽에만 둬서, 넘길 때마다 표가 위로 튀어 올라 카드가 통째로 바뀌는 것처럼 보였다.
+  // 표 머리에 몇째 줄인지 적어 어디를 보고 있는지 알게 한다.
+  const from = at * PER_PAGE + 1;
+  const head = pages > 1
+    ? `**■ 창고**　\`${from}–${from + slice.length - 1} / ${owned.length}\``
+    : '**■ 창고**';
+  const lines = [...made, head, table(slice.map(([item, n]) => [clipW(item.name, 24), `×${num(n)}`]))];
   if (worth) lines.push(`_다 팔면_ **${num(worth)}골드**`);
 
   return {

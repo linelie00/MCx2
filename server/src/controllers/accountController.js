@@ -10,7 +10,7 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, mt, hp, title, items, stats, refilledAt, updatedAt }
+ * account shape: { gold, mt, hp, title, items, stats, refilledAt, healedAt, updatedAt }
  *
  * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
  * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
@@ -54,6 +54,14 @@ const MIN_BALANCE = -1000;
  */
 const MAX_HP = 100;
 
+/**
+ * 하루에 한 번 되찾는 체력. 사람은 `/출첵` 으로, 미겔·마티암은 날이 바뀌면 저절로.
+ *
+ * **쓰러진 사람은 안 일어난다.** 부활은 부활의 영약으로만 — 시간이 되살려 주면
+ * 영약이 쓸모없어지고 죽음이 무게를 잃는다(처음 정한 규칙이다).
+ */
+const DAILY_HEAL = 20;
+
 /** 처음 보는 id 의 MT. 얻는 길이 좁아서 0 에서 시작한다. */
 const START_MT = 0;
 
@@ -82,6 +90,7 @@ const blank = () => ({
   items: {},
   stats: {},
   refilledAt: null,
+  healedAt: null,       // 오늘 체력을 되찾았는지. 골드 도장(refilledAt)과 **따로** 센다
   updatedAt: null,
 });
 
@@ -138,6 +147,49 @@ function dailyRule(acct, today) {
   return { refilled: true, before, gold: acct.gold };
 }
 
+/**
+ * 사람의 하루 회복(`/출첵`). 골드와 **같은 모양의 규칙**이다 — 하루 한 번, 진짜로
+ * 깎였을 때만 도장을 찍는다. 가득 찬 채로 누르면 그냥 넘어가고, 그날 다치면 그때 받는다.
+ *
+ * **도장은 골드와 따로 둔다.** 같은 `refilledAt` 을 쓰면, 골드가 넉넉한 사람은 골드
+ * 도장이 안 찍히니 **체력을 하루에 몇 번이고 받는다.**
+ */
+function healRule(acct, today) {
+  if (acct.healedAt === today) return { healed: false, reason: 'claimed', hp: acct.hp };
+  if (acct.hp <= 0) return { healed: false, reason: 'dead', hp: acct.hp };
+  if (acct.hp >= MAX_HP) return { healed: false, reason: 'full', hp: acct.hp };
+
+  const before = acct.hp;
+  acct.hp = Math.min(MAX_HP, acct.hp + DAILY_HEAL);
+  acct.healedAt = today;
+  acct.updatedAt = now();
+  return { healed: true, before, hp: acct.hp };
+}
+
+/**
+ * 미겔·마티암의 하루 회복. **날이 바뀌고 처음 읽힐 때** 저절로 붙는다.
+ *
+ * 사람과 달리 **다쳤든 아니든 도장을 찍는다.** 사람 규칙처럼 "깎였을 때만" 이면,
+ * 아침에 가득 찼던 마티암이 던전에서 다치는 순간 그 핸드의 쓰기에서 회복이 끼어들어
+ * **싸우던 도중에 체력이 20 튄다.** 하루의 몫은 그날 처음 볼 때 정해져야 한다.
+ *
+ * 읽기(`list`)에서도 붙이되 **거기서는 저장하지 않는다.** 날짜와 저장된 값만으로
+ * 정해지는 값이라 몇 번을 다시 계산해도 같고, 그날 처음 쓰는 순간 함께 저장된다.
+ * 그래서 봇이 읽은 체력과 서버가 쓰기 직전에 보는 체력이 늘 같다.
+ */
+function npcDaily(acct, today) {
+  if (acct.healedAt === today) return acct;
+  if (acct.hp > 0) acct.hp = Math.min(MAX_HP, acct.hp + DAILY_HEAL);
+  acct.healedAt = today;
+  return acct;
+}
+
+/** 저장된 계정을 **오늘 기준으로** 읽는다. 모든 핸들러가 이 길로만 읽는다. */
+const load = (data, id, today) => {
+  const acct = normalize(data.accounts[id]);
+  return isNpc(id) ? npcDaily(acct, today) : acct;
+};
+
 /** `?ids=a,b,c` 또는 본문의 배열을 검사해서 준다. 이상하면 문자열(사유)을 돌려준다. */
 function parseIds(raw) {
   const list = (Array.isArray(raw) ? raw : String(raw ?? '').split(','))
@@ -171,9 +223,10 @@ exports.list = (req, res) => {
   const data = readOr503(res);
   if (!data) return undefined;
 
+  const today = dayKey();
   const accounts = {};
-  for (const id of ids) accounts[id] = publicView(normalize(data.accounts[id]));
-  return res.json({ accounts, today: dayKey() });
+  for (const id of ids) accounts[id] = publicView(load(data, id, today));
+  return res.json({ accounts, today });
 };
 
 // ---------------------------------------------------------------- 정산
@@ -256,9 +309,10 @@ exports.applyDeltas = (req, res) => {
   if (!data) return undefined;
 
   // 먼저 전부 계산해 보고, 하나라도 선을 넘으면 **아무것도 안 쓴다.**
+  const today = dayKey();
   const next = {};
   for (const id of ids) {
-    const acct = normalize(data.accounts[id]);
+    const acct = load(data, id, today);
 
     const gold = acct.gold + (maps.deltas[id] ?? 0);
     if (gold < MIN_BALANCE) {
@@ -333,7 +387,7 @@ exports.setTitle = (req, res) => {
   const data = readOr503(res);
   if (!data) return undefined;
 
-  const acct = normalize(data.accounts[id]);
+  const acct = load(data, id, dayKey());
   acct.title = title;
   acct.updatedAt = now();
   data.accounts[id] = acct;
@@ -345,19 +399,29 @@ exports.setTitle = (req, res) => {
   return res.json({ accounts: { [id]: publicView(acct) } });
 };
 
-/** POST /api/accounts/claim — `{ id }`. 사람이 `/출첵` 으로 부른다. */
+/**
+ * POST /api/accounts/claim — `{ id, heal? }`. 사람이 `/출첵` 으로 부른다.
+ *
+ * 골드와 체력을 **한 번의 쓰기로** 같이 준다. 둘의 도장은 따로라 한쪽만 받을 수도 있다.
+ *
+ * `heal: false` 면 체력은 건너뛴다(도장도 안 찍는다). 봇이 **던전에 앉아 있는 사람**에게
+ * 그렇게 보낸다 — 판이 도는 동안 체력은 판의 장부에 있어서, 여기서 고치면 다음 핸드의
+ * 쓰기에 섞여 들어가 "던전 안에서는 회복 못 한다" 는 규칙이 뚫린다.
+ */
 exports.claim = (req, res) => {
   const id = String((req.body && req.body.id) || '').trim();
   if (!ID_RE.test(id)) return res.status(400).json({ error: 'id 모양이 아닙니다' });
+  const wantHeal = !(req.body && req.body.heal === false);
 
   const data = readOr503(res);
   if (!data) return undefined;
 
   const today = dayKey();
-  const acct = normalize(data.accounts[id]);
+  const acct = load(data, id, today);
   const out = dailyRule(acct, today);
+  const heal = wantHeal ? healRule(acct, today) : { healed: false, reason: 'skipped', hp: acct.hp };
 
-  if (out.refilled) {
+  if (out.refilled || heal.healed) {
     data.accounts[id] = acct;
     try {
       store.write(data);
@@ -368,8 +432,9 @@ exports.claim = (req, res) => {
 
   // 못 받은 것도 **200 이다.** "오늘 이미 받았다" 와 "아직 넉넉하다" 는 오류가 아니라
   // 답이다. 봇이 사유를 그대로 읽어 다른 말을 하면 된다.
-  return res.json({ ...out, floor: DAILY_FLOOR, today });
+  return res.json({ ...out, heal: { ...heal, amount: DAILY_HEAL, max: MAX_HP }, floor: DAILY_FLOOR, today });
 };
 
 module.exports.START_GOLD = START_GOLD;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;
+module.exports.DAILY_HEAL = DAILY_HEAL;

@@ -24,7 +24,8 @@ const GAMES = [
 ];
 
 /**
- * 그 계정이 **다른 채널의** 판에 앉아 있으면 `{ game, channelId }`, 아니면 null.
+ * 그 계정이 **다른 채널의** 판에 앉아 있으면 `{ game, channelId, mode }`, 아니면 null.
+ * `mode` 는 홀덤의 `cash`·`tourney`·`dungeon` (블랙잭은 없다).
  *
  * `except` 는 지금 보고 있는 채널이다. 같은 판에 두 번 앉는 것은 각 게임의 `addSeat` 가
  * 이미 막으므로 여기서 또 볼 이유가 없고, 안 빼면 자기 자신 때문에 늘 걸린다.
@@ -35,12 +36,15 @@ export function seatedAt(id, { except = null } = {}) {
       if (game.channelId === except) continue;
       // 모브는 판마다 새로 생기므로 판을 건너 겹칠 일이 없다. id 도 mob:0 처럼
       // 판 안에서만 유일해서, 안 거르면 다른 판의 mob:0 과 헷갈린다.
-      if (game.seats.some((s) => s.kind !== 'mob' && s.id === id)) {
-        return { game: name, channelId: game.channelId };
-      }
+      const at = { game: name, channelId: game.channelId, mode: game.mode };
+      if (game.seats.some((s) => s.kind !== 'mob' && s.id === id)) return at;
       // 던전에 데려온 지원군은 자리에 없어도 **체력이 그 판의 장부에 실려 있다.**
       // 안 보면 미겔이 두 던전에 동시에 불려 가고 체력이 두 번 걸린다.
-      if (game.reserves?.includes(id)) return { game: name, channelId: game.channelId };
+      if (game.reserves?.includes(id)) return at;
+      // **던전 주인도 마찬가지다.** 지원군과 자리를 바꾸면 주인은 자리에서도 예비에서도
+      // 빠지는데, 체력은 여전히 그 판의 장부에 있다. 안 보면 쉬는 동안 `/상점`·`/사용`·
+      // `/출첵` 으로 체력을 고칠 수 있고, 다시 나올 때 그게 판의 쓰기에 섞여 든다.
+      if (game.owner === id) return at;
     }
   }
   return null;

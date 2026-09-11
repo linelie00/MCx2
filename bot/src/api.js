@@ -232,8 +232,8 @@ export const setTitle = (id, title) =>
   request('/api/accounts/title', { method: 'POST', bot: true, json: { id, title } });
 
 /** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
-export const claimDaily = (id) =>
-  request('/api/accounts/claim', { method: 'POST', bot: true, json: { id } });
+export const claimDaily = (id, { heal = true } = {}) =>
+  request('/api/accounts/claim', { method: 'POST', bot: true, json: { id, heal } });
 
 // ---------------------------------------------------------------- 자가진단
 

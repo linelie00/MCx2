@@ -209,6 +209,69 @@ const server = app.listen(0, async () => {
   eq('파일에 gold 로 적힌다', saved.gold, 7000);
   eq('파일에서 chips 가 사라진다', saved.chips, undefined);
 
+  // --- 하루 회복 — 사람은 /출첵, 미겔·마티암은 날이 바뀌면 저절로
+  fs.writeFileSync(FILE, JSON.stringify({
+    accounts: {
+      2000001: { gold: 5000, hp: 50 },                        // 골드는 넉넉하고 다쳤다
+      2000002: { gold: 5000, hp: 90 },                        // 거의 가득
+      2000003: { gold: 5000, hp: 0 },                         // 쓰러졌다
+      2000004: { gold: 5000, hp: 100 },                       // 가득
+      2000005: { gold: 5000, hp: 40 },                        // 던전 안
+      'npc:migel': { gold: 1000, hp: 50, healedAt: '2000-01-01' },
+      'npc:matiam': { gold: 1000, hp: 0, healedAt: '2000-01-01' },
+    },
+  }), 'utf-8');
+  const DH = require('../src/controllers/accountController').DAILY_HEAL;
+
+  const h1 = await post('/claim', { id: '2000001' });
+  eq('출첵으로 체력이 오른다', [h1.body.heal.healed, h1.body.heal.hp], [true, 50 + DH]);
+  eq('골드가 넉넉해도 체력은 받는다', h1.body.refilled, false);
+  eq('저장됐다', (await hit('?ids=2000001')).body.accounts['2000001'].hp, 50 + DH);
+  // 골드 도장을 같이 쓰면 넉넉한 사람은 도장이 안 찍혀 하루에 몇 번이고 받는다.
+  const h2 = await post('/claim', { id: '2000001' });
+  eq('체력도 하루 한 번', [h2.body.heal.healed, h2.body.heal.reason], [false, 'claimed']);
+  eq('두 번 받지 않았다', (await hit('?ids=2000001')).body.accounts['2000001'].hp, 50 + DH);
+
+  eq('최대치에서 멈춘다', (await post('/claim', { id: '2000002' })).body.heal.hp, 100);
+
+  const dead = await post('/claim', { id: '2000003' });
+  eq('쓰러진 사람은 안 일어난다', [dead.body.heal.healed, dead.body.heal.reason, dead.body.heal.hp], [false, 'dead', 0]);
+
+  const full = await post('/claim', { id: '2000004' });
+  eq('가득이면 안 준다', [full.body.heal.healed, full.body.heal.reason], [false, 'full']);
+  await post('/deltas', { hp: { 2000004: -30 } });
+  eq('그날 다치면 받을 수 있다', (await post('/claim', { id: '2000004' })).body.heal.hp, 70 + DH);
+
+  const skip = await post('/claim', { id: '2000005', heal: false });
+  eq('heal:false 면 건너뛴다', [skip.body.heal.healed, skip.body.heal.reason], [false, 'skipped']);
+  eq('체력 그대로', (await hit('?ids=2000005')).body.accounts['2000005'].hp, 40);
+  eq('건너뛴 날은 나중에 받을 수 있다', (await post('/claim', { id: '2000005' })).body.heal.hp, 40 + DH);
+
+  // NPC — 읽기만 해도 오늘 몫이 보이고, 몇 번을 읽어도 두 번 붙지 않는다
+  const n1 = await hit('?ids=npc:migel,npc:matiam');
+  eq('미겔은 저절로 회복', n1.body.accounts['npc:migel'].hp, 50 + DH);
+  eq('쓰러진 마티암은 그대로', n1.body.accounts['npc:matiam'].hp, 0);
+  eq('다시 읽어도 한 번만', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].hp, 50 + DH);
+  // 읽기에서는 저장하지 않지만, 그날 처음 쓸 때 **같은 값으로** 저장된다
+  const w1 = await post('/deltas', { hp: { 'npc:migel': -10 } });
+  eq('쓰기는 회복된 값 위에 얹힌다', w1.body.accounts['npc:migel'].hp, 50 + DH - 10);
+  eq('그 뒤로는 같은 날 또 안 붙는다', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].hp, 50 + DH - 10);
+  const w2 = await post('/deltas', { hp: { 'npc:migel': -5 } });
+  eq('다친 뒤에도 같은 날은 안 붙는다(싸우는 도중에 튀면 안 된다)', w2.body.accounts['npc:migel'].hp, 50 + DH - 15);
+  eq('NPC 골드는 여전히 안 채운다', w2.body.accounts['npc:migel'].gold, 1000);
+
+  // 가득 찬 채로 하루를 시작했다가 그날 다친 경우. **여기가 제일 틀리기 쉽다** —
+  // "깎였을 때만 도장" 으로 짜면 아침엔 도장이 안 찍히고, 던전에서 다치는 순간 다음
+  // 핸드의 쓰기에서 회복이 끼어들어 싸우던 도중에 체력이 튄다.
+  fs.writeFileSync(FILE, JSON.stringify({
+    accounts: { 'npc:migel': { gold: 1000, hp: 100, healedAt: '2000-01-01' } },
+  }), 'utf-8');
+  eq('가득이면 읽어도 그대로', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].hp, 100);
+  await post('/deltas', { hp: { 'npc:migel': -30 } });
+  eq('그날 다쳐도 회복이 안 끼어든다', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].hp, 70);
+  const w3 = await post('/deltas', { hp: { 'npc:migel': -5 } });
+  eq('다음 쓰기에서도 안 끼어든다', w3.body.accounts['npc:migel'].hp, 65);
+
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

@@ -18,7 +18,7 @@
 import assert from 'node:assert/strict';
 import * as hold from '../src/holdem/state.js';
 import { ledger } from '../src/casino/wallet.js';
-import { overOf, capOf, OVER_RATE } from '../src/holdem/payout.js';
+import { overOf, capOf, OVER_RATE, tourneyDeltas, TOURNEY_MT } from '../src/holdem/payout.js';
 import { boardEmbed } from '../src/holdem/render.js';
 import { DUNGEON, STAKES, atLevel } from '../src/casino/stakes.js';
 import { MAX_HP } from '../src/casino/items.js';
@@ -494,14 +494,21 @@ check('보상 한 줄에 셋이 다 보인다', () => {
 
 // ---------------------------------------------------------------- 토너먼트
 
-function runTourney(channelId, seats) {
+function runTourney(channelId, seats, { mobs = 0 } = {}) {
   const gold = Object.fromEntries(seats.map((n) => [user(n).id, 1000]));
   const server = makeServer(gold, {});
   const game = hold.create({
     channelId, homeChannelId: channelId, guildId: 'g', starterId: user(seats[0]).id, mode: 'tourney',
   });
   for (const n of seats) hold.addSeat(game, hold.humanSeat(user(n), `사람${n}`));
-  const err = hold.start(game, { ...gold });
+  // 모브도 한 스택을 든다 — 명령 쪽(commands/holdem.js)이 하는 그대로
+  const mobSeats = Array.from({ length: mobs }, (_, i) => {
+    const m = hold.mobSeat({ name: `적${i}`, seen: 1, loose: 0, bluff: 0.1, raise: 0.5, note: '' }, i, STAKES.low);
+    m.buyIn = STAKES.low.stack;
+    hold.addSeat(game, m);
+    return m;
+  });
+  const err = hold.start(game, { ...gold, ...Object.fromEntries(mobSeats.map((m) => [m.id, m.buyIn])) });
   assert.equal(err, null, `토너먼트가 안 열렸다: ${err}`);
 
   let hands = 0;
@@ -512,7 +519,7 @@ function runTourney(channelId, seats) {
     if (hands > 400) throw new Error('토너먼트가 안 끝난다');
     if (!hold.beginHand(game)) break;
   }
-  server.apply({ deltas: game.gold.net() });
+  server.apply({ deltas: tourneyDeltas(game).deltas });
   return { server, game, hands };
 }
 
@@ -532,6 +539,50 @@ check('골드 총합이 보존된다', () => {
     const total = Object.values(server.bal.gold).reduce((a, b) => a + b, 0);
     assert.equal(total, 4000, `총합이 ${total} 이 됐다`);
   }
+});
+
+check('모브가 끼어도 골드가 생기지 않는다 — 상금은 들어온 만큼', () => {
+  // 모브는 지갑이 없어서 들고 앉은 칩은 아무도 안 낸 칩이다. 사람이 모브를 이긴 만큼
+  // 골드가 생기면 안 된다. 사람이 우승하면 상금(사람 셋 × 1000)을 통째로, 모브가 우승하면 0.
+  let humanWon = 0;
+  let mobWon = 0;
+  for (let i = 0; i < ROUNDS; i += 1) {
+    const { server, game } = runTourney(`tm-${i}`, [1, 2, 3], { mobs: 1 });
+    const total = Object.values(server.bal.gold).reduce((a, b) => a + b, 0);
+    assert.ok(total <= 3000, `골드가 ${total - 3000} 생겼다`);
+    const winner = game.seats.find((x) => x.gold > 0);
+    if (winner.kind === 'mob') {
+      mobWon += 1;
+      assert.equal(total, 0, `모브가 이겼는데 사람 골드가 ${total} 남았다`);
+    } else {
+      humanWon += 1;
+      assert.equal(total, 3000, `사람이 이겼는데 총합이 ${total} 이다`);
+      assert.equal(server.bal.gold[winner.id], 3000, '우승자가 상금을 통째로 못 받았다');
+    }
+  }
+  assert.ok(humanWon && mobWon, `사람 우승 ${humanWon} · 모브 우승 ${mobWon} — 한쪽 길을 못 봤다`);
+});
+
+check('중간에 접어도 — 사람 칩이 상금을 넘으면 상금만큼으로 줄여 나눈다', () => {
+  const game = hold.create({ channelId: 'tm-cut', homeChannelId: 'tm-cut', guildId: 'g', starterId: user(1).id, mode: 'tourney' });
+  for (const n of [1, 2]) hold.addSeat(game, hold.humanSeat(user(n), `사람${n}`));
+  const m = hold.mobSeat({ name: '적', seen: 1, loose: 0, bluff: 0, raise: 0.5, note: '' }, 0, STAKES.low);
+  hold.addSeat(game, m);
+  hold.start(game, { [user(1).id]: 1000, [user(2).id]: 1000, [m.id]: 1000 });
+  // 사람1 이 모브 칩을 다 땄다 치고: 2000 → 사람1, 사람2 는 1000 그대로. 칩 3000, 상금 2000
+  for (const x of game.seats) { x.gold += x.committed; x.committed = 0; }
+  game.gold.reconcile(user(1).id, 2000);
+  game.gold.reconcile(user(2).id, 1000);
+  game.gold.reconcile(m.id, 0);
+  const { deltas, pool } = tourneyDeltas(game);
+  assert.equal(pool, 2000);
+  assert.equal(deltas[user(1).id] + deltas[user(2).id], 0, `골드가 ${deltas[user(1).id] + deltas[user(2).id]} 생겼다`);
+  assert.deepEqual(deltas, { [user(1).id]: 334, [user(2).id]: -334 }, JSON.stringify(deltas));
+  hold.remove('tm-cut');
+});
+
+check('MT 는 1위 둘 · 2위 하나', () => {
+  assert.deepEqual(TOURNEY_MT, [2, 1]);
 });
 
 check('탈락 순서가 인원과 맞는다', () => {

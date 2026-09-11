@@ -56,7 +56,7 @@ const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
  * 건너뛰므로(state.js), 어딘가에서 물리면 그 채널이 영영 막힌다. 블라인드가 계속
  * 올라가니 정상적으로는 백 핸드 안에 끝난다 — 이건 그물이다.
  */
-const TOURNEY_LEAST = 3;
+const { TOURNEY_LEAST } = state;
 const TOURNEY_HANDS = 300;
 const TOURNEY_MS = 90 * 60 * 1000;
 
@@ -518,21 +518,42 @@ async function finishGame(game) {
   return finishDungeon(game);
 }
 
-/** 우승자가 판돈을 다 가져가고 MT 한 개. */
-async function finishTourney(game) {
-  const alive = game.seats.filter((s) => s.gold > 0);
-  const winner = alive.length === 1 ? alive[0] : state.standings(game)[0]?.seat;
+/**
+ * 등수. **남아 있는 자리가 먼저**(칩이 많은 순), 그다음 **탈락의 역순**이다.
+ * 끝까지 가면 남은 사람이 하나라 그대로 1위. 중간에 접었으면 칩으로 가른다 — 예전에는
+ * 남은 자리끼리 앉은 순서대로 늘어놓아 칩이 적은 사람이 1위로 적히기도 했다.
+ */
+function tourneyRank(game) {
+  const out = [...game.knocked].reverse();
+  const alive = game.seats.filter((s) => !game.knocked.includes(s.id))
+    .sort((a, b) => b.gold - a.gold);
+  return [...alive, ...out.map((id) => game.seats.find((s) => s.id === id)).filter(Boolean)];
+}
 
-  const saved = await payout.finishTourney(game, winner?.kind === 'mob' ? null : winner?.id);
+/** 상금(들어온 골드)을 나누고, MT 는 1위 둘 · 2위 하나(payout.TOURNEY_MT). */
+async function finishTourney(game) {
+  const rank = tourneyRank(game);
+  const winner = rank[0] ?? null;
+
+  const saved = await payout.finishTourney(game, rank.map((s) => s.id));
   game.saveFailed = !saved.ok;
 
-  // 등수는 **탈락의 역순**이다. 마지막까지 남은 사람이 1위.
-  const order = [...game.knocked].reverse();
-  const rank = game.seats
-    .map((s) => ({ seat: s, at: order.indexOf(s.id) }))
-    .sort((a, b) => (a.at < 0 ? -1 : b.at < 0 ? 1 : a.at - b.at));
+  const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
+  const rows = rank.map((s, i) => {
+    const mt = saved.mt?.[s.id];
+    const gold = saved.deltas?.[s.id];
+    const tail = [
+      mt ? `🪙 MT +${mt}` : '',
+      gold > 0 ? `💰 +${num(gold)}` : '',
+    ].filter(Boolean).join(' · ');
+    return `${['🥇', '🥈', '🥉'][i] ?? `${i + 1}위`} **${s.name}**${s.kind === 'mob' ? ' _(에너미)_' : ''}${tail ? ` — ${tail}` : ''}`;
+  });
+  const notes = [];
+  if (winner?.kind === 'mob') {
+    notes.push(`**${winner.name}** 이(가) 판을 쓸어 갔어요 — 상금 **${num(saved.pool)}골드**는 에너미 몫이에요.`);
+  }
+  if (!saved.ok) notes.push('_저장하지 못했어요._');
 
-  const rows = rank.map((r, i) => `${['🥇', '🥈', '🥉'][i] ?? `${i + 1}위`} **${r.seat.name}**`);
   await game.message?.channel?.send({
     embeds: [base({
       title: '🏆 토너먼트가 끝났어요',
@@ -540,13 +561,10 @@ async function finishTourney(game) {
         winner ? `**${winner.name}** 우승 — ${game.handNo}핸드 만에.` : '한 명도 안 남았어요.',
         '',
         ...rows,
-        '',
-        saved.ok && winner && winner.kind !== 'mob'
-          ? `🪙 **MT +1** — 지금 ${saved.accounts[winner.id]?.mt ?? '?'}개.`
-          : '_저장하지 못했어요._',
+        ...(notes.length ? ['', ...notes] : []),
       ].join('\n'),
       color: THEME_COLOR,
-      footer: `블라인드 ${game.stakes.sb}/${game.stakes.bb} 까지 올랐어요`,
+      footer: `상금 ${num(saved.pool)}골드 · 블라인드 ${game.stakes.sb}/${game.stakes.bb} 까지 올랐어요`,
     })],
   }).catch((err) => console.warn('[홀덤] 토너먼트 결과 실패:', err.message));
 }
@@ -906,9 +924,11 @@ const data = new SlashCommandBuilder()
         .addChoices(...STAKES_CHOICES))
       .addIntegerOption((o) => o.setName('모브').setDescription('엘리트 에너미를 몇 자리 앉힐지')
         .setMinValue(1).setMaxValue(state.MAX_SEATS - 1)))
-  .addSubcommand((s) => s.setName('토너먼트').setDescription('한 명이 남을 때까지 — 셋부터')
+  .addSubcommand((s) => s.setName('토너먼트').setDescription('한 명이 남을 때까지 — 넷부터')
     .addStringOption((o) => o.setName('판돈').setDescription('시작 블라인드. 여기서 점점 오릅니다')
-      .addChoices(...STAKES_CHOICES)))
+      .addChoices(...STAKES_CHOICES))
+    .addIntegerOption((o) => o.setName('모브').setDescription('엘리트 에너미를 몇 자리 앉힐지 — 넷을 채울 때')
+      .setMinValue(1).setMaxValue(state.MAX_SEATS - 1)))
   .addSubcommand((s) => s.setName('던전').setDescription('에너미와 체력을 걸고 단둘이'))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
   .addSubcommand((s) => s.setName('족보').setDescription('손의 순서를 알려줍니다'))
@@ -976,13 +996,14 @@ async function execute(interaction) {
     // 모브는 **판을 만들 때 한 번에** 앉힌다. 인원만 정하면 알아서 골라 오는 것이
     // 이 옵션의 전부라, 대기실에서 하나씩 부를 이유가 없다.
     //
-    // **토너먼트에는 모브가 없다.** 모브는 지갑이 없어서 `apply` 가 그 몫을 버린다 —
-    // 사람이 모브를 이기면 아무도 안 낸 골드가 생기고, 지면 사람 골드가 사라진다.
-    if (!tourney) {
-      drawMobs(interaction.options.getInteger('모브') ?? 0).forEach((mob, i) => {
-        state.addSeat(game, state.mobSeat(mob, i, game.stakes));
-      });
-    }
+    // **토너먼트에도 앉는다.** 모브는 지갑이 없어서 들고 앉은 칩이 아무도 안 낸 칩인데,
+    // 정산을 "들어온 골드만 나눈다" 로 바꿔 골드가 새로 생기지 않는다(payout.tourneyDeltas).
+    // 토너먼트는 모두 같은 스택으로 시작하므로 모브도 한 스택을 든다.
+    drawMobs(interaction.options.getInteger('모브') ?? 0).forEach((mob, i) => {
+      const seat = state.mobSeat(mob, i, game.stakes);
+      if (tourney) seat.buyIn = game.stakes.stack;
+      state.addSeat(game, seat);
+    });
 
     await room.send({ embeds: [howto(game)] })
       .catch((err) => console.warn('[홀덤] 규칙 안내 실패:', err.message));
@@ -1092,10 +1113,10 @@ async function handleLobby(interaction, game, action, arg) {
       await deny(interaction, '판을 연 사람만 시작할 수 있어요.');
       return true;
     }
-    // 토너먼트는 셋부터. 둘이면 그냥 헤즈업이라 토너먼트라고 할 게 없다.
+    // 토너먼트는 넷부터(모브 자리까지 센다). 셋이면 금방 헤즈업이라 토너먼트라고 할 게 적다.
     if (game.mode === 'tourney' && game.seats.length < TOURNEY_LEAST) {
       await deny(interaction, `토너먼트는 **${TOURNEY_LEAST}명**부터 시작할 수 있어요.`
-        + ' 미겔·마티암을 불러 자리를 채울 수 있어요.');
+        + ' 미겔·마티암을 부르거나, `/홀덤 토너먼트 모브:` 로 에너미를 앉혀 자리를 채울 수 있어요.');
       return true;
     }
 

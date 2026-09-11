@@ -217,23 +217,59 @@ export async function settleOverflow(game, { rand = Math.random } = {}) {
   return { ok: true, ...summary, accounts: saved.accounts };
 }
 
+/** 토너먼트 MT — 1위 둘, 2위 하나. 모브 자리는 받지 않는다(그 등수의 몫이 사라진다). */
+export const TOURNEY_MT = [2, 1];
+
 /**
- * 토너먼트가 끝났다. **한 번에 정산하고 우승자에게 MT 한 개.**
+ * 토너먼트 정산. `{ deltas, pool }` — **판 밖으로 나가는 골드는 들어온 골드를 못 넘는다.**
  *
- * `net()` 은 판을 시작할 때와 견준 증감이라, 그대로가 곧 "들고 앉은 것을 우승자가 다"
- * 이다. 그래서 핸드마다 `rebase()` 를 안 했다.
+ * 모브도 앉을 수 있게 되면서 "스택 = 골드" 가 깨졌다. 모브는 지갑이 없어서 모브가 들고
+ * 앉은 칩은 **아무도 안 낸 칩**이다. 예전처럼 `net()` 을 그대로 쓰면 사람이 모브를 이긴
+ * 만큼 골드가 새로 생긴다. 그래서
  *
- * 방치로 끝나도 같은 길을 탄다 — 그 시점 스택으로 정산한다. 안 그러면 상금이 통째로
- * 사라진다.
+ *   상금(pool) = 사람·미겔·마티암이 들고 앉은 것의 합
+ *   받는 몫    = 지갑 있는 자리의 칩 — 합이 상금을 넘으면 **상금만큼으로 줄여서** 나눈다
+ *
+ * 끝까지 가서 사람이 우승하면 칩을 다 쥐고 있으니 상금을 통째로 받는다 — 모브 없는 판과
+ * 같다. **모브가 우승하면** 지갑 있는 자리의 칩이 0 이라 모두 들고 앉은 만큼 잃는다(에너미가
+ * 가져간다). 방치나 `/홀덤 그만` 으로 중간에 끝나면 그 시점 칩으로 같은 식을 탄다.
+ *
+ * 줄여서 나눌 때 생기는 자투리는 칩이 제일 많은 자리에 준다 — 합이 상금과 딱 맞게.
  */
-export async function finishTourney(game, winnerId) {
+export function tourneyDeltas(game) {
+  const net = game.gold.net();
+  const ids = Object.keys(net).filter((id) => !id.startsWith('mob:'));
+  const chips = Object.fromEntries(ids.map((id) => [id, game.gold.get(id)]));
+  const sat = Object.fromEntries(ids.map((id) => [id, chips[id] - net[id]]));
+  const pool = ids.reduce((a, id) => a + sat[id], 0);
+  const held = ids.reduce((a, id) => a + chips[id], 0);
+
+  let take = { ...chips };
+  if (held > pool && held > 0) {
+    take = Object.fromEntries(ids.map((id) => [id, Math.floor((chips[id] * pool) / held)]));
+    const left = pool - ids.reduce((a, id) => a + take[id], 0);
+    const top = [...ids].sort((a, b) => chips[b] - chips[a])[0];
+    if (top) take[top] += left;
+  }
+  return { deltas: Object.fromEntries(ids.map((id) => [id, take[id] - sat[id]])), pool };
+}
+
+/**
+ * 토너먼트가 끝났다. **한 번에 정산하고 MT 는 1위 둘 · 2위 하나**(TOURNEY_MT).
+ *
+ * `order` 는 등수대로 늘어놓은 자리 id(1위 먼저). 모브 자리는 MT 를 안 받는다.
+ * 핸드마다 `rebase()` 를 안 했으므로 `net()` 이 판 시작 대비 누적이다(tourneyDeltas).
+ */
+export async function finishTourney(game, order = []) {
   expect(game, 'gold');
-  const saved = await apply({
-    deltas: game.gold.net(),
-    mt: winnerId ? { [winnerId]: 1 } : {},
+  const { deltas, pool } = tourneyDeltas(game);
+  const mt = {};
+  order.slice(0, TOURNEY_MT.length).forEach((id, i) => {
+    if (id && !id.startsWith('mob:')) mt[id] = TOURNEY_MT[i];
   });
+  const saved = await apply({ deltas, mt });
   if (saved.ok) game.gold.rebase();
-  return saved;
+  return { ...saved, deltas, mt, pool };
 }
 
 /**
@@ -281,5 +317,5 @@ export const dungeonLost = (id, died = id) => apply({
 export const metEnemy = (id, foe) => apply({ enemies: { [id]: { [foe]: { met: 1 } } } });
 
 export default {
-  hand, finishTourney, dungeonWon, dungeonLost, metEnemy, settleOverflow, overOf, capOf, OVER_RATE, ALLY_HEAL_SHARE,
+  hand, finishTourney, tourneyDeltas, TOURNEY_MT, dungeonWon, dungeonLost, metEnemy, settleOverflow, overOf, capOf, OVER_RATE, ALLY_HEAL_SHARE,
 };

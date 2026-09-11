@@ -14,7 +14,7 @@ import { handText, isJumboable, example } from '../casino/cards.js';
 import { describe } from '../casino/poker.js';
 import { MAX_SEATS } from './rules.js';
 import {
-  currentSeat, actionsFor, raisesFor, toCallFor, pot, standings, rising,
+  currentSeat, actionsFor, raisesFor, toCallFor, pot, standings, rising, TOURNEY_LEAST,
 } from './state.js';
 import {
   atLevel, LEVEL_EVERY, TOP_LEVEL, TOURNEY_FLOOR_BB, TOURNEY_SLOW_EVERY,
@@ -193,9 +193,9 @@ export function lobbyRows(game) {
     btn(game, 'join', '참가', ButtonStyle.Primary).setDisabled(full),
     btn(game, 'npc', '미겔 부르기', ButtonStyle.Secondary, 'migel').setDisabled(full),
     btn(game, 'npc', '마티암 부르기', ButtonStyle.Secondary, 'matiam').setDisabled(full),
-    // 토너먼트는 셋부터. 명령 쪽에서도 한 번 더 본다.
+    // 토너먼트는 넷부터(state.TOURNEY_LEAST, 모브 자리까지). 명령 쪽에서도 한 번 더 본다.
     btn(game, 'start', '시작', ButtonStyle.Success)
-      .setDisabled(game.seats.length < (game.mode === 'tourney' ? 3 : 2)),
+      .setDisabled(game.seats.length < (game.mode === 'tourney' ? TOURNEY_LEAST : 2)),
     btn(game, 'cancel', '취소', ButtonStyle.Danger),
   )];
 }

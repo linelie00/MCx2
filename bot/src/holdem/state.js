@@ -212,6 +212,9 @@ export function swapFighter(game, seat, who) {
 /** 블라인드가 오르는 판인지. 현금 판은 판 내내 그대로다. */
 export const rising = (game) => game.mode === 'tourney' || game.mode === 'dungeon';
 
+/** 토너먼트 최소 인원 — 모브 자리까지 센다. 셋이면 금방 헤즈업이라 넷으로 올렸다. */
+export const TOURNEY_LEAST = 4;
+
 /**
  * 토너먼트 블라인드를 한 칸 올릴지. `beginHand` 가 핸드 번호를 올린 뒤 부른다.
  *

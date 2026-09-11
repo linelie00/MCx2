@@ -27,7 +27,7 @@ import { forget, deadEmbed } from '../casino/alive.js';
 import { forgetBag as forgetBook } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { STAKES_CHOICES, tooPoor, DUNGEON, LEVEL_EVERY } from '../casino/stakes.js';
-import { drawMobs, drawEnemy, hpOf } from '../holdem/mobs.js';
+import { drawMobs, drawEnemy, hpOf, regenOf } from '../holdem/mobs.js';
 import {
   PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
   holeMessage, turnCall, resultEmbed, unitLabel,
@@ -828,6 +828,8 @@ async function openDungeon(interaction) {
   // 등급을 자리에 남긴다. 판이 끝날 때 `finishDungeon` 이 볼 수 있는 것은 자리뿐이다.
   enemy.elite = mob.elite;
   enemy.buyIn = hpOf(mob);
+  // 핸드가 끝날 때마다 되찾는 체력(state.settle). 시작 체력까지만.
+  enemy.regen = regenOf(mob);
   state.addSeat(game, enemy);
 
   await room.send({ embeds: [dungeonHowto(game, mob, hp)] })
@@ -881,6 +883,7 @@ const dungeonHowto = (game, mob, hp) => ((tier) => base({
     + ` 넘긴 몫은 판 안에서는 그대로 걸 수 있고, 끝나면 그쪽 것은 **체력 1 = ${payout.OVER_RATE}골드**,`
     + ' 미겔·마티암 것은 **그쪽 체력을 고치고** 남으면 아이템이 됩니다.',
     `${mob.name} 도 시작 체력(**${hpOf(mob)}**)을 넘지 못해요 — 그쪽을 때려도 적이 낫지는 않아요.`,
+    `대신 **핸드가 끝날 때마다 체력을 ${regenOf(mob)} 되찾아요**(시작 체력까지). 조금씩 깎아서는 안 되고, 크게 한 번 이겨야 해요.`,
     '',
     '핸드가 끝날 때마다 **[다음 핸드]** 로 이어가거나 **[도망]** 으로 물러날 수 있어요.',
     '물러나면 그때까지의 체력 그대로 나갑니다.',

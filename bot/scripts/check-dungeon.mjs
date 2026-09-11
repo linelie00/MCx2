@@ -101,6 +101,7 @@ function runDungeon(channelId, startHp, mobHp) {
   hold.addSeat(game, hold.humanSeat(user(1), '사람1'));
   const mob = hold.mobSeat({ name: '적', seen: 1, loose: 0, bluff: 0.1, raise: 0.5, note: '' }, 0, DUNGEON);
   mob.buyIn = mobHp;
+  mob.regen = 3;                                  // 재생도 같이 돈다 — 총합 검사가 센다
   hold.addSeat(game, mob);
 
   const err = hold.start(game, { [ME]: startHp, [mob.id]: mobHp });
@@ -160,7 +161,7 @@ check('체력 총합이 보존된다 — 적이 넘겨 흩어진 몫까지 세�
   for (const [start, mobHp] of [[60, 40], [100, 80], [MAX_HP, MAX_HP]]) {
     for (let i = 0; i < ROUNDS; i += 1) {
       const { game } = runDungeon(`ds-${start}-${mobHp}-${i}`, start, mobHp);
-      const total = game.seats.reduce((a, s) => a + s.gold, 0) + (game.burned ?? 0);
+      const total = game.seats.reduce((a, s) => a + s.gold, 0) + (game.burned ?? 0) - (game.regened ?? 0);
       assert.equal(total, start + mobHp, `${start}+${mobHp} 인데 총합이 ${total} 이 됐다`);
       if (game.burned) sawBurn = true;
     }

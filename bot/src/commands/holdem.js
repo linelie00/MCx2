@@ -114,10 +114,25 @@ function payloadFor(game) {
   };
 }
 
+/**
+ * 판을 제자리에서 고친다.
+ *
+ * **다만 지난 핸드의 결과가 떠 있으면 고치지 않고 새로 띄운다.** 판 메시지는 핸드마다 같은
+ * 것을 고쳐 써서, [다음 핸드] 를 누르는 순간 방금 끝난 핸드의 결과(보드·깐 패·누가 얼마)가
+ * 새 핸드 화면으로 **덮여 사라졌다.** 그래서 결과가 떠 있는 메시지는 버튼만 걷어 그대로 두고
+ * (기록으로 남는다), 새 핸드는 그 아래 새 메시지로 띄운다(repost).
+ *
+ * 무엇을 그려 뒀는지는 `game.drawn` 이 기억한다 — `{ hand, settled }`.
+ */
 async function draw(game) {
   if (!game.message) return;
+  if (game.drawn?.settled && game.drawn.hand !== game.handNo && !['done', 'lobby'].includes(game.phase)) {
+    await repost(game);
+    return;
+  }
   await game.message.edit(payloadFor(game))
     .catch((err) => console.warn('[홀덤] 판 갱신 실패:', err.message));
+  game.drawn = { hand: game.handNo, settled: game.phase === 'settled' };
 }
 
 /** 판을 맨 아래에 새로 띄운다. 새 것을 먼저 보내고 옛 것의 버튼을 걷는다. */
@@ -130,10 +145,13 @@ async function repost(game) {
     console.warn('[홀덤] 판 새로 띄우기 실패:', err.message);
     return null;
   });
-  if (!fresh) { await draw(game); return; }
+  // 못 띄웠으면 제자리에서라도 고친다. 기록은 못 남기지만 판은 굴러가야 한다 — drawn 을
+  // 비워 draw 가 다시 여기로 돌아오지 않게 한다.
+  if (!fresh) { game.drawn = null; await draw(game); return; }
 
   game.message = fresh;
   game.boardBottom = true;
+  game.drawn = { hand: game.handNo, settled: game.phase === 'settled' };
   await old.edit({ components: [] }).catch(() => {});
 }
 
@@ -530,7 +548,7 @@ function tourneyRank(game) {
   return [...alive, ...out.map((id) => game.seats.find((s) => s.id === id)).filter(Boolean)];
 }
 
-/** 상금(들어온 골드)을 나누고, MT 는 1위 둘 · 2위 하나(payout.TOURNEY_MT). */
+/** 칩 증감대로 골드를 옮기고(모브 칩 포함), MT 는 1위 둘 · 2위 하나(payout.TOURNEY_MT). */
 async function finishTourney(game) {
   const rank = tourneyRank(game);
   const winner = rank[0] ?? null;
@@ -550,7 +568,7 @@ async function finishTourney(game) {
   });
   const notes = [];
   if (winner?.kind === 'mob') {
-    notes.push(`**${winner.name}** 이(가) 판을 쓸어 갔어요 — 상금 **${num(saved.pool)}골드**는 에너미 몫이에요.`);
+    notes.push(`**${winner.name}** 이(가) 판을 쓸어 갔어요 — 들고 앉은 골드는 에너미 몫이에요.`);
   }
   if (!saved.ok) notes.push('_저장하지 못했어요._');
 
@@ -564,7 +582,7 @@ async function finishTourney(game) {
         ...(notes.length ? ['', ...notes] : []),
       ].join('\n'),
       color: THEME_COLOR,
-      footer: `상금 ${num(saved.pool)}골드 · 블라인드 ${game.stakes.sb}/${game.stakes.bb} 까지 올랐어요`,
+      footer: `판돈 ${num(saved.pool)}골드 · 블라인드 ${game.stakes.sb}/${game.stakes.bb} 까지 올랐어요`,
     })],
   }).catch((err) => console.warn('[홀덤] 토너먼트 결과 실패:', err.message));
 }
@@ -996,9 +1014,9 @@ async function execute(interaction) {
     // 모브는 **판을 만들 때 한 번에** 앉힌다. 인원만 정하면 알아서 골라 오는 것이
     // 이 옵션의 전부라, 대기실에서 하나씩 부를 이유가 없다.
     //
-    // **토너먼트에도 앉는다.** 모브는 지갑이 없어서 들고 앉은 칩이 아무도 안 낸 칩인데,
-    // 정산을 "들어온 골드만 나눈다" 로 바꿔 골드가 새로 생기지 않는다(payout.tourneyDeltas).
-    // 토너먼트는 모두 같은 스택으로 시작하므로 모브도 한 스택을 든다.
+    // **토너먼트에도 앉는다.** 모브 칩도 따면 골드가 된다(payout.tourneyDeltas) — 에너미를
+    // 이기면 그만큼 벌고, 지면 에너미가 가져간다. 토너먼트는 모두 같은 스택으로 시작하므로
+    // 모브도 한 스택을 든다.
     drawMobs(interaction.options.getInteger('모브') ?? 0).forEach((mob, i) => {
       const seat = state.mobSeat(mob, i, game.stakes);
       if (tourney) seat.buyIn = game.stakes.stack;

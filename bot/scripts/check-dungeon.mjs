@@ -541,29 +541,28 @@ check('골드 총합이 보존된다', () => {
   }
 });
 
-check('모브가 끼어도 골드가 생기지 않는다 — 상금은 들어온 만큼', () => {
-  // 모브는 지갑이 없어서 들고 앉은 칩은 아무도 안 낸 칩이다. 사람이 모브를 이긴 만큼
-  // 골드가 생기면 안 된다. 사람이 우승하면 상금(사람 셋 × 1000)을 통째로, 모브가 우승하면 0.
+check('모브 칩도 따면 골드가 된다 — 지면 에너미가 가져간다', () => {
+  // 모브는 지갑이 없어서 들고 앉은 칩은 아무도 안 낸 칩이다. 사람이 우승하면 모브 몫까지
+  // 판 칩 전부(사람 셋 × 1000 + 모브 1000)를 받는다. 모브가 우승하면 사람 골드는 0.
   let humanWon = 0;
   let mobWon = 0;
   for (let i = 0; i < ROUNDS; i += 1) {
     const { server, game } = runTourney(`tm-${i}`, [1, 2, 3], { mobs: 1 });
     const total = Object.values(server.bal.gold).reduce((a, b) => a + b, 0);
-    assert.ok(total <= 3000, `골드가 ${total - 3000} 생겼다`);
     const winner = game.seats.find((x) => x.gold > 0);
     if (winner.kind === 'mob') {
       mobWon += 1;
       assert.equal(total, 0, `모브가 이겼는데 사람 골드가 ${total} 남았다`);
     } else {
       humanWon += 1;
-      assert.equal(total, 3000, `사람이 이겼는데 총합이 ${total} 이다`);
-      assert.equal(server.bal.gold[winner.id], 3000, '우승자가 상금을 통째로 못 받았다');
+      assert.equal(total, 4000, `사람이 이겼는데 총합이 ${total} 이다 — 모브 몫을 못 받았다`);
+      assert.equal(server.bal.gold[winner.id], 4000, '우승자가 판 칩을 다 못 받았다');
     }
   }
   assert.ok(humanWon && mobWon, `사람 우승 ${humanWon} · 모브 우승 ${mobWon} — 한쪽 길을 못 봤다`);
 });
 
-check('중간에 접어도 — 사람 칩이 상금을 넘으면 상금만큼으로 줄여 나눈다', () => {
+check('중간에 접으면 그 시점 칩 그대로 — 모브에게서 딴 몫도', () => {
   const game = hold.create({ channelId: 'tm-cut', homeChannelId: 'tm-cut', guildId: 'g', starterId: user(1).id, mode: 'tourney' });
   for (const n of [1, 2]) hold.addSeat(game, hold.humanSeat(user(n), `사람${n}`));
   const m = hold.mobSeat({ name: '적', seen: 1, loose: 0, bluff: 0, raise: 0.5, note: '' }, 0, STAKES.low);
@@ -575,9 +574,8 @@ check('중간에 접어도 — 사람 칩이 상금을 넘으면 상금만큼으
   game.gold.reconcile(user(2).id, 1000);
   game.gold.reconcile(m.id, 0);
   const { deltas, pool } = tourneyDeltas(game);
-  assert.equal(pool, 2000);
-  assert.equal(deltas[user(1).id] + deltas[user(2).id], 0, `골드가 ${deltas[user(1).id] + deltas[user(2).id]} 생겼다`);
-  assert.deepEqual(deltas, { [user(1).id]: 334, [user(2).id]: -334 }, JSON.stringify(deltas));
+  assert.equal(pool, 3000, '판돈은 모브 몫까지');
+  assert.deepEqual(deltas, { [user(1).id]: 1000, [user(2).id]: 0 }, JSON.stringify(deltas));
   hold.remove('tm-cut');
 });
 

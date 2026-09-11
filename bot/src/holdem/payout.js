@@ -221,37 +221,22 @@ export async function settleOverflow(game, { rand = Math.random } = {}) {
 export const TOURNEY_MT = [2, 1];
 
 /**
- * 토너먼트 정산. `{ deltas, pool }` — **판 밖으로 나가는 골드는 들어온 골드를 못 넘는다.**
+ * 토너먼트 정산. `{ deltas, pool }` — **판 시작 대비 칩 증감이 곧 골드 증감이다**(`net()`).
  *
- * 모브도 앉을 수 있게 되면서 "스택 = 골드" 가 깨졌다. 모브는 지갑이 없어서 모브가 들고
- * 앉은 칩은 **아무도 안 낸 칩**이다. 예전처럼 `net()` 을 그대로 쓰면 사람이 모브를 이긴
- * 만큼 골드가 새로 생긴다. 그래서
+ * **모브 칩도 따면 골드가 된다.** 모브는 지갑이 없어서 모브가 들고 앉은 칩은 아무도 안 낸
+ * 칩이다 — 사람이 모브를 이긴 만큼은 판 밖에서 **새로 생기는 골드**다. 한때 "들어온 골드만
+ * 나눈다" 로 막았는데, 에너미를 앉히는 재미가 없어서(이겨도 받을 게 없다) 되돌렸다.
+ * 반대로 **모브에게 지면 그만큼 골드가 사라진다**(에너미가 가져간다).
  *
- *   상금(pool) = 사람·미겔·마티암이 들고 앉은 것의 합
- *   받는 몫    = 지갑 있는 자리의 칩 — 합이 상금을 넘으면 **상금만큼으로 줄여서** 나눈다
- *
- * 끝까지 가서 사람이 우승하면 칩을 다 쥐고 있으니 상금을 통째로 받는다 — 모브 없는 판과
- * 같다. **모브가 우승하면** 지갑 있는 자리의 칩이 0 이라 모두 들고 앉은 만큼 잃는다(에너미가
- * 가져간다). 방치나 `/홀덤 그만` 으로 중간에 끝나면 그 시점 칩으로 같은 식을 탄다.
- *
- * 줄여서 나눌 때 생기는 자투리는 칩이 제일 많은 자리에 준다 — 합이 상금과 딱 맞게.
+ * 모브 자리는 지갑이 없으니 증감에서 뺀다(`apply` 도 거르지만 화면에 쓰려고 여기서 뺀다).
+ * `pool` 은 판에 깔린 칩 전부(모브 몫 포함) — 결과 화면이 "판돈" 으로 적는다.
  */
 export function tourneyDeltas(game) {
   const net = game.gold.net();
-  const ids = Object.keys(net).filter((id) => !id.startsWith('mob:'));
-  const chips = Object.fromEntries(ids.map((id) => [id, game.gold.get(id)]));
-  const sat = Object.fromEntries(ids.map((id) => [id, chips[id] - net[id]]));
-  const pool = ids.reduce((a, id) => a + sat[id], 0);
-  const held = ids.reduce((a, id) => a + chips[id], 0);
-
-  let take = { ...chips };
-  if (held > pool && held > 0) {
-    take = Object.fromEntries(ids.map((id) => [id, Math.floor((chips[id] * pool) / held)]));
-    const left = pool - ids.reduce((a, id) => a + take[id], 0);
-    const top = [...ids].sort((a, b) => chips[b] - chips[a])[0];
-    if (top) take[top] += left;
-  }
-  return { deltas: Object.fromEntries(ids.map((id) => [id, take[id] - sat[id]])), pool };
+  const all = Object.keys(net);
+  const pool = all.reduce((a, id) => a + game.gold.get(id) - net[id], 0);
+  const deltas = Object.fromEntries(all.filter((id) => !id.startsWith('mob:')).map((id) => [id, net[id]]));
+  return { deltas, pool };
 }
 
 /**

@@ -148,7 +148,7 @@ export function resultEmbed(mode, craft, { parts, total, capped, by, poison, who
     title: `${g.emoji} ${g.label} — ${craft.name}`,
     description: [...lines, '', worth.join(' · ')].join('\n'),
     color: g.color,
-    footer: `${who} 의 ${mode.verb} · 재료 ${names.join(' · ')}`,
+    footer: `${who}의 ${mode.verb} · 재료 ${names.join(' · ')}`,
   });
 }
 

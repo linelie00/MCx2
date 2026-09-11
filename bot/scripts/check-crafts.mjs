@@ -250,6 +250,8 @@ check('독과 괴식을 재료 줄에 적고, 먹은 결과는 쓰지 말라고'
   assert.match(system, /독 재료를 썼다는 이유만으로는 깎지 마라/);
   assert.match(system, /먹었을 때 어떻게 되는지는 묘사에도 한줄평에도 쓰지 마라/);
   assert.match(system, /"detox"/);
+  // 실제로 "주사위의 도움 덕분인지" 라고 쓴 적이 있다. 이야기 속 인물은 주사위를 모른다.
+  assert.match(system, /"주사위"·"점수"·"등급" 같은 말을 쓰지 마라/);
 });
 check('등급 문턱은 모델에게 안 알려 준다', () => {
   const { system, user } = promptFor(CRAFT, { name: 'x', process: 'y', counts: { oreRed: 1 }, dice: 10 });

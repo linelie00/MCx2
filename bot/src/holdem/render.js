@@ -224,10 +224,14 @@ export function boardEmbed(game) {
   const lines = [];
 
   if (game.board.length) {
-    lines.push('**보드**', `　${handText(game.board)}`, '');
+    lines.push('**보드**', `　${handText(game.board)}`);
   } else if (game.phase !== 'lobby') {
-    lines.push('_보드는 아직 없습니다._', '');
+    lines.push('_보드는 아직 없습니다._');
   }
+  // **팟은 보드 바로 밑에.** 푸터에만 있을 때는 작은 글씨라 안 보였다. 콜할지 말지는
+  // 팟을 보고 정하는 것이라 판에서 제일 먼저 눈에 들어와야 한다. 정산 화면에서는 방금
+  // 끝난 핸드의 팟이다.
+  if (game.phase !== 'lobby') lines.push(`💰 **팟 ${pot(game).toLocaleString('ko-KR')}**`, '');
 
   lines.push(...showdownLines(game));
 
@@ -252,7 +256,7 @@ export function boardEmbed(game) {
     title,
     description: lines.join('\n'),
     color: seat?.color ?? THEME_COLOR,
-    footer: `팟 ${pot(game)} · ${game.stakes.name} ${game.stakes.sb}/${game.stakes.bb}${nextBlinds(game)}`
+    footer: `${game.stakes.name} ${game.stakes.sb}/${game.stakes.bb}${nextBlinds(game)}`
       + `${savedMark(game)} · 버튼 ${game.seats[game.button]?.name ?? '-'}`,
   });
 }

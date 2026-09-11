@@ -283,6 +283,18 @@ check('현금 판은 블라인드가 안 오른다', () => {
   hold.remove('dcash');
 });
 
+check('팟은 판 본문에 굵게 — 푸터에 숨기지 않는다', () => {
+  // 푸터에만 있을 때는 작은 글씨라 안 보였다. 콜할지는 팟을 보고 정한다.
+  const game = hold.create({ channelId: 'dpot', homeChannelId: 'dpot', guildId: 'g', starterId: user(1).id });
+  hold.addSeat(game, hold.humanSeat(user(1), '사람1'));
+  hold.addSeat(game, hold.humanSeat(user(2), '사람2'));
+  assert.equal(hold.start(game, { [user(1).id]: 1000, [user(2).id]: 1000 }), null);
+  const e = boardEmbed(game).data;
+  assert.ok(e.description.includes(`💰 **팟 ${hold.pot(game)}**`), e.description.slice(0, 80));
+  assert.equal(/팟/.test(e.footer.text), false, '푸터에도 팟이 남았다');
+  hold.remove('dpot');
+});
+
 check('한쪽이 0 이 되면 끝난다', () => {
   for (let i = 0; i < ROUNDS; i += 1) {
     const { game } = runDungeon(`de-${i}`, 100, 80);

@@ -4,10 +4,13 @@
  * 창고에 있는 것을 꺼내 먹고 체력이 오르내린다. 상점에서 산 회복약이 쓸모를 갖는
  * 유일한 자리이자, **쓰러진 사람이 일어나는 유일한 길**이다.
  *
- * **남에게도 먹일 수 있다.** 미겔·마티암도 계정이 있어서 죽을 수 있는데, 그때 아무도
- * 못 살리면 그 인물이 영영 누워 있게 된다. 다만 **회복되는 것만** 넘길 수 있다 —
- * 정체 모를 화석(−100) 같은 것을 남에게 먹이는 길은 아예 두지 않는다. 자기한테는
- * 음수도 그대로 먹는다(원석을 씹으면 아파야 한다).
+ * **남에게도 먹일 수 있다 — 무엇이든.** 미겔·마티암도 계정이 있어서 죽을 수 있는데,
+ * 그때 아무도 못 살리면 그 인물이 영영 누워 있게 된다.
+ *
+ * 처음에는 회복되는 것만 넘길 수 있게 했다. 그런데 독을 애매한 이름으로 숨겨 두자
+ * **"이건 못 먹여요" 라는 거절이 곧 "이건 독이에요" 가 됐다.** 미겔에게 먹여 보는 것으로
+ * 떠볼 수 있었다. 그래서 막지 않는다 — 누구에게 먹이든 운이다. 같은 까닭으로 체력이
+ * 가득해도 막는 것은 **회복약만**이다(약병엔 라벨이 있으니 "아껴 두세요" 가 비밀을 안 흘린다).
  *
  * **쓰러져 있어도 쓸 수 있는 명령이다**(`allowDead`). 대신 그때는 부활의 영약만,
  * 그것도 자기한테만 쓸 수 있다.
@@ -224,15 +227,6 @@ async function execute(interaction) {
   const me = interaction.user.id;
   const self = who.id === me;
 
-  // 남에게 넘기는 것은 회복되는 것만. 음수를 남에게 먹이는 길은 아예 두지 않는다.
-  if (!self && !tonic(item)) {
-    await interaction.reply({
-      embeds: [fail(`**${item.name}** 은(는) 남에게 먹일 수 없어요. 회복되는 것만 넘길 수 있어요.`)],
-      flags: MessageFlags.Ephemeral,
-    });
-    return;
-  }
-
   // 계정을 읽는다 — HTTP 라 먼저 응답을 잡는다.
   await interaction.deferReply();
 
@@ -273,7 +267,15 @@ async function execute(interaction) {
   }
 
   const was = Number(target?.hp ?? MAX_HP);
-  if (was >= MAX_HP && tonic(item)) {
+  // **쓰러진 사람에게는 부활의 영약만.** 예전에는 남에게 먹일 때 이걸 안 봐서, 쓰러진
+  // 미겔에게 소형 회복약을 먹이면 일어났다 — "부활은 영약으로만" 이 뚫려 있었다.
+  if (was <= 0 && item.key !== 'potionRevive') {
+    await interaction.editReply({
+      embeds: [fail(`${who.name}은(는) 쓰러져 있어요. 부활의 영약만 들어가요.`)],
+    });
+    return;
+  }
+  if (was >= MAX_HP && item.kind === '소비' && tonic(item)) {
     await interaction.editReply({
       embeds: [fail(`${who.name}의 체력이 이미 가득이에요. 아껴 두세요.`)],
     });

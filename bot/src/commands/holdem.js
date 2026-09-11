@@ -25,7 +25,7 @@ import { roll, listText, TIER as LOOT } from '../casino/loot.js';
 import { ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
 import { forget, deadEmbed } from '../casino/alive.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
-import { STAKES_CHOICES, tooPoor, DUNGEON } from '../casino/stakes.js';
+import { STAKES_CHOICES, tooPoor, DUNGEON, LEVEL_EVERY } from '../casino/stakes.js';
 import { drawMobs, drawEnemy, hpOf } from '../holdem/mobs.js';
 import {
   PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
@@ -713,8 +713,8 @@ setInterval(() => {
  * 있다. `/홀덤 시작` 은 즉시 `reply()` 하고 나중에 대기실 버튼에서 읽지만, 여기는
  * 읽을 자리가 이것뿐이라 흉내 내면 안 된다.
  *
- * 판돈은 던전 등급 하나뿐이다 — 블라인드 1/2 라 **체력 100 이 정확히 50BB** 이고,
- * `holdem/ai.js` 가 그 비율을 전제로 맞춰져 있다.
+ * 판돈은 던전 등급 하나뿐이다 — 블라인드 2/4 에서 시작해 토너먼트처럼 6핸드마다
+ * 오른다(stakes.js 의 DUNGEON 에 까닭이 있다).
  */
 async function openDungeon(interaction) {
   const me = interaction.user.id;
@@ -822,6 +822,8 @@ const dungeonHowto = (game, mob, hp) => ((tier) => base({
     '**여기서 거는 것은 골드가 아니라 체력입니다.**',
     `앉은 체력이 곧 스택이에요 — 그쪽 **${hp}**, ${mob.name} **${hpOf(mob)}**.`,
     '한쪽이 0 이 되면 끝나고, **0 이 된 쪽은 쓰러집니다.**',
+    `블라인드는 **${game.stakes.sb}/${game.stakes.bb}** 에서 시작해 **${LEVEL_EVERY}핸드마다** 올라요`
+    + ' — 오래 버틸수록 한 핸드가 비싸집니다.',
     `뺏은 체력이 **${MAX_HP}** 를 넘어도 판 안에서는 그대로 걸 수 있어요.`
     + ` 넘긴 몫은 나갈 때 **체력 1 = ${payout.OVER_RATE}골드**로 바뀝니다.`,
     '',

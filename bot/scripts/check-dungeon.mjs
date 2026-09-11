@@ -224,6 +224,50 @@ check('자리를 갈아 끼워도 지나간 정산은 그대로다', () => {
   hold.remove('dsw');
 });
 
+check('던전도 블라인드가 오른다', () => {
+  // 1/2 고정일 때는 판이 안 끝났다 — 접어도 체력 1~2 만 나가 둘 다 기다리기만 했다.
+  assert.deepStrictEqual([DUNGEON.sb, DUNGEON.bb], [2, 4], '시작 블라인드가 2/4 가 아니다');
+  const ME = user(1).id;
+  const game = hold.create({
+    channelId: 'dbl', homeChannelId: 'dbl', guildId: 'g', starterId: ME, mode: 'dungeon',
+  });
+  game.stakes = DUNGEON;
+  game.base = DUNGEON;
+  hold.addSeat(game, hold.humanSeat(user(1), '사람1'));
+  const mob = hold.mobSeat({ name: '적', seen: 1, loose: 0, bluff: 0.1, raise: 0.5, note: '' }, 0, DUNGEON);
+  hold.addSeat(game, mob);
+  // 넉넉히 들고 앉혀 판이 도중에 안 끝나게 한다. 여기서 보려는 것은 블라인드뿐이다.
+  assert.equal(hold.start(game, { [ME]: 100000, [mob.id]: 100000 }), null);
+
+  const seen = new Map();
+  for (let i = 0; i < 20 && game.phase !== 'done'; i += 1) {
+    seen.set(game.handNo, game.stakes.bb);
+    if (!playHand(game)) break;
+    if (!hold.beginHand(game)) break;
+  }
+  for (const [hand, bb] of seen) {
+    const want = atLevel(DUNGEON, Math.floor((hand - 1) / 6)).bb;
+    assert.equal(bb, want, `${hand}핸드에서 빅블라인드가 ${bb} (기대 ${want})`);
+  }
+  assert.ok([...seen.values()].some((bb) => bb > 4), '20핸드 동안 한 번도 안 올랐다');
+  assert.equal(DUNGEON.bb, 4, '던전 등급 원본이 바뀌었다');
+  hold.remove('dbl');
+});
+
+check('현금 판은 블라인드가 안 오른다', () => {
+  const game = hold.create({ channelId: 'dcash', homeChannelId: 'dcash', guildId: 'g', starterId: 'u' });
+  hold.addSeat(game, hold.humanSeat(user(1), '사람1'));
+  hold.addSeat(game, hold.humanSeat(user(2), '사람2'));
+  const bb = game.stakes.bb;
+  assert.equal(hold.start(game, { [user(1).id]: 1e6, [user(2).id]: 1e6 }), null);
+  for (let i = 0; i < 14 && game.phase !== 'done'; i += 1) {
+    if (!playHand(game)) break;
+    if (!hold.beginHand(game)) break;
+  }
+  assert.equal(game.stakes.bb, bb, `현금 판 블라인드가 ${bb} 에서 ${game.stakes.bb} 로 올랐다`);
+  hold.remove('dcash');
+});
+
 check('한쪽이 0 이 되면 끝난다', () => {
   for (let i = 0; i < ROUNDS; i += 1) {
     const { game } = runDungeon(`de-${i}`, 100, 80);

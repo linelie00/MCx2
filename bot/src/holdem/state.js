@@ -206,6 +206,9 @@ export function swapFighter(game, seat, who) {
   touch(game);
 }
 
+/** 블라인드가 오르는 판인지. 현금 판은 판 내내 그대로다. */
+export const rising = (game) => game.mode === 'tourney' || game.mode === 'dungeon';
+
 export const hasNpc = (game, character) =>
   game.seats.some((s) => s.kind === 'npc' && s.character === character);
 
@@ -274,7 +277,8 @@ export function beginHand(game) {
   // **블라인드는 여기서만 올린다.** 핸드와 핸드 사이, 블라인드를 걷기 전 딱 한 곳이다.
   // 판 도중에 바뀌면 이미 건 돈의 뜻이 달라진다. `sb`·`bb` 와 표시용 `level` 만 갈고,
   // `stack`·`minBuyIn` 은 판을 열 때만 쓰이므로 1단계 값 그대로 둔다.
-  if (game.mode === 'tourney') {
+  // 던전도 오른다. 1:1 이라 안 올리면 둘 다 기다리기만 해서 판이 안 끝난다(stakes.js).
+  if (rising(game)) {
     const level = Math.floor((game.handNo - 1) / LEVEL_EVERY);
     if (level !== (game.stakes.level ?? 0)) game.stakes = atLevel(game.base, level);
     game.minRaise = game.stakes.bb;

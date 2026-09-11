@@ -14,8 +14,9 @@ import { handText, isJumboable, example } from '../casino/cards.js';
 import { describe } from '../casino/poker.js';
 import { MAX_SEATS } from './rules.js';
 import {
-  currentSeat, actionsFor, raisesFor, toCallFor, pot, standings,
+  currentSeat, actionsFor, raisesFor, toCallFor, pot, standings, rising,
 } from './state.js';
+import { atLevel, LEVEL_EVERY, TOP_LEVEL } from '../casino/stakes.js';
 import { base, THEME_COLOR } from '../embeds.js';
 import { padEndW, padStartW, clipW } from '../text.js';
 
@@ -251,9 +252,24 @@ export function boardEmbed(game) {
     title,
     description: lines.join('\n'),
     color: seat?.color ?? THEME_COLOR,
-    footer: `팟 ${pot(game)} · ${game.stakes.name} ${game.stakes.sb}/${game.stakes.bb}${savedMark(game)}`
-      + ` · 버튼 ${game.seats[game.button]?.name ?? '-'}`,
+    footer: `팟 ${pot(game)} · ${game.stakes.name} ${game.stakes.sb}/${game.stakes.bb}${nextBlinds(game)}`
+      + `${savedMark(game)} · 버튼 ${game.seats[game.button]?.name ?? '-'}`,
   });
+}
+
+/**
+ * 블라인드가 언제 오르는지. ` · 3핸드 뒤 4/8` 처럼. 안 오르는 판이면 빈 문자열.
+ *
+ * 오른다는 걸 모르면 **갑자기 비싸진 것처럼** 느낀다. 미리 보이면 그게 압박이 된다 —
+ * 오르기 전에 승부를 볼지, 버틸지를 고를 수 있다.
+ */
+function nextBlinds(game) {
+  if (!rising(game) || !game.base || game.handNo < 1) return '';
+  const level = Math.floor((game.handNo - 1) / LEVEL_EVERY);
+  if (level >= TOP_LEVEL) return '';
+  const next = atLevel(game.base, level + 1);
+  const left = LEVEL_EVERY - ((game.handNo - 1) % LEVEL_EVERY);
+  return ` · ${left === 1 ? '다음 핸드부터' : `${left}핸드 뒤`} ${next.sb}/${next.bb}`;
 }
 
 export function boardRows(game) {

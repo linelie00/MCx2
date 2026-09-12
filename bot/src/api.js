@@ -235,8 +235,8 @@ export const setTitle = (id, title) =>
  * 낚시 한 판을 쓴다. `{ ok, left, tries, today }` — 하루 횟수를 **서버가** 센다.
  * 못 받는 것도 오류가 아니라 답이라 200 으로 온다(출첵과 같은 규약).
  */
-export const tryFish = (id) =>
-  request('/api/accounts/fish', { method: 'POST', bot: true, json: { id } });
+export const tryFish = (id, { peek = false } = {}) =>
+  request('/api/accounts/fish', { method: 'POST', bot: true, json: { id, peek } });
 
 /** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
 export const claimDaily = (id, { heal = true } = {}) =>

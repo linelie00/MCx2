@@ -33,6 +33,7 @@ import { apply } from '../casino/wallet.js';
 import { base, fail, trunc, THEME_COLOR } from '../embeds.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEMS, ITEM_BY_KEY, CATS } from '../casino/items.js';
+import { BAITS, BAIT_KEYS } from '../yacht/fishing.js';
 import { isDead, forget } from '../casino/alive.js';
 import { GRADE_BY_KEY } from '../casino/crafts.js';
 import { forgetCrafts, forgetBag, craftLabel } from '../casino/bag.js';
@@ -49,12 +50,20 @@ export const PREFIX = 'shop';
 export const STOCK = ['potionSmall', 'potionMedium', 'potionLarge', 'potionRevive'];
 
 /**
+ * 미끼. **낚시의 하루 다섯 번을 다 쓴 뒤**에 한 판을 사는 물건이라 회복약과 칸을 나눴다.
+ * 기회 수는 낚시 쪽 규칙(`yacht/fishing.js` 의 `BAITS`)이 정한다 — 여기서 다시 안 적는다.
+ */
+export const BAIT = BAIT_KEYS;
+const baitNote = (key) => `${BAITS[key].tries}번 던질 수 있는 한 판`;
+
+/**
  * 진열대. 회복약 한 칸, 그리고 재료의 갈래(`CATS`)마다 한 칸.
  *
  * 재료는 명부의 `shop: true` 로 고른다 — 새 재료를 들이면 여기는 안 고쳐도 된다.
  */
 export const SHELVES = [
   { key: 'potion', label: '회복약', icon: '🍶', keys: STOCK },
+  { key: 'baits', label: '미끼', icon: '🪱', keys: BAIT },
   ...CATS.map((c) => ({
     ...c,
     keys: ITEMS.filter((i) => i.kind === '재료' && i.cat === c.key && i.shop).map((i) => i.key),
@@ -195,7 +204,9 @@ function listPayload(side, owner, account, shelfKey = 'potion', page = 0) {
           label: trunc(i.name, 100),
           value: i.key,
           // 회복약에만 효능을 적는다(`/사용` 과 같은 원칙). 재료는 먹어 봐야 안다.
-          description: trunc(i.kind === '소비' ? `${num(i.price)}골드 · 먹으면 ${healText(i.heal)}` : `${num(i.price)}골드`, 100),
+          description: trunc(BAIT.includes(i.key)
+            ? `${num(i.price)}골드 · ${baitNote(i.key)}`
+            : i.kind === '소비' ? `${num(i.price)}골드 · 먹으면 ${healText(i.heal)}` : `${num(i.price)}골드`, 100),
         }))),
     ),
     sideRow('buy', owner),
@@ -328,7 +339,8 @@ function cardPayload(side, key, owner, account) {
 
   const lines = [`_${item.desc}_`, ''];
   lines.push(side === 'buy'
-    ? `개당 **${num(item.price)}골드**${item.kind === '소비' ? ` · 먹으면 **${healText(item.heal)}**` : ''}`
+    ? `개당 **${num(item.price)}골드**${BAIT.includes(key) ? ` · **${baitNote(key)}**`
+      : item.kind === '소비' ? ` · 먹으면 **${healText(item.heal)}**` : ''}`
     : `개당 **${num(item.price)}골드** · 가진 것 **${num(have)}개**`);
   if (!most) {
     lines.push('', side === 'buy' ? '_골드가 모자라요._' : '_팔 게 없어요._');

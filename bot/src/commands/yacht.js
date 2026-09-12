@@ -29,6 +29,7 @@ import { NPC_ID, displayOf } from '../casino/accounts.js';
 import { getAccounts } from '../api.js';
 import { CATEGORY_KEYS } from '../yacht/rules.js';
 import * as fishing from '../yacht/fishing.js';
+import { BAITS, BAIT_KEYS, triesFor } from '../yacht/fishing.js';
 import {
   openEmbed as fishOpenEmbed, boardEmbed as fishBoardEmbed, boardRows as fishBoardRows,
   resultEmbed as fishResultEmbed, LEGEND_COLOR,
@@ -292,24 +293,63 @@ async function endFish(round) {
   await sendFishResult(round);
 }
 
+const itemName = (key) => fishItemOf(key)?.name ?? key;
+
+/**
+ * 이 판을 무엇으로 여는가 — **무료 다섯 번이 먼저, 그다음이 미끼**다.
+ *
+ *   미끼를 골랐으면        그 미끼를 쓴다(무료가 남아 있어도). 고급 미끼로 기회 일곱을
+ *                          노리는 길이 그것뿐이라 고를 수 있게 뒀다. 이때 무료 횟수는
+ *                          **엿보기만** 한다(`tryFish(..., { peek: true })`).
+ *   안 골랐고 무료가 남으면  무료 판. 서버가 그 자리에서 하루 몫을 하나 깎는다.
+ *   안 골랐고 무료가 없으면  창고의 미끼를 일반 → 고급 순서로 하나 꺼낸다.
+ *
+ * 돌려주는 것은 `{ quota, bait }`. 거절했으면 `null` 이다(그때는 이미 답을 보냈다).
+ */
+async function openFishing(interaction, me, want) {
+  const nope = async (line) => {
+    await interaction.editReply({ embeds: [fail(line)] });
+    return null;
+  };
+
+  let quota;
+  try {
+    quota = await tryFish(me, { peek: Boolean(want) });
+  } catch (err) {
+    return nope(`낚시터에 못 갔어요. ${err.message}`);
+  }
+  if (!want && quota.ok) return { quota, bait: null };
+
+  // 여기부터는 미끼가 필요하다. 창고를 보고 하나 꺼낸다.
+  const acct = (await getAccounts([me]).catch(() => null))?.accounts?.[me] ?? null;
+  if (!acct) return nope('창고를 못 열었어요. 잠시 뒤에 다시 해 주세요.');
+  const items = acct.items ?? {};
+  const key = want ?? BAIT_KEYS.find((k) => Number(items[k] ?? 0) > 0);
+
+  if (!key || !(Number(items[key] ?? 0) > 0)) {
+    return nope(want
+      ? `**${itemName(want)}** 이(가) 없어요. \`/상점\` 의 **미끼** 칸에서 팔아요.`
+      : `오늘 무료 낚시 **${quota.tries}번**을 다 썼어요. 미끼가 있으면 한 판 더 할 수 있어요 — \`/상점\` 의 **미끼** 칸.`);
+  }
+
+  const spent = await apply({ items: { [me]: { [key]: -1 } } }).catch(() => ({ ok: false }));
+  if (!spent.ok) return nope('미끼를 못 꺼냈어요. 잠시 뒤에 다시 해 주세요.');
+  forgetBag(me);
+
+  return {
+    quota,
+    bait: { key, name: itemName(key), left: Number(spent.accounts?.[me]?.items?.[key] ?? 0) },
+  };
+}
+
 /** `/요트 낚시` — 대기실도 자리도 없다. 하루 횟수를 서버에 물어야 해서 먼저 defer 한다. */
 async function startFishing(interaction) {
   const me = interaction.user.id;
   await interaction.deferReply();
 
-  let quota;
-  try {
-    quota = await tryFish(me);
-  } catch (err) {
-    await interaction.editReply({ embeds: [fail(`낚시터에 못 갔어요. ${err.message}`)] });
-    return;
-  }
-  if (!quota.ok) {
-    await interaction.editReply({
-      embeds: [fail(`오늘은 벌써 **${quota.tries}번** 다녀왔어요. 물고기도 쉬어야죠 — 내일 다시 와요.`)],
-    });
-    return;
-  }
+  const opened = await openFishing(interaction, me, interaction.options.getString('미끼'));
+  if (!opened) return;
+  const { quota, bait } = opened;
 
   const who = interaction.member?.displayName
     || interaction.user.globalName || interaction.user.username;
@@ -333,8 +373,10 @@ async function startFishing(interaction) {
     userId: me,
     name: who,
     color: null,
+    tries: triesFor(bait?.key),
   });
   round.left = quota.left;
+  round.bait = bait;
 
   await room.send({ embeds: [fishOpenEmbed(round)] })
     .catch((err) => console.warn('[낚시] 안내 실패:', err.message));
@@ -609,7 +651,12 @@ const data = new SlashCommandBuilder()
         { name: '마티암', value: 'matiam' },
         { name: '미겔 + 마티암', value: 'both' },
       )))
-  .addSubcommand((s) => s.setName('낚시').setDescription('혼자 낚시를 합니다 (하루 5번)'))
+    .addSubcommand((s) => s.setName('낚시').setDescription('혼자 낚시를 합니다 (하루 5번)')
+      .addStringOption((o) => o.setName('미끼')
+        .setDescription('미끼를 써서 한 판 더 — 안 고르면 무료 몫부터 씁니다')
+        .addChoices(...BAIT_KEYS.map((k) => ({
+          name: `${itemName(k)} — 기회 ${BAITS[k].tries}번`, value: k,
+        })))))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
   .addSubcommand((s) => s.setName('그만').setDescription('진행 중인 판을 접습니다'));
 

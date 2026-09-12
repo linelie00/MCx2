@@ -384,6 +384,15 @@ const server = app.listen(0, async () => {
   eq('도장이 찍혔다', (await hit(`?ids=${FT}`)).body.accounts[FT].fishedCount, 5);
   eq('이상한 id 는 400', (await post('/fish', { id: 'drop-table' })).status, 400);
 
+  // 엿보기는 **세기만 한다** — 미끼로 여는 판이 하루 몫을 깎으면 안 된다.
+  const FP = '4000006';
+  const peeked = (await post('/fish', { id: FP, peek: true })).body;
+  eq('안 쓴 사람을 엿보면 다섯', [peeked.ok, peeked.left, peeked.tries, peeked.peek], [true, 5, 5, true]);
+  eq('엿봐도 도장은 안 찍힌다', (await hit(`?ids=${FP}`)).body.accounts[FP].fishedCount, 0);
+  eq('다 쓴 사람을 엿보면 0', (await post('/fish', { id: FT, peek: true })).body.left, 0);
+  eq('다 썼으면 엿보기도 ok 가 아니다', (await post('/fish', { id: FT, peek: true })).body.ok, false);
+  eq('엿본 뒤에도 도장은 다섯 그대로', (await hit(`?ids=${FT}`)).body.accounts[FT].fishedCount, 5);
+
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

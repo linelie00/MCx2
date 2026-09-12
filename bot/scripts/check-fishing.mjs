@@ -141,6 +141,35 @@ check('거리마다 다른 통에서 뽑는다', () => {
   assert.ok(fishing.LEGEND_MISS.includes(fishing.hintFor(1, { legend: true, rand })));
 });
 
+console.log('\n미끼');
+check('둘뿐이고 고급이 기회 하나 더', () => {
+  assert.deepEqual(fishing.BAIT_KEYS, ['bait', 'fineBait']);
+  assert.equal(fishing.triesFor('bait'), fishing.TRIES);
+  assert.equal(fishing.triesFor('fineBait'), fishing.TRIES + 1);
+  assert.equal(fishing.triesFor(null), fishing.TRIES);
+  assert.equal(fishing.triesFor('없는미끼'), fishing.TRIES);
+});
+check('미끼가 판의 기회 수를 정한다', () => {
+  const r = fishing.create({ channelId: 'bait-t', userId: '1', name: '사백', tries: fishing.triesFor('fineBait') });
+  assert.equal(r.tries, 7);
+  assert.equal(r.triesLeft, 7);
+  fishing.remove('bait-t');
+});
+check('미끼는 기회 말고 아무것도 안 바꾼다', () => {
+  // 미끼로 전설 확률을 올리면 "돈으로 전설을 산다" 가 된다. 표에 `tries` 말고는 못 적게 막는다.
+  for (const [key, spec] of Object.entries(fishing.BAITS)) {
+    assert.deepEqual(Object.keys(spec), ['tries'], key);
+  }
+});
+check('미끼도 명부에 있다', () => {
+  for (const key of fishing.BAIT_KEYS) {
+    const item = itemOf(key);
+    assert.ok(item, key);
+    assert.equal(item.kind, '소비');
+    assert.ok(item.price > 0, key);
+  }
+});
+
 console.log('\n판');
 check('여섯 번 빗나가면 끝난다', () => {
   const r = round({ hidden: { key: 'minnow', row: 'yacht', legend: false } });

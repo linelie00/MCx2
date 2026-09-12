@@ -55,6 +55,8 @@ export const ITEMS = [
   { key: 'potionMedium',    name: '중형 회복약',              kind: '소비', price:  550, sell: false, heal: [20, 40],   desc: '젤린의 어쩌구에서 만든 더 좋은 상처 치유 영약.' },
   { key: 'potionLarge',     name: '고급 회복약',              kind: '소비', price:  600, sell: false, heal: [40, 60],   desc: '젤린인가 뭔가가 만든 탁월한 치유력의 영약.' },
   { key: 'potionRevive',    name: '부활의 영약',              kind: '소비', price: 1000, sell: false, heal: [100, 100], desc: '한 번 마시면 3일 동안 밤을 샌 사람도 말짱해지고 전신 골절도 단번에 치료하는 탁월한 피로회복과 치유 효과를 가진 영약. 죽은 사람도 살려낼 수 있다. (물론, 사망 방지 마법이 걸려 있다면!)' },
+  { key: 'bait',            name: '일반 미끼',                kind: '소비', price:   10, sell: false, loot: false, heal: 0, desc: '지렁이 한 통. 하루치 낚시를 다 쓰고도 한 판 더 던지고 싶을 때 쓴다. 기회는 여섯 번.' },
+  { key: 'fineBait',        name: '고급 미끼',                kind: '소비', price:  100, sell: false, loot: false, heal: 0, desc: '무엇이 무엇을 좋아하는지 아는 사람이 만든 것. 비린내가 진해서 주머니에 오래 넣어 두면 곤란하다. 한 판에 기회가 일곱 번.' },
   { key: 'prettyMushroom',  name: '이쁘니 버섯',              kind: '재료', cat: 'veg',   price:   10, sell: true,  heal: -15,        poison: 1, desc: '알록달록하고 예쁘다. 포자를 들이키면 요정들이 나타나 머리 속에서 흥얼거리는 것 같다. 랄랄라... 다 함께 버섯 춤을 춰 봐요.' },
   { key: 'twig',            name: '나뭇가지',                 kind: '잡화', price:    1, sell: true,  heal: -1,         desc: '쉽게 부러지는 나뭇가지. 상점에 팔면 무려 1골드를 얻을 수 있다!' },
   { key: 'redFeather',      name: '새빨간 깃털',              kind: '잡화', price:    5, sell: true,  heal: 0,          desc: '깃펜으로 자주 쓰이는, 정열적인 색깔의 깃털. 미친딱부리도요새의 것이다.' },

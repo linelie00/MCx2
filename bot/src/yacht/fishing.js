@@ -26,8 +26,24 @@ import {
   BONUS_ROW, distance, hide, lengthOf, BY_KEY,
 } from '../casino/fish.js';
 
-/** 한 판에 던질 수 있는 횟수. */
+/** 한 판에 던질 수 있는 횟수. 무료 판과 일반 미끼가 이것을 쓴다. */
 export const TRIES = 6;
+
+/**
+ * 미끼. **하루 무료 다섯 판을 다 쓰고도 더 하고 싶을 때** 한 판을 산다.
+ *
+ * 고급 미끼는 기회가 하나 더 붙는다 — 그것 말고 달라지는 것은 없다. 전설이 뜰 확률도,
+ * 낚이는 것의 무게도 그대로다. 미끼로 확률을 건드리면 "돈으로 전설을 산다" 가 되고,
+ * 그러면 5% 를 지키느라 둔 하루 다섯 번이 뜻을 잃는다.
+ */
+export const BAITS = {
+  bait: { tries: TRIES },
+  fineBait: { tries: 7 },
+};
+export const BAIT_KEYS = Object.keys(BAITS);
+
+/** 그 미끼로 여는 판의 기회 수. 미끼가 없으면(무료 판) 기본값. */
+export const triesFor = (baitKey) => BAITS[baitKey]?.tries ?? TRIES;
 
 /** 초이스를 쓸 수 있는 눈의 합. */
 export const CHOICE_NEED = 21;
@@ -170,6 +186,7 @@ export function touch(round) {
  */
 export function create({
   channelId, homeChannelId, guildId, userId, name, color, rand = Math.random,
+  tries = TRIES,
 }) {
   const round = {
     serial: `f${randomBytes(3).toString('hex')}`,
@@ -188,11 +205,13 @@ export function create({
     rollsLeft: MAX_ROLLS,
     trail: [],
     turn: 1,
-    triesLeft: TRIES,
+    tries,                       // 이 판의 기회 수(미끼가 정한다)
+    triesLeft: tries,
     hidden: hide(rand),          // { key, row, legend } — **화면에 절대 안 나간다**
     log: [],                     // 지나간 기척
     caught: null,                // { key, cm, legend }
-    left: null,                  // 오늘 남은 낚시 횟수(서버가 준다)
+    left: null,                  // 오늘 남은 무료 낚시 횟수(서버가 준다)
+    bait: null,                  // { key, name, left } — 미끼로 연 판이면
     endedReason: null,           // 'caught' | 'out' | 'cancelled' | 'idle'
     rewarded: false,
     lastAt: Date.now(),
@@ -281,7 +300,7 @@ export function expired(now = Date.now()) {
 export const caughtInfo = (round) => (round.caught ? BY_KEY[round.caught.key] ?? null : null);
 
 export default {
-  TRIES, CHOICE_NEED, UPPER_NEED, IDLE_MS,
+  TRIES, BAITS, BAIT_KEYS, triesFor, CHOICE_NEED, UPPER_NEED, IDLE_MS,
   canWrite, writable, hintFor, openingLine, legendNeed, legendBanner, isCatch,
   create, get, forChannel, remove, touch, writeTo, skipTurn, nextTurn, land, end, expired,
   caughtInfo,

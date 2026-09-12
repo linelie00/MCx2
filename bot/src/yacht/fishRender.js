@@ -16,7 +16,7 @@ import {
 } from './rules.js';
 import { faces, faceEmoji, PREFIX } from './render.js';
 import {
-  writable, canWrite, TRIES, openingLine, legendNeed, legendBanner,
+  writable, canWrite, openingLine, legendNeed, legendBanner,
 } from './fishing.js';
 import { BONUS_ROW, itemOf, isLegend } from '../casino/fish.js';
 import { base, THEME_COLOR } from '../embeds.js';
@@ -29,6 +29,14 @@ const VALUE_W = 7;
 export const WATER = 0x4a7a8c;
 export const JUNK_COLOR = 0x6b6b6b;
 export const LEGEND_COLOR = 0xc9a227;
+
+/**
+ * 카드 아래 한 줄. 무료 판이면 오늘 남은 횟수를, 미끼로 연 판이면 무엇을 썼는지 적는다 —
+ * 미끼는 골드로 산 것이라 어디에 들어갔는지 보여야 한다.
+ */
+export const quotaText = (round) => (round.bait
+  ? `${round.bait.name} 한 개 · 남은 것 ${round.bait.left}개`
+  : `오늘 남은 낚시 ${round.left ?? '?'}번`);
 
 export const cid = (round, action, arg) =>
   [PREFIX, round.serial, round.rev, action, arg].filter((x) => x !== undefined).join(':');
@@ -89,14 +97,14 @@ const legendOpenEmbed = (round) => base({
     '',
     '**■ 닿으려면**',
     legendNeed(round.hidden),
-    `기회는 **${TRIES}번**, 기회마다 주사위는 **${MAX_ROLLS}번**. 빗나가도 자리는 그대로예요.`,
+    `기회는 **${round.tries}번**, 기회마다 주사위는 **${MAX_ROLLS}번**. 빗나가도 자리는 그대로예요.`,
     '',
     ...RULE_LINES,
     '',
     '_놓치면 오늘의 강은 다시 잠잠해진다._',
   ].join('\n'),
   color: LEGEND_COLOR,
-  footer: `전설은 백 판에 다섯 번 와요 · 오늘 남은 낚시 ${round.left ?? '?'}번`,
+  footer: `전설은 백 판에 다섯 번 와요 · ${quotaText(round)}`,
 });
 
 /** 판을 열 때 한 번. 규칙과 첫 기척. */
@@ -106,7 +114,7 @@ export const openEmbed = (round) => (round.hidden.legend ? legendOpenEmbed(round
     openingLine(round.hidden),
     '',
     `점수표의 **열세 줄 가운데 하나**에 숨어 있어요. 그 칸을 **실제로 적어야** 낚입니다.`,
-    `기회는 **${TRIES}번**, 기회마다 주사위는 **${MAX_ROLLS}번**까지 굴려요.`,
+    `기회는 **${round.tries}번**, 기회마다 주사위는 **${MAX_ROLLS}번**까지 굴려요.`,
     '',
     ...RULE_LINES,
     '',
@@ -115,7 +123,7 @@ export const openEmbed = (round) => (round.hidden.legend ? legendOpenEmbed(round
     '보너스 칸은 **소계 63** 을 만들면, 요트 칸은 **같은 눈 다섯**을 적으면 닿습니다.',
   ].join('\n'),
   color: WATER,
-  footer: `오늘 남은 낚시 ${round.left ?? '?'}번 · 10분 동안 아무것도 안 누르면 닫혀요`,
+  footer: `${quotaText(round)} · 10분 동안 아무것도 안 누르면 닫혀요`,
 }));
 
 export function boardEmbed(round) {
@@ -142,7 +150,7 @@ export function boardEmbed(round) {
     title: `${round.hidden.legend ? '✦' : '🎣'} 낚시 · 남은 기회 ${round.triesLeft}번`,
     description: lines.join('\n'),
     color: round.hidden.legend ? LEGEND_COLOR : (round.color ?? WATER),
-    footer: `${round.name} · 오늘 남은 낚시 ${round.left ?? '?'}번`,
+    footer: `${round.name} · ${quotaText(round)}`,
   });
 }
 
@@ -204,7 +212,7 @@ export function resultEmbed(round, { line, book = null } = {}) {
           : '_무엇이 있었는지는 물만 안다._',
       ].join('\n'),
       color: round.hidden.legend ? LEGEND_COLOR : WATER,
-      footer: `${round.name} · 오늘 남은 낚시 ${round.left ?? '?'}번`,
+      footer: `${round.name} · ${quotaText(round)}`,
     });
   }
 
@@ -231,8 +239,10 @@ export function resultEmbed(round, { line, book = null } = {}) {
     description: [...crown, line ?? '', '', `_${item.desc}_`, '', facts]
       .filter((x) => x !== null).join('\n'),
     color: legend ? LEGEND_COLOR : (c.cm ? WATER : JUNK_COLOR),
-    footer: `${round.name} · 오늘 남은 낚시 ${round.left ?? '?'}번 · /물고기 도감 에 적혔어요`,
+    footer: `${round.name} · ${quotaText(round)} · /물고기 도감 에 적혔어요`,
   });
 }
 
-export default { cid, fishTable, openEmbed, boardEmbed, boardRows, resultEmbed, WATER, LEGEND_COLOR };
+export default {
+  cid, fishTable, openEmbed, boardEmbed, boardRows, resultEmbed, quotaText, WATER, LEGEND_COLOR,
+};

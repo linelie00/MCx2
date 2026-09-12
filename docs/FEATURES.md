@@ -396,7 +396,7 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/플리 듣기` | 누구나 | `GET /api/playlist` (링크만 만든다) |
 | `/캐입 말 · 초기화 · 사용량` | 누구나 | 없음 (Gemini) |
 | `/요트 시작 · 판 · 그만` | 누구나 | 없음 (Gemini) |
-| `/요트 낚시` | 누구나 | `POST /api/accounts/fish` (하루 5번) · `POST /deltas` (아이템·도감·전적, 전설이면 MT) |
+| `/요트 낚시` | 누구나 | `POST /api/accounts/fish` (하루 5번 · `peek`) · `POST /deltas` (미끼 소모·아이템·도감·전적, 전설이면 MT) |
 | `/물고기 도감` | 누구나 | `GET /api/accounts` (낚아 본 것만 이름이 열린다) |
 | `/블랙잭 시작 · 판 · 그만` | 누구나 | `GET /api/accounts` · `POST /deltas` |
 | `/홀덤 시작 · 판 · 족보 · 그만` | 누구나 | `GET /api/accounts` · `POST /deltas` |

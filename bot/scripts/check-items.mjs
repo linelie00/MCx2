@@ -18,6 +18,7 @@ process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
 process.env.DISCORD_GUILD_ID ||= 'x';
 const cmd = (await import('../src/commands/items.js')).default;
+const { SHELVES } = await import('../src/commands/shop.js');
 const { width } = await import('../src/text.js');
 
 let ok = 0; let bad = 0;
@@ -27,7 +28,7 @@ const eq = (name, got, want) => {
 };
 
 console.log('\n모양');
-eq('179종 — 시트 95 + 요리 재료 42 + 독 8 + 괴식 10 + 낚시 24', ITEMS.length, 179);
+eq('181종 — 시트 95 + 요리 재료 42 + 독 8 + 괴식 10 + 낚시 24 + 미끼 2', ITEMS.length, 181);
 eq('키가 안 겹친다', Object.keys(ITEM_BY_KEY).length, ITEMS.length);
 eq('이름이 안 겹친다', new Set(ITEMS.map((i) => i.name)).size, ITEMS.length);
 eq('키는 영문 카멜케이스', ITEMS.filter((i) => !/^[a-z][A-Za-z0-9]*$/.test(i.key)).map((i) => i.key), []);
@@ -109,8 +110,14 @@ eq('깨진 값은 안 넘어왔다',
   ['아이스크림', '고고고', '따꼼약', '아무튼 먹으면 죽는거'].filter((n) => findItem(n)), []);
 eq('값 없던 요리는 뺐다',
   ['전사의 스튜', '바다 루비', '지네 담금주', '투명 드래곤 스튜'].filter((n) => findItem(n)), []);
-eq('소비는 회복약 넷뿐', ITEMS.filter((i) => i.kind === '소비').map((i) => i.key),
-  ['potionSmall', 'potionMedium', 'potionLarge', 'potionRevive']);
+eq('소비는 회복약 넷과 미끼 둘', ITEMS.filter((i) => i.kind === '소비').map((i) => i.key),
+  ['potionSmall', 'potionMedium', 'potionLarge', 'potionRevive', 'bait', 'fineBait']);
+// 미끼는 **먹는 물건이 아니다.** 회복이 0 이라 `/사용` 이 알아서 거절한다 — 그 약속을 못 박아 둔다.
+eq('미끼는 못 먹는다', ITEMS.filter((i) => ['bait', 'fineBait'].includes(i.key) && i.heal !== 0), []);
+eq('미끼는 던전에서 안 나온다',
+  ITEMS.filter((i) => ['bait', 'fineBait'].includes(i.key) && i.loot !== false), []);
+eq('미끼는 상점 미끼 칸에 있다',
+  SHELVES.find((sh) => sh.key === 'baits')?.keys, ['bait', 'fineBait']);
 eq('소비는 전부 값이 있다', ITEMS.filter((i) => i.kind === '소비' && !i.price), []);
 
 // ---------------------------------------------------------------- /아이템
@@ -159,8 +166,8 @@ const lines = (body) => body.split(String.fromCharCode(10)).filter((l) => l && !
 
 console.log('\n/아이템 — 목록');
 let c = read(await show(null));
-eq('전체 179종', c.fields[0], '종류=**179**');
-eq('아홉 쪽', c.fields[1], '쪽=1 / 9');
+eq('전체 181종', c.fields[0], '종류=**181**');
+eq('열 쪽', c.fields[1], '쪽=1 / 10');
 eq('한 쪽에 스무 줄', lines(c.body).length, 20);
 eq('갈래 버튼 넷', c.labels.slice(0, 4), ['전체', '소비', '잡화', '재료']);
 eq('넘김 버튼', c.labels.slice(4), ['◀', '▶']);
@@ -169,7 +176,7 @@ eq('셀렉트 값은 키', c.options[0], 'potionSmall');
 
 console.log('\n/아이템 — 갈래와 쪽');
 c = read(await click('item:list:use:0'));
-eq('소비는 넷', c.fields[0], '종류=**4**');
+eq('소비는 여섯', c.fields[0], '종류=**6**');
 eq('한 쪽뿐이면 넘김 버튼이 없다', c.labels, ['전체', '소비', '잡화', '재료']);
 eq('회복약이 보인다', /소형 회복약/.test(c.body), true);
 eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
@@ -201,7 +208,7 @@ eq('값 칸은 비운다', c.fields[1], '값=_없음_');
 
 eq('먹어 봐야 안다', read(await show('redFeather')).footer, '먹으면 어떻게 될지는 먹어 봐야 알아요');
 eq('목록에도 회복 칸이 없다', /\s[−-]?\d+\s*$/m.test(read(await click('item:list:use:0')).body.replace(/[\d,]+골드/g, '')), false);
-eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**179**');
+eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**181**');
 eq('독은 카드에 안 적는다 — 먹어 봐야 안다', /☠️|독/.test(read(await show('deathCap')).body), false);
 eq('괴식이면 카드에 적는다', /🪱 \*\*괴식\*\*/.test(read(await show('bugPile')).body), true);
 eq('멀쩡한 것은 아무 표시 없다', /☠️|🪱/.test(read(await show('honey')).body), false);

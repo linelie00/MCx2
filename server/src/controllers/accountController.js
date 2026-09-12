@@ -635,6 +635,14 @@ exports.fishTry = (req, res) => {
   const today = dayKey();
   const acct = load(data, id, today);
   const used = acct.fishedAt === today ? acct.fishedCount : 0;
+
+  // `peek` 은 **세기만 하고 안 쓴다.** 미끼로 여는 판은 무료 횟수를 깎으면 안 되는데,
+  // 남은 횟수는 화면에 적어야 해서 읽기만 하는 길이 따로 필요하다.
+  if (req.body && req.body.peek) {
+    const left = Math.max(0, FISH_TRIES - used);
+    return res.json({ ok: left > 0, left, tries: FISH_TRIES, today, peek: true });
+  }
+
   if (used >= FISH_TRIES) {
     return res.json({ ok: false, left: 0, tries: FISH_TRIES, today });
   }

@@ -404,7 +404,9 @@ async function finishFishing(round) {
     const before = (await getAccounts([id]).catch(() => null))?.accounts?.[id] ?? null;
     const saved = await apply({
       items: c ? { [id]: { [c.key]: 1 } } : {},
-      fish: c && (isFish(c.key) || legend) ? { [id]: { [c.key]: { caught: 1, best: c.cm ?? 0 } } } : {},
+      // **잡동사니도 도감에 적는다** — `/물고기 도감` 에 잡동사니 탭이 있다. 나뭇가지 열 개를
+      // 건진 것도 그날의 기록이다.
+      fish: c ? { [id]: { [c.key]: { caught: 1, best: c.cm ?? 0 } } } : {},
       mt: legend ? { [id]: 1 } : {},
       bump: { [id]: bump },
     });
@@ -764,11 +766,14 @@ async function fishComponent(interaction, serial, rev, action, arg) {
     return;
   }
 
+  // **기척은 이번 클릭에 새로 생겼을 때만 올린다.** 예전에는 마지막 기록을 그냥 봤더니,
+  // 굴리기·고정을 누를 때마다 같은 줄이 또 떴다("잠잠하다" 가 네 번).
+  const before = round.log.length;
   const refused = await handleFish(interaction, round, action, arg);
   if (refused) return;
 
   // 방금 무슨 일이 있었는지 한 줄. 낚았으면 그 지문이 결과 카드에도 그대로 간다.
-  const last = round.log.at(-1);
+  const last = round.log.length > before ? round.log.at(-1) : null;
   if (round.caught) {
     const item = fishItemOf(round.caught.key);
     const cm = round.caught.cm;

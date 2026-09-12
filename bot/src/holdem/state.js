@@ -345,6 +345,11 @@ export function beginHand(game) {
   game.board = [];
   game.hist = [];
   game.results = null;
+  // 화면용. 올인으로 남은 보드를 한 장씩 깔 때만 쓴다(commands/holdem.js 의 runout).
+  // **핸드마다 지워야 한다** — 안 지우면 다음 핸드에서 패가 깔린 채로 시작한다.
+  game.revealed = false;
+  game.boardShown = null;
+  game.boardSeen = 0;
 
   // 버튼을 다음 참가자로.
   let b = game.button;

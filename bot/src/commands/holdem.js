@@ -30,7 +30,7 @@ import { STAKES_CHOICES, tooPoor, DUNGEON, LEVEL_EVERY } from '../casino/stakes.
 import { drawMobs, drawEnemy, hpOf } from '../holdem/mobs.js';
 import {
   PREFIX, howto, ranking, lobbyEmbed, lobbyRows, boardEmbed, boardRows,
-  holeMessage, turnCall, resultEmbed, unitLabel,
+  holeMessage, turnCall, resultEmbed, unitLabel, shownBoard,
 } from '../holdem/render.js';
 import { handText, isJumboable } from '../casino/cards.js';
 import { CATEGORIES } from '../casino/poker.js';
@@ -165,14 +165,18 @@ async function repost(game) {
  * (블랙잭에서는 반대로 골랐다. 거기서는 카드가 누구 것인지 알 수 없어서 이름을 붙이는
  * 대신 작아지는 쪽을 택했는데, 홀덤의 보드는 모두가 함께 쓰는 것이라 헷갈릴 일이 없다.)
  */
-async function showBoard(game, label) {
+async function showBoard(game, label, { again = true } = {}) {
   if (!game.message?.channel) return;
-  const cards = handText(game.board);
+  const shown = shownBoard(game);
+  game.boardSeen = shown.length;
+  const cards = handText(shown);
   const content = isJumboable(cards) ? cards : `**${label}**\n${cards}`;
   game.boardBottom = false;
   await game.message.channel.send({ content })
     .catch((err) => console.warn('[홀덤] 보드 알림 실패:', err.message));
-  await repost(game);
+  // 올인 뒤 한 장씩 깔 때는(`again: false`) 판을 다시 안 띄운다 — 스트리트마다 띄우면
+  // 카드 석 장 보려고 판이 세 번 더 쌓인다. 정산이 곧 맨 아래에 다시 띄운다.
+  if (again) await repost(game);
 }
 
 // ---------------------------------------------------------------- 대사
@@ -332,6 +336,41 @@ async function openTable(game) {
 
 const STREET_NAME = { flop: '플랍', turn: '턴', river: '리버' };
 
+/** 올인 뒤 한 장씩 까는 사이. 짧으면 순식간이고 길면 지루하다. */
+const RUNOUT_MS = 1600;
+
+/**
+ * **올인이라 더 둘 사람이 없을 때의 마무리.**
+ *
+ * 규칙 쪽은 그런 판에서 남은 보드를 한 번에 깔고 곧장 쇼다운으로 간다(state.nextStreet) —
+ * 그게 옳다. 칩이 더 움직일 데가 없으니 물어볼 것이 없기 때문이다. 그런데 그대로 그리면
+ * **플랍·턴·리버가 통째로 뜨고 곧바로 결과**라, 판에서 제일 긴장되는 순간이 한 줄로 지나간다.
+ *
+ * 그래서 규칙은 그대로 두고 **화면만 되감는다.** 마지막으로 보여 준 스트리트까지로 보드를
+ * 자르고(`game.boardShown`), 서로의 패를 깐 다음, 한 장씩 늘리며 다시 알린다.
+ *
+ * 안 하는 경우가 둘 있다 — 접어서 혼자 남은 판(깔 것도 보여 줄 것도 없다)과, 이미 리버까지
+ * 정상으로 온 판(마지막 스트리트에서 올인이 났으면 새로 깔 카드가 없다).
+ */
+export async function runout(game) {
+  const from = game.boardSeen ?? 0;
+  if (live(game.seats).length < 2) return;
+  if (game.board.length <= from) return;
+
+  game.boardShown = from;
+  game.revealed = true;
+  await repost(game);
+  await sleep(RUNOUT_MS);
+
+  for (const [street, upto] of [['flop', 3], ['turn', 4], ['river', 5]]) {
+    if (upto <= from || upto > game.board.length) continue;
+    game.boardShown = upto;
+    await showBoard(game, STREET_NAME[street], { again: false });
+    if (upto < game.board.length) await sleep(RUNOUT_MS);
+  }
+  game.boardShown = null;
+}
+
 async function runDriver(game) {
   if (game.driving) return;
   game.driving = true;
@@ -353,12 +392,17 @@ async function runDriver(game) {
           const talker = game.seats.find((s) => s.kind === 'npc' && !s.folded && !s.out);
           if (talker && await seatSays(game, talker, 'street', { street: STREET_NAME[street] },
             { p: 0.4 })) await repost(game);
-        } else {
+        } else if (street !== 'showdown') {
           await draw(game);
         }
       }
 
-      if (game.phase === 'showdown') { await settleAndShow(game); continue; }
+      if (game.phase === 'showdown') {
+        // 올인으로 건너뛴 스트리트가 있으면 여기서 한 장씩 깐다.
+        await runout(game);
+        await settleAndShow(game);
+        continue;
+      }
       if (game.phase === 'settled') {
         // **현금 판만 사람을 기다린다.** 토너먼트는 한 명이 남을 때까지 저절로 돌아야
         // 하고, 그러려면 여기서 멈추면 안 된다. 던전은 사람이 [다음 핸드] 나 [도망] 을

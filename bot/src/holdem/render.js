@@ -207,6 +207,31 @@ const STREET_LABEL = {
   showdown: '쇼다운', settled: '정산',
 };
 
+/**
+ * **지금 화면에 보이는 보드.** 보통은 보드 전부다.
+ *
+ * 올인이라 더 둘 사람이 없으면 규칙 쪽은 남은 보드를 한 번에 깔아 버린다(state.nextStreet).
+ * 그걸 그대로 그리면 플랍·턴·리버가 통째로 떠서 볼 것이 없다. 그래서 명령 쪽이 `boardShown`
+ * 으로 **몇 장까지 보여 줄지**를 잡고 한 장씩 늘린다. 규칙은 손대지 않는다.
+ */
+export const shownBoard = (game) =>
+  (Number.isInteger(game.boardShown) ? game.board.slice(0, game.boardShown) : game.board);
+
+/**
+ * 올인으로 깐 패. 아직 정산 전이라 **누가 이겼는지는 안 적는다** — 보드가 다 깔리기 전에
+ * 족보를 적으면 한 장씩 까는 뜻이 없다.
+ */
+function openLines(game) {
+  if (!game.revealed || game.results) return [];
+  const open = game.seats.filter((s) => !s.folded && !s.out && s.hole.length);
+  if (open.length < 2) return [];
+  return [
+    '**패를 깠습니다**',
+    ...open.map((s) => `　**${s.name}** ${handText(s.hole)}`),
+    '',
+  ];
+}
+
 /** 쇼다운에서 깐 패. 끝까지 간 사람만 나온다. */
 function showdownLines(game) {
   const shown = game.results?.shown ?? [];
@@ -225,8 +250,9 @@ function showdownLines(game) {
 export function boardEmbed(game) {
   const lines = [];
 
-  if (game.board.length) {
-    lines.push('**보드**', `　${handText(game.board)}`);
+  const board = shownBoard(game);
+  if (board.length) {
+    lines.push('**보드**', `　${handText(board)}`);
   } else if (game.phase !== 'lobby') {
     lines.push('_보드는 아직 없습니다._');
   }
@@ -235,7 +261,7 @@ export function boardEmbed(game) {
   // 끝난 핸드의 팟이다.
   if (game.phase !== 'lobby') lines.push(`💰 **팟 ${pot(game).toLocaleString('ko-KR')}**`, '');
 
-  lines.push(...showdownLines(game));
+  lines.push(...openLines(game), ...showdownLines(game));
 
   if (game.phase === 'settled' && game.results) {
     lines.push(...game.results.rows
@@ -391,7 +417,7 @@ export function holeMessage(game, seat) {
   if (isJumboable(cards)) return { content: cards };
 
   const lines = [`　${cards}`];
-  if (game.board.length) lines.push('', '**보드**', `　${handText(game.board)}`);
+  if (shownBoard(game).length) lines.push('', '**보드**', `　${handText(shownBoard(game))}`);
   return {
     embeds: [base({
       title: `${seat.name}의 패`,

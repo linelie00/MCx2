@@ -21,7 +21,8 @@
     "check-crafts": "node scripts/check-crafts.mjs",
     "check-bestiary": "node scripts/check-bestiary.mjs",
     "check-yacht-titles": "node scripts/check-yacht-titles.mjs",
-    "check-fishing": "node scripts/check-fishing.mjs"
+    "check-fishing": "node scripts/check-fishing.mjs",
+    "check-showdown": "node scripts/check-showdown.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

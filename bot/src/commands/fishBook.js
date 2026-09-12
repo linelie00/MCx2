@@ -53,13 +53,10 @@ function counts(book, list = ENTRIES) {
   return { got: got.length, total: list.length };
 }
 
-/**
- * 한 줄. **못 잡은 것도 등급은 보여 준다** — 무엇이 남았는지 알아야 모으는 맛이 난다.
- * 이름·크기·설명은 여전히 잡아야 열린다.
- */
+/** 한 줄. **못 잡은 것은 등급도 안 보여 준다** — 무엇이 숨어 있는지까지가 도감의 몫이다. */
 function line(f, r) {
+  if (!caughtOf(r)) return '❔ ???';
   const mark = tierOf(f.key)?.mark ?? '❔';
-  if (!caughtOf(r)) return `${mark} ???`;
   const item = itemOf(f.key);
   const best = r.best ? ` · 최대 **${r.best}cm**` : '';
   return `${mark} **${item.name}** · ${num(r.caught)}마리${best}`;

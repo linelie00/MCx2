@@ -128,7 +128,7 @@ check('같은 거리면 위아래가 같은 갈래', () => {
   }
 });
 check('지문에 위·아래가 안 들어간다', () => {
-  const all = [...fishing.NEAR, ...fishing.FAINT, ...fishing.NOTHING, fishing.LEGEND_MISS, fishing.NO_ROOM];
+  const all = [...fishing.NEAR, ...fishing.FAINT, ...fishing.NOTHING, ...fishing.LEGEND_MISS, fishing.NO_ROOM];
   for (const line of all) {
     assert.ok(!/위|아래|↑|↓|above|below/.test(line), `방향이 새는 지문: ${line}`);
   }
@@ -138,7 +138,7 @@ check('거리마다 다른 통에서 뽑는다', () => {
   assert.ok(fishing.NEAR.includes(fishing.hintFor(1, { rand })));
   assert.ok(fishing.FAINT.includes(fishing.hintFor(2, { rand })));
   for (const gap of [3, 4, 5, 12]) assert.ok(fishing.NOTHING.includes(fishing.hintFor(gap, { rand })));
-  assert.equal(fishing.hintFor(1, { legend: true, rand }), fishing.LEGEND_MISS);
+  assert.ok(fishing.LEGEND_MISS.includes(fishing.hintFor(1, { legend: true, rand })));
 });
 
 console.log('\n판');

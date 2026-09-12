@@ -31,7 +31,7 @@ import { CATEGORY_KEYS } from '../yacht/rules.js';
 import * as fishing from '../yacht/fishing.js';
 import {
   openEmbed as fishOpenEmbed, boardEmbed as fishBoardEmbed, boardRows as fishBoardRows,
-  resultEmbed as fishResultEmbed,
+  resultEmbed as fishResultEmbed, LEGEND_COLOR,
 } from '../yacht/fishRender.js';
 import { itemOf as fishItemOf, isFish, isLegend, BY_KEY as FISH_BY_KEY } from '../casino/fish.js';
 import { tryFish } from '../api.js';
@@ -441,9 +441,12 @@ async function finishFishing(round) {
     if (legend) {
       await round.message?.channel?.send({
         embeds: [base({
-          title: '🪙 MT +1',
-          description: `전설을 낚았어요. 지금 **${saved.accounts[id]?.mt ?? '?'}개**.`,
-          color: THEME_COLOR,
+          title: '✦ 전설의 값 · MT +1',
+          description: [
+            '이런 것을 낚은 사람에게는 마땅한 몫이 있다.',
+            `**MT +1** — 지금 **${saved.accounts[id]?.mt ?? '?'}개**.`,
+          ].join('\n'),
+          color: LEGEND_COLOR,
         })],
       }).catch(() => {});
     }

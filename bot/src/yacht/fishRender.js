@@ -15,7 +15,9 @@ import {
   scoreAll, totals, bonusLost, categoryOf,
 } from './rules.js';
 import { faces, faceEmoji, PREFIX } from './render.js';
-import { writable, canWrite, TRIES, openingLine } from './fishing.js';
+import {
+  writable, canWrite, TRIES, openingLine, legendNeed, legendBanner,
+} from './fishing.js';
 import { BONUS_ROW, itemOf, isLegend } from '../casino/fish.js';
 import { base, THEME_COLOR } from '../embeds.js';
 import { padEndW, padStartW, width } from '../text.js';
@@ -65,8 +67,40 @@ export function fishTable(round) {
   return ['```', ...upper, row('소계', t.upper), bonus, rule, ...lower, rule, row('합계', t.total), '```'].join('\n');
 }
 
+const RULE_LINES = [
+  '**■ 적을 수 있는 칸**',
+  '1~6 은 그 눈이 **세 개 이상**, 초이스는 **눈의 합 21 이상**,',
+  '나머지는 **조건이 맞아 0점이 아닐 때**만 적을 수 있어요. 0점을 버려 떠볼 수는 없어요.',
+];
+
+/**
+ * 전설 판을 여는 카드.
+ *
+ * 백 판에 다섯 번 오는 판이라 **평범한 판과 한눈에 달라야 한다** — 제목·띠 색·머리글이 전부
+ * 바뀐다. 거리 기척은 이 판에서 뜻이 없으므로(칸을 이미 알려 줬다) 그 자리에 **닿는 길**을 쓴다.
+ */
+const legendOpenEmbed = (round) => base({
+  title: '✦ 전 설 ✦',
+  description: [
+    '```',
+    '          전 설 이 나 타 났 다',
+    '```',
+    openingLine(round.hidden),
+    '',
+    '**■ 닿으려면**',
+    legendNeed(round.hidden),
+    `기회는 **${TRIES}번**, 기회마다 주사위는 **${MAX_ROLLS}번**. 빗나가도 자리는 그대로예요.`,
+    '',
+    ...RULE_LINES,
+    '',
+    '_놓치면 오늘의 강은 다시 잠잠해진다._',
+  ].join('\n'),
+  color: LEGEND_COLOR,
+  footer: `전설은 백 판에 다섯 번 와요 · 오늘 남은 낚시 ${round.left ?? '?'}번`,
+});
+
 /** 판을 열 때 한 번. 규칙과 첫 기척. */
-export const openEmbed = (round) => base({
+export const openEmbed = (round) => (round.hidden.legend ? legendOpenEmbed(round) : base({
   title: '🎣 낚시',
   description: [
     openingLine(round.hidden),
@@ -74,9 +108,7 @@ export const openEmbed = (round) => base({
     `점수표의 **열세 줄 가운데 하나**에 숨어 있어요. 그 칸을 **실제로 적어야** 낚입니다.`,
     `기회는 **${TRIES}번**, 기회마다 주사위는 **${MAX_ROLLS}번**까지 굴려요.`,
     '',
-    '**■ 적을 수 있는 칸**',
-    '1~6 은 그 눈이 **세 개 이상**, 초이스는 **눈의 합 21 이상**,',
-    '나머지는 **조건이 맞아 0점이 아닐 때**만 적을 수 있어요. 0점을 버려 떠볼 수는 없어요.',
+    ...RULE_LINES,
     '',
     '**■ 기척**',
     '빗나가면 얼마나 가까웠는지 한 줄이 옵니다. **위인지 아래인지는 안 알려 줘요.**',
@@ -84,11 +116,11 @@ export const openEmbed = (round) => base({
   ].join('\n'),
   color: WATER,
   footer: `오늘 남은 낚시 ${round.left ?? '?'}번 · 10분 동안 아무것도 안 누르면 닫혀요`,
-});
+}));
 
 export function boardEmbed(round) {
   const lines = [];
-  if (round.hidden.legend) lines.push(`✨ _${openingLine(round.hidden)}_`, '');
+  if (round.hidden.legend) lines.push(legendBanner(round.hidden), '');
 
   if (round.dice) {
     lines.push(`${faces(round.dice, round.held)}${round.held.some(Boolean) ? '　← 고정' : ''}`);
@@ -107,9 +139,9 @@ export function boardEmbed(round) {
   lines.push('', fishTable(round));
 
   return base({
-    title: `🎣 낚시 · 남은 기회 ${round.triesLeft}번`,
+    title: `${round.hidden.legend ? '✦' : '🎣'} 낚시 · 남은 기회 ${round.triesLeft}번`,
     description: lines.join('\n'),
-    color: round.color ?? WATER,
+    color: round.hidden.legend ? LEGEND_COLOR : (round.color ?? WATER),
     footer: `${round.name} · 오늘 남은 낚시 ${round.left ?? '?'}번`,
   });
 }
@@ -161,13 +193,15 @@ export function resultEmbed(round, { line, book = null } = {}) {
   const c = round.caught;
   if (!c) {
     return base({
-      title: '🎣 오늘은 여기까지',
+      title: round.hidden.legend ? '✦ 그림자가 돌아갔다' : '🎣 오늘은 여기까지',
       description: [
         line ?? (round.hidden.legend
           ? '그림자가 천천히 물밑으로 돌아간다. 다음을 기약하자.'
           : '해가 기운다. 오늘은 여기까지다.'),
         '',
-        '_무엇이 있었는지는 물만 안다._',
+        round.hidden.legend
+          ? '_그런 것은 아무 때나 오지 않는다._'
+          : '_무엇이 있었는지는 물만 안다._',
       ].join('\n'),
       color: round.hidden.legend ? LEGEND_COLOR : WATER,
       footer: `${round.name} · 오늘 남은 낚시 ${round.left ?? '?'}번`,
@@ -187,9 +221,15 @@ export function resultEmbed(round, { line, book = null } = {}) {
     item.sell && item.price ? `팔면 **${item.price.toLocaleString('ko-KR')}골드**` : '팔 수 없어요',
   ].filter(Boolean).join('　·　');
 
+  // 전설은 카드부터 다르다 — 제목에 띠를 두르고 머리글을 얹는다. 백 판에 다섯 번 있는 일이다.
+  const crown = legend ? ['```', '           전 설 을 낚 았 다', '```'] : [];
+
   return base({
-    title: `${legend ? '✨' : c.cm ? '🎣' : '🪵'} ${item.name}${c.cm ? ` ${c.cm}cm` : ''}`,
-    description: [line ?? '', '', `_${item.desc}_`, '', facts].filter((x) => x !== null).join('\n'),
+    title: legend
+      ? `✦ ${item.name} ${c.cm}cm ✦`
+      : `${c.cm ? '🎣' : '🪵'} ${item.name}${c.cm ? ` ${c.cm}cm` : ''}`,
+    description: [...crown, line ?? '', '', `_${item.desc}_`, '', facts]
+      .filter((x) => x !== null).join('\n'),
     color: legend ? LEGEND_COLOR : (c.cm ? WATER : JUNK_COLOR),
     footer: `${round.name} · 오늘 남은 낚시 ${round.left ?? '?'}번 · /물고기 도감 에 적혔어요`,
   });

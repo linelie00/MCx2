@@ -89,26 +89,54 @@ export const NOTHING = [
   '물이끼만 걸려 올라온다.',
   '아무 기척도 없다.',
 ];
-/** 전설 판은 칸을 이미 알려 줬다 — 거리가 뜻이 없어 따로 한 줄. */
-export const LEGEND_MISS = '깊은 곳에서 무언가가 이쪽을 본다. 자리를 잘못 짚었다.';
+/** 전설 판은 칸을 이미 알려 줬다 — 거리가 뜻이 없어 따로 뽑는다. */
+export const LEGEND_MISS = [
+  '깊은 곳에서 무언가가 이쪽을 본다. 자리를 잘못 짚었다.',
+  '물밑의 그림자가 한 번 몸을 튼다. 아직 거기 있다.',
+  '줄이 툭 늘어진다. 그것은 미끼를 쳐다보지도 않았다.',
+  '커다란 것이 천천히 방향을 바꾼다. 시간이 많지 않다.',
+];
 export const NO_ROOM = '던질 자리가 없다. 한 번을 그냥 흘려보냈다.';
 
 const one = (list, rand) => list[Math.floor(rand() * list.length)] ?? list[0];
 
 export function hintFor(gap, { legend = false, rand = Math.random } = {}) {
-  if (legend) return LEGEND_MISS;
+  if (legend) return one(LEGEND_MISS, rand);
   if (gap === 1) return one(NEAR, rand);
   if (gap === 2) return one(FAINT, rand);
   return one(NOTHING, rand);
 }
 
-/** 판을 열 때의 한 줄. 전설이면 **어느 칸인지** 알려 준다. */
+/**
+ * 판을 열 때의 지문. 전설이면 **어느 칸인지** 알려 준다.
+ *
+ * 전설은 백 판에 다섯 번 오는 판이다. 한 줄로 흘려보내면 평범한 판과 구별이 안 가서,
+ * 여기서만 여러 줄을 쓴다 — 화면도 색과 제목을 같이 바꾼다(`fishRender.legendOpenEmbed`).
+ */
 export function openingLine(hidden) {
   if (!hidden.legend) return '물속 어딘가에 한 마리가 있다. 어느 칸인지는 아직 모른다.';
   return hidden.row === BONUS_ROW
-    ? '물밑이 무겁다. **소계** 쪽에서 커다란 그림자가 천천히 지나간다.'
-    : '수면이 한 번 크게 일렁였다. **요트** 칸 밑에서 무언가 숨을 쉰다.';
+    ? [
+      '물밑이 무겁다. 강이 통째로 한 뼘 내려앉은 것 같다.',
+      '발밑의 자갈이 잘게 울리고, 물살이 한쪽으로만 천천히 끌려간다.',
+      '이런 것은 이야기 속에서나 들었다. **소계** 쪽이다.',
+    ].join('\n')
+    : [
+      '수면이 한 번 크게 일렁였다. 물결이 사방으로 퍼지는데 무엇이 지나갔는지는 보이지 않는다.',
+      '강가의 새가 전부 날아올랐고, 낚싯줄이 손안에서 저 혼자 떨린다.',
+      '평생 한 번 볼까 말까 한 것이 **요트** 칸 밑에서 숨을 쉬고 있다.',
+    ].join('\n');
 }
+
+/** 전설에 닿는 **유일한 길**. 거리 기척이 뜻이 없는 판이라 이 줄이 그 자리를 대신한다. */
+export const legendNeed = (hidden) => (hidden.row === BONUS_ROW
+  ? `1~6 칸을 메워 **윗칸 소계 ${BONUS_NEED}**. 여섯 번을 전부 같은 눈 셋으로 채워야 겨우 닿아요.`
+  : '**요트 칸에 같은 눈 다섯.** 그 한 수 말고는 닿는 길이 없어요.');
+
+/** 판이 도는 동안 표 위에 남는 한 줄. 무엇을 쫓고 있는지 잊지 않게. */
+export const legendBanner = (hidden) => (hidden.row === BONUS_ROW
+  ? `✦ **전설** · 소계 ${BONUS_NEED} 에 닿으면`
+  : '✦ **전설** · 요트 칸에 같은 눈 다섯');
 
 /**
  * 그 수로 낚였는지.
@@ -254,7 +282,7 @@ export const caughtInfo = (round) => (round.caught ? BY_KEY[round.caught.key] ??
 
 export default {
   TRIES, CHOICE_NEED, UPPER_NEED, IDLE_MS,
-  canWrite, writable, hintFor, openingLine, isCatch,
+  canWrite, writable, hintFor, openingLine, legendNeed, legendBanner, isCatch,
   create, get, forChannel, remove, touch, writeTo, skipTurn, nextTurn, land, end, expired,
   caughtInfo,
 };

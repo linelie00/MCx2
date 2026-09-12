@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import * as fishing from '../src/yacht/fishing.js';
 import {
   ROWS, COMMON_ROWS, BONUS_ROW, distance, hide, lengthOf, CATCHES, BY_KEY, LEGENDS, FISH, JUNK,
-  itemOf, isFish, isLegend, LEGEND_CHANCE,
+  itemOf, isFish, isLegend, LEGEND_CHANCE, TIERS, tierOf, chanceOf,
 } from '../src/casino/fish.js';
 import { newSheet, scoreFor, CATEGORY_KEYS, BONUS_NEED } from '../src/yacht/rules.js';
 
@@ -139,6 +139,33 @@ check('거리마다 다른 통에서 뽑는다', () => {
   assert.ok(fishing.FAINT.includes(fishing.hintFor(2, { rand })));
   for (const gap of [3, 4, 5, 12]) assert.ok(fishing.NOTHING.includes(fishing.hintFor(gap, { rand })));
   assert.ok(fishing.LEGEND_MISS.includes(fishing.hintFor(1, { legend: true, rand })));
+});
+
+console.log('\n등급');
+check('낚이는 것은 전부 등급이 있다', () => {
+  for (const one of CATCHES) assert.ok(tierOf(one.key), one.key);
+});
+check('등급은 무게에서 나온다 — 무게가 크면 등급이 낮다', () => {
+  // 무게가 곧 희귀도다. 둘이 어긋나면(무게만 고치고 등급을 안 고치면) 여기서 걸린다.
+  const rank = (key) => TIERS.findIndex((t) => t.key === tierOf(key).key);
+  for (const a of FISH) {
+    for (const b of FISH) {
+      if (a.weight > b.weight) assert.ok(rank(a.key) <= rank(b.key), `${a.key} ↔ ${b.key}`);
+    }
+  }
+});
+check('물고기는 네 등급으로 다 나뉜다', () => {
+  const seen = new Set(FISH.map((f) => tierOf(f.key).key));
+  for (const t of TIERS) assert.ok(seen.has(t.key), `${t.name} 이 빈 등급이다`);
+  assert.equal(seen.size, TIERS.length);
+});
+check('전설·잡동사니는 무게를 안 본다', () => {
+  for (const one of LEGENDS) assert.equal(tierOf(one.key).key, 'legend');
+  for (const one of JUNK) assert.equal(tierOf(one.key).key, 'junk');
+});
+check('확률을 다 더하면 100%', () => {
+  const sum = CATCHES.reduce((a, one) => a + chanceOf(one.key), 0);
+  assert.ok(Math.abs(sum - 100) < 0.0001, `${sum}%`);
 });
 
 console.log('\n미끼');

@@ -18,7 +18,7 @@ import { faces, faceEmoji, PREFIX } from './render.js';
 import {
   writable, canWrite, openingLine, legendNeed, legendBanner,
 } from './fishing.js';
-import { BONUS_ROW, itemOf, isLegend } from '../casino/fish.js';
+import { BONUS_ROW, itemOf, isFish, isLegend, tierOf } from '../casino/fish.js';
 import { base, THEME_COLOR } from '../embeds.js';
 import { padEndW, padStartW, width } from '../text.js';
 
@@ -222,7 +222,9 @@ export function resultEmbed(round, { line, book = null } = {}) {
   const best = rec?.best ?? c.cm;
   const nth = rec?.caught ?? 1;
 
+  const tier = tierOf(c.key);
   const facts = [
+    tier ? `${tier.mark} **${tier.name}**` : null,
     c.cm ? `길이 **${c.cm}cm**` : null,
     c.cm && best > c.cm ? `내 최고 ${best}cm` : (c.cm ? '**최고 기록!**' : null),
     `**${nth}마리째**`,
@@ -235,10 +237,12 @@ export function resultEmbed(round, { line, book = null } = {}) {
   return base({
     title: legend
       ? `✦ ${item.name} ${c.cm}cm ✦`
-      : `${c.cm ? '🎣' : '🪵'} ${item.name}${c.cm ? ` ${c.cm}cm` : ''}`,
+      // 잡동사니도 길이가 있다(나뭇가지 22cm). 그래서 **갈래로** 가른다 — 길이로 가르면
+      // 건져 올린 장화가 물고기 얼굴을 하고 나온다.
+      : `${isFish(c.key) ? '🎣' : '🪵'} ${item.name}${c.cm ? ` ${c.cm}cm` : ''}`,
     description: [...crown, line ?? '', '', `_${item.desc}_`, '', facts]
       .filter((x) => x !== null).join('\n'),
-    color: legend ? LEGEND_COLOR : (c.cm ? WATER : JUNK_COLOR),
+    color: legend ? LEGEND_COLOR : (isFish(c.key) ? WATER : JUNK_COLOR),
     footer: `${round.name} · ${quotaText(round)} · /물고기 도감 에 적혔어요`,
   });
 }

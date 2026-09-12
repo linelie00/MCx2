@@ -140,6 +140,39 @@ const TAGGED = [
 export const CATCHES = TAGGED;
 export const BY_KEY = Object.fromEntries(TAGGED.map((f) => [f.key, f]));
 
+/**
+ * **등급.** 따로 적지 않고 **무게에서 끌어낸다** — 무게가 곧 희귀도라, 둘을 따로 두면
+ * 언젠가 어긋난다(무게만 고치고 등급을 안 고치는 날이 온다).
+ *
+ * 경계는 지금 표의 허리를 자른 값이다. `min` 은 그 등급에 드는 **최소 무게**.
+ */
+export const TIERS = [
+  { key: 'common', name: '흔함', mark: '⚪', min: 9 },
+  { key: 'uncommon', name: '보통', mark: '🟢', min: 6 },
+  { key: 'rare', name: '귀함', mark: '🔵', min: 4 },
+  { key: 'epic', name: '희귀', mark: '🟣', min: 0 },
+];
+export const LEGEND_TIER = { key: 'legend', name: '전설', mark: '🟡' };
+export const JUNK_TIER = { key: 'junk', name: '잡동사니', mark: '🪵' };
+
+/** 그것의 등급. 전설과 잡동사니는 무게를 안 본다 — 갈래 자체가 등급이다. */
+export function tierOf(key) {
+  const one = BY_KEY[key];
+  if (!one) return null;
+  if (one.tab === 'l') return LEGEND_TIER;
+  if (one.tab === 'j') return JUNK_TIER;
+  return TIERS.find((t) => one.weight >= t.min) ?? TIERS[TIERS.length - 1];
+}
+
+/** 한 판에 그것이 숨을 확률(%). 등급 옆에 적어 준다 — 무게는 숫자일 뿐이라 안 와닿는다. */
+export function chanceOf(key) {
+  const one = BY_KEY[key];
+  if (!one) return 0;
+  if (one.tab === 'l') return (LEGEND_CHANCE / LEGENDS.length) * 100;
+  const total = [...FISH, ...JUNK].reduce((a, f) => a + f.weight, 0);
+  return ((1 - LEGEND_CHANCE) * one.weight / total) * 100;
+}
+
 /** 도감이 쓰는 갈래. 물고기·전설만 "종" 으로 센다 — 잡동사니는 모으는 재미가 아니다. */
 export const isFish = (key) => BY_KEY[key]?.tab === 'f';
 export const isLegend = (key) => BY_KEY[key]?.tab === 'l';
@@ -188,5 +221,6 @@ export function lengthOf(key, rand = Math.random) {
 export default {
   ROWS, COMMON_ROWS, BONUS_ROW, rowIndex, distance,
   FISH, JUNK, LEGENDS, CATCHES, BY_KEY, LEGEND_CHANCE,
+  TIERS, LEGEND_TIER, JUNK_TIER, tierOf, chanceOf,
   isFish, isLegend, itemOf, hide, lengthOf,
 };

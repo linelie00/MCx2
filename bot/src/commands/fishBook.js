@@ -16,7 +16,7 @@ import {
 } from 'discord.js';
 import { getAccounts } from '../api.js';
 import { fishFor } from '../casino/bag.js';
-import { FISH, JUNK, LEGENDS, itemOf } from '../casino/fish.js';
+import { FISH, JUNK, LEGENDS, itemOf, tierOf, chanceOf, TIERS } from '../casino/fish.js';
 import { base, fail, gauge, trunc, THEME_COLOR } from '../embeds.js';
 
 export const PREFIX = 'fsh';
@@ -53,11 +53,26 @@ function counts(book, list = ENTRIES) {
   return { got: got.length, total: list.length };
 }
 
+/**
+ * 한 줄. **못 잡은 것도 등급은 보여 준다** — 무엇이 남았는지 알아야 모으는 맛이 난다.
+ * 이름·크기·설명은 여전히 잡아야 열린다.
+ */
 function line(f, r) {
-  if (!caughtOf(r)) return '❔ ???';
+  const mark = tierOf(f.key)?.mark ?? '❔';
+  if (!caughtOf(r)) return `${mark} ???`;
   const item = itemOf(f.key);
   const best = r.best ? ` · 최대 **${r.best}cm**` : '';
-  return `${f.tab === 'l' ? '✨' : f.tab === 'j' ? '🪵' : '🐟'} **${item.name}** · ${num(r.caught)}마리${best}`;
+  return `${mark} **${item.name}** · ${num(r.caught)}마리${best}`;
+}
+
+/** 등급별로 몇 종을 모았는지. 물고기 탭에만 붙인다 — 잡동사니·전설은 등급이 하나뿐이다. */
+function tierLine(book, list) {
+  return TIERS.map((t) => {
+    const mine = list.filter((f) => tierOf(f.key)?.key === t.key);
+    if (!mine.length) return null;
+    const got = mine.filter((f) => caughtOf(recOf(book, f.key))).length;
+    return `${t.mark} ${t.name} ${got}/${mine.length}`;
+  }).filter(Boolean).join('　');
 }
 
 export function listPayload(id, book, tabKey, page) {
@@ -80,6 +95,7 @@ export function listPayload(id, book, tabKey, page) {
     { name: '물고기', value: `${gauge(fishOnly.got, fishOnly.total, { percent: false })} ${fishOnly.got} / ${fishOnly.total}`, inline: true },
     { name: `${tab.label} · ${at + 1} / ${pages}쪽`, value: `${here.got} / ${here.total}`, inline: true },
   );
+  if (tab.key === 'f') embed.addFields({ name: '등급', value: tierLine(book, list) });
 
   const rows = [new ActionRowBuilder().addComponents(...TABS.map((t) => new ButtonBuilder()
     .setCustomId(cid('list', t.key, TAB_PAGE, id))
@@ -121,7 +137,9 @@ export function cardPayload(id, book, key, tabKey, page) {
   if (!f || !caughtOf(r)) return null;
   const item = itemOf(key);
 
+  const tier = tierOf(key);
   const facts = [
+    tier ? `${tier.mark} **${tier.name}** (한 판에 ${chanceOf(key).toFixed(1)}%)` : null,
     `**${num(r.caught)}마리**`,
     r.best ? `최고 **${r.best}cm**` : null,
     f.cm ? `크기 ${f.cm[0]}~${f.cm[1]}cm` : null,

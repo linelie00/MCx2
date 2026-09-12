@@ -408,7 +408,7 @@ check('잡화·재료만, 막은 것은 안 나온다', () => {
   }
   assert.ok(POOL.some((i) => i.key === 'oreBlue'), '원석이 빠졌다');
   assert.ok(POOL.some((i) => i.key === 'raspberry'), '재료가 안 나온다');
-  assert.equal(POOL.length, 118, `풀이 ${POOL.length}종이다 (잡화 45 + 재료 73)`);
+  assert.equal(POOL.length, 137, `풀이 ${POOL.length}종이다 (잡화 45 + 재료 92)`);
   assert.ok(POOL.some((i) => i.key === 'deathCap'), '독이 안 나온다');
 });
 

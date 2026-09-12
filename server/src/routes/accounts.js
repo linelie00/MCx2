@@ -16,6 +16,7 @@ const router = express.Router();
 router.get('/', requireBot, ctrl.list);
 router.post('/deltas', requireBot, express.json(), ctrl.applyDeltas);
 router.post('/claim', requireBot, express.json(), ctrl.claim);
+router.post('/fish', requireBot, express.json(), ctrl.fishTry);
 router.post('/title', requireBot, express.json(), ctrl.setTitle);
 
 module.exports = router;

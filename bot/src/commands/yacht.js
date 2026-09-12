@@ -28,6 +28,14 @@ import { apply } from '../casino/wallet.js';
 import { NPC_ID, displayOf } from '../casino/accounts.js';
 import { getAccounts } from '../api.js';
 import { CATEGORY_KEYS } from '../yacht/rules.js';
+import * as fishing from '../yacht/fishing.js';
+import {
+  openEmbed as fishOpenEmbed, boardEmbed as fishBoardEmbed, boardRows as fishBoardRows,
+  resultEmbed as fishResultEmbed,
+} from '../yacht/fishRender.js';
+import { itemOf as fishItemOf, isFish, isLegend, BY_KEY as FISH_BY_KEY } from '../casino/fish.js';
+import { tryFish } from '../api.js';
+import { forgetBag } from '../casino/bag.js';
 import { earned as earnedTitles, gained as gainedTitles } from '../casino/titles.js';
 import { awardCard } from '../casino/titleCard.js';
 
@@ -247,6 +255,191 @@ async function runNpcTurns(game) {
   }
 }
 
+// ---------------------------------------------------------------- 낚시
+//
+// `/요트 낚시`. 판은 `yacht/fishing.js` 가 들고 있고(요트 판과 따로 산다), 화면은
+// `yacht/fishRender.js` 가 그린다. 여기 있는 것은 **디스코드와 계정에 닿는 부분**뿐이다.
+//
+// 버튼은 요트와 같은 `yacht:` 를 쓰되 판 번호가 `f` 로 시작한다 — `component()` 가 그걸 보고
+// 갈라낸다. 새 prefix 를 만들면 라우팅만 하나 더 늘 뿐이다.
+
+const fishPayload = (round) => (round.phase === 'done'
+  ? { embeds: [fishResultEmbed(round, round.result ?? {})], components: [] }
+  : { embeds: [fishBoardEmbed(round)], components: fishBoardRows(round) });
+
+async function drawFish(round) {
+  if (!round.message) return;
+  await round.message.edit(fishPayload(round))
+    .catch((err) => console.warn('[낚시] 판 갱신 실패:', err.message));
+}
+
+/** `/요트 낚시` — 대기실도 자리도 없다. 하루 횟수를 서버에 물어야 해서 먼저 defer 한다. */
+async function startFishing(interaction) {
+  const me = interaction.user.id;
+  await interaction.deferReply();
+
+  let quota;
+  try {
+    quota = await tryFish(me);
+  } catch (err) {
+    await interaction.editReply({ embeds: [fail(`낚시터에 못 갔어요. ${err.message}`)] });
+    return;
+  }
+  if (!quota.ok) {
+    await interaction.editReply({
+      embeds: [fail(`오늘은 벌써 **${quota.tries}번** 다녀왔어요. 물고기도 쉬어야죠 — 내일 다시 와요.`)],
+    });
+    return;
+  }
+
+  const who = interaction.member?.displayName
+    || interaction.user.globalName || interaction.user.username;
+  await interaction.editReply({ embeds: [base({ description: `낚싯대를 챙깁니다 — ${who}` })] });
+  const anchor = await interaction.fetchReply();
+
+  let room = interaction.channel;
+  try {
+    if (!interaction.channel.isThread()) {
+      room = await anchor.startThread({ name: `🎣 낚시 — ${who}`, autoArchiveDuration: 1440 });
+    }
+  } catch (err) {
+    console.warn('[낚시] 스레드를 못 만들어 채널에서 진행합니다:', err.message);
+    room = interaction.channel;
+  }
+
+  const round = fishing.create({
+    channelId: room.id,
+    homeChannelId: interaction.channelId,
+    guildId: interaction.guildId,
+    userId: me,
+    name: who,
+    color: null,
+  });
+  round.left = quota.left;
+
+  await room.send({ embeds: [fishOpenEmbed(round)] })
+    .catch((err) => console.warn('[낚시] 안내 실패:', err.message));
+  round.message = await room.send(fishPayload(round));
+}
+
+/** 낚시 버튼. 거절했으면 true(부르는 쪽이 더 안 나간다). */
+async function handleFish(interaction, round, action, arg) {
+  if (interaction.user.id !== round.userId) {
+    await deny(interaction, '자기 낚시터에서만 누를 수 있어요.');
+    return true;
+  }
+
+  if (action === 'roll') {
+    if (round.rollsLeft <= 0) { await deny(interaction, '더 못 굴려요. 적을 칸을 고르세요.'); return true; }
+    const held = round.dice ? [...round.held] : null;
+    round.dice = round.dice ? reroll(round.dice, round.held) : rollDice();
+    round.rollsLeft -= 1;
+    round.trail.push(`${MAX_ROLLS - round.rollsLeft}번째 — ${faces(round.dice, held)}`);
+    fishing.touch(round);
+    return false;
+  }
+
+  if (action === 'hold') {
+    if (!round.dice) { await deny(interaction, '먼저 굴려 주세요.'); return true; }
+    const i = Number(arg);
+    if (!Number.isInteger(i) || i < 0 || i > 4) { await deny(interaction, '그런 주사위가 없어요.'); return true; }
+    round.held[i] = !round.held[i];
+    fishing.touch(round);
+    return false;
+  }
+
+  if (action === 'skip') {
+    if (fishing.writable(round.sheet, round.dice).length) {
+      await deny(interaction, '아직 적을 수 있는 칸이 있어요.');
+      return true;
+    }
+    fishing.skipTurn(round);
+    return false;
+  }
+
+  if (action === 'quit') {
+    fishing.end(round, 'cancelled');
+    return false;
+  }
+
+  if (action === 'pick') {
+    if (!round.dice) { await deny(interaction, '먼저 굴려 주세요.'); return true; }
+    const key = interaction.values?.[0];
+    // 지나간 셀렉트로 못 쓰는 칸이 올 수 있다. rev 가 거의 다 걸러 주지만 여기서 한 번 더.
+    const out = key ? fishing.writeTo(round, key) : null;
+    if (!out) { await deny(interaction, '지금 눈으로는 그 칸에 못 적어요.'); return true; }
+    return false;
+  }
+
+  await deny(interaction, '지금은 누를 수 없는 버튼이에요.');
+  return true;
+}
+
+/**
+ * 낚시가 끝났다. **한 번의 쓰기로** 아이템·도감·전적·MT 를 같이 넣고 새 칭호를 알린다.
+ *
+ * `round.rewarded` 를 **첫 await 앞에서** 세운다 — 끝나는 길이 둘이라(버튼·방치) 두 번
+ * 들어올 수 있다.
+ */
+async function finishFishing(round) {
+  if (round.rewarded) return;
+  round.rewarded = true;
+  if (!['caught', 'out'].includes(round.endedReason)) return;   // 접거나 방치한 판은 안 센다
+
+  const id = round.userId;
+  const c = round.caught;
+  const legend = Boolean(c && isLegend(c.key));
+  const bump = {
+    fishRounds: 1,
+    ...(c ? { fishCaught: 1 } : { fishEmpty: 1 }),
+    ...(c && round.firstTry ? { fishFirstTry: 1 } : {}),
+    ...(c && c.cm ? { bestFishCm: c.cm } : {}),
+    ...(c && !isFish(c.key) && !legend ? { fishJunk: 1 } : {}),
+    ...(c && c.key === 'waterCentipede' ? { fishCentipede: 1 } : {}),
+    ...(legend ? { fishLegend: 1 } : {}),
+  };
+
+  try {
+    // 새 칭호를 알리려면 **쓰기 전 계정**이 있어야 한다(칭호는 전적에서 계산하므로).
+    const before = (await getAccounts([id]).catch(() => null))?.accounts?.[id] ?? null;
+    const saved = await apply({
+      items: c ? { [id]: { [c.key]: 1 } } : {},
+      fish: c && (isFish(c.key) || legend) ? { [id]: { [c.key]: { caught: 1, best: c.cm ?? 0 } } } : {},
+      mt: legend ? { [id]: 1 } : {},
+      bump: { [id]: bump },
+    });
+    if (!saved.ok) {
+      round.result = { line: '건져 올린 것을 놓쳤어요 — 저장하지 못했어요.' };
+      return;
+    }
+    forgetBag(id);
+
+    round.result = { line: round.line, book: saved.accounts[id]?.fish ?? null };
+    await drawFish(round);
+
+    if (legend) {
+      await round.message?.channel?.send({
+        embeds: [base({
+          title: '🪙 MT +1',
+          description: `전설을 낚았어요. 지금 **${saved.accounts[id]?.mt ?? '?'}개**.`,
+          color: THEME_COLOR,
+        })],
+      }).catch(() => {});
+    }
+
+    if (!before) return;
+    const held = earnedTitles(saved.accounts[id]);
+    const fresh = gainedTitles(earnedTitles(before).map((t) => t.key), held);
+    if (fresh.length) {
+      await round.message?.channel?.send(awardCard({
+        name: round.name, avatar: null, avatarFile: null, fresh, held: held.length,
+      })).catch((err) => console.warn('[낚시] 칭호 알림 실패:', err.message));
+    }
+  } catch (err) {
+    console.warn('[낚시] 정산 실패:', err.message);
+  }
+}
+
 /**
  * 한 자리의 요트 전적 — 칭호가 읽는다(casino/titles.js 의 요트 갈래).
  *
@@ -378,6 +571,8 @@ function kickNpc(game) {
 // 재시작하면 판 자체가 사라지므로 문제되지 않는다.
 setInterval(() => {
   for (const game of state.expired()) draw(game);
+  // 낚시는 혼자 하는 판이라 드라이버가 시간을 갱신해 주지 않는다 — 여기서 같이 걷는다.
+  for (const round of fishing.expired()) drawFish(round);
 }, 60_000).unref();
 
 const data = new SlashCommandBuilder()
@@ -390,6 +585,7 @@ const data = new SlashCommandBuilder()
         { name: '마티암', value: 'matiam' },
         { name: '미겔 + 마티암', value: 'both' },
       )))
+  .addSubcommand((s) => s.setName('낚시').setDescription('혼자 낚시를 합니다 (하루 5번)'))
   .addSubcommand((s) => s.setName('판').setDescription('판을 다시 띄웁니다'))
   .addSubcommand((s) => s.setName('그만').setDescription('진행 중인 판을 접습니다'));
 
@@ -397,6 +593,17 @@ async function execute(interaction) {
   const sub = interaction.options.getSubcommand();
   const existing = state.forChannel(interaction.channelId);
   const live = existing && existing.phase !== 'done' ? existing : null;
+  // 한 채널에 판 하나다. 요트와 낚시가 같은 채널에 겹치면 버튼이 서로를 덮는다.
+  const fishLive = (() => {
+    const r = fishing.forChannel(interaction.channelId);
+    return r && r.phase !== 'done' ? r : null;
+  })();
+
+  if (['시작', '낚시'].includes(sub) && (live || fishLive)) {
+    await deny(interaction, '이 채널에 이미 판이 있어요. `/요트 판` 으로 띄우거나 `/요트 그만` 으로 접어주세요.');
+    return;
+  }
+  if (sub === '낚시') { await startFishing(interaction); return; }
 
   if (sub === '시작') {
     if (live) {
@@ -490,6 +697,10 @@ async function execute(interaction) {
  */
 async function component(interaction) {
   const [, serial, rev, action, arg] = interaction.customId.split(':');
+
+  // **낚시 판은 번호가 `f` 로 시작한다.** 요트와 버튼 이름이 같아서 여기서 갈라야 한다.
+  if (serial.startsWith('f')) { await fishComponent(interaction, serial, rev, action, arg); return; }
+
   const game = state.forChannel(interaction.channelId);
 
   // 봇이 재시작됐거나 다른 판의 버튼. 그냥 무시하면 디스코드가 빨간 "상호작용 실패"를
@@ -534,6 +745,48 @@ async function component(interaction) {
   }
 
   kickNpc(game);
+}
+
+/** 낚시 버튼. 요트와 같은 얼개다 — 지나간 클릭은 다시 그리기만 한다. */
+async function fishComponent(interaction, serial, rev, action, arg) {
+  const round = fishing.forChannel(interaction.channelId);
+  if (!round || round.serial !== serial || round.phase === 'done') {
+    await interaction.reply({
+      embeds: [fail('이 낚시는 이미 끝났어요. 봇이 재시작되면 진행 중이던 판이 사라져요.')],
+      flags: MessageFlags.Ephemeral,
+    });
+    await interaction.message.edit({ components: [] }).catch(() => {});
+    return;
+  }
+  if (Number(rev) !== round.rev) {
+    await ack(interaction, '낚시');
+    await drawFish(round);
+    return;
+  }
+
+  const refused = await handleFish(interaction, round, action, arg);
+  if (refused) return;
+
+  // 방금 무슨 일이 있었는지 한 줄. 낚았으면 그 지문이 결과 카드에도 그대로 간다.
+  const last = round.log.at(-1);
+  if (round.caught) {
+    const item = fishItemOf(round.caught.key);
+    const cm = round.caught.cm;
+    round.line = isLegend(round.caught.key)
+      ? `줄이 비명을 지른다. 한참을 버틴 끝에 — **${item.name}** ${cm}cm. 손이 떨린다.`
+      : round.caught.key === 'waterCentipede'
+        ? '무언가 꿈틀댄다 — **물지네**다. 손등을 물렸다.'
+        : isFish(round.caught.key)
+          ? `찌가 왈칵 끌려 들어간다 — **${item.name}** ${cm}cm!`
+          : `묵직하다! 힘껏 당겨 보니 — **${item.name}**. 물만 뚝뚝 떨어진다.`;
+  }
+
+  await ack(interaction, '낚시');
+  await drawFish(round);
+  if (last?.hint && round.phase !== 'done') {
+    await round.message?.channel?.send({ content: `🎣 _${last.hint}_` }).catch(() => {});
+  }
+  if (round.phase === 'done') await finishFishing(round);
 }
 
 /** 대기실 버튼. 거절했으면 true 를 돌려준다(호출부가 더 진행하지 않게). */

@@ -10,7 +10,7 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, mt, hp, title, items, crafts, enemies, stats, refilledAt, healedAt, updatedAt }
+ * account shape: { gold, mt, hp, title, items, crafts, enemies, fish, stats, refilledAt, healedAt, fishedAt, fishedCount, updatedAt }
  *
  * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
  * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
@@ -145,6 +145,9 @@ const blank = () => ({
   items: {},
   crafts: [],           // /요리·/제작 이 만든 것. 명부에 없는 물건이라 한 줄씩 담는다
   enemies: {},          // 에너미 도감 { 이름: { met, won } } — 만나면 이름이, 이기면 성향이 드러난다
+  fish: {},             // 물고기 도감 { 아이템키: { caught, best } } — best 는 **큰 쪽만** 남는다
+  fishedAt: null,       // 낚시 도장(한국 날짜). 하루 FISH_TRIES 번
+  fishedCount: 0,       //
   stats: {},
   refilledAt: null,
   healedAt: null,       // 오늘 체력을 되찾았는지. 골드 도장(refilledAt)과 **따로** 센다
@@ -170,6 +173,8 @@ const normalize = (raw) => {
   if (!acct.items || typeof acct.items !== 'object') acct.items = {};
   if (!Array.isArray(acct.crafts)) acct.crafts = [];
   if (!acct.enemies || typeof acct.enemies !== 'object' || Array.isArray(acct.enemies)) acct.enemies = {};
+  if (!acct.fish || typeof acct.fish !== 'object' || Array.isArray(acct.fish)) acct.fish = {};
+  if (!Number.isSafeInteger(acct.fishedCount) || acct.fishedCount < 0) acct.fishedCount = 0;
   return acct;
 };
 
@@ -182,6 +187,9 @@ const publicView = (acct) => ({
   items: acct.items,
   crafts: acct.crafts,
   enemies: acct.enemies,
+  fish: acct.fish,
+  fishedAt: acct.fishedAt,
+  fishedCount: acct.fishedCount,
   stats: acct.stats,
   refilledAt: acct.refilledAt,
 });
@@ -312,6 +320,9 @@ const BUMP_KEYS = new Set([
   // 쓰러진 남을 부활의 영약으로 일으켰다(힐러·용사) · 홀덤 팟 5BB 이하로 이겼다(잔돈) ·
   // 블랙잭 최소 베팅으로 둔 판(소심한 손)
   'reviveGiven', 'smallPotWon', 'minBetHands',
+  // 낚시 — 판 수 · 잡은 것 · 빈손 · 첫 기회에 · 잡동사니 · 물지네 · 전설 · 전설로 만든 요리
+  'fishRounds', 'fishCaught', 'fishEmpty', 'fishFirstTry', 'fishJunk', 'fishCentipede',
+  'fishLegend', 'legendDish',
   // 요트 — 끝까지 둔 판 · 요트(같은 눈 5개) · 윗칸 보너스 · 0점 칸 다섯 이상 · 혼자 1위 · 꼴찌
   'yachtPlayed', 'yachtYacht', 'yachtBonus', 'yachtEmpty', 'yachtWon', 'yachtLast',
   // 홀덤 토너먼트 — 1위 · 2위 · 제일 먼저 탈락 · 모브 둘 이상 앉은 판 우승 · 5BB 밑에서 살아나 우승
@@ -326,7 +337,7 @@ const BUMP_KEYS = new Set([
 const OWN_RE = /^own[A-Z][A-Za-z0-9]{1,39}$/;
 
 /** 더하지 않고 **큰 쪽만 남기는** 값들. 순서를 안 타는 건 더하기와 같다. */
-const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet', 'bestCook', 'bestCraft', 'bestYacht']);
+const MAX_KEYS = new Set(['bestPot', 'bestHand', 'bestBet', 'bestCook', 'bestCraft', 'bestYacht', 'bestFishCm']);
 
 /**
  * POST /api/accounts/deltas — 계정 하나의 네 가지를 **한 번에** 옮긴다.
@@ -375,6 +386,21 @@ exports.applyDeltas = (req, res) => {
     }
   }
 
+  // 물고기 도감. `{ id: { 아이템키: { caught: +n, best: cm } } }` — caught 는 더하고 best 는 큰 쪽.
+  const fishes = body.fish || {};
+  if (typeof fishes !== 'object' || Array.isArray(fishes)) return res.status(400).json({ error: 'fish 는 객체여야 합니다' });
+  for (const [id, book] of Object.entries(fishes)) {
+    if (!book || typeof book !== 'object' || Array.isArray(book)) return res.status(400).json({ error: `fish.${id} 가 객체가 아닙니다` });
+    for (const [key, rec] of Object.entries(book)) {
+      if (!ITEM_KEY_RE.test(key)) return res.status(400).json({ error: `아이템 키 모양이 아닙니다: ${key}` });
+      if (!rec || typeof rec !== 'object') return res.status(400).json({ error: `fish.${id}.${key} 가 객체가 아닙니다` });
+      for (const [k, v] of Object.entries(rec)) {
+        if (!['caught', 'best'].includes(k)) return res.status(400).json({ error: `모르는 도감 칸: ${k}` });
+        if (!Number.isSafeInteger(v) || v < 0) return res.status(400).json({ error: `도감 칸이 0 이상 정수가 아닙니다: ${k}=${v}` });
+      }
+    }
+  }
+
   const craftOps = body.crafts || {};
   if (typeof craftOps !== 'object' || Array.isArray(craftOps)) {
     return res.status(400).json({ error: 'crafts 는 객체여야 합니다' });
@@ -397,7 +423,7 @@ exports.applyDeltas = (req, res) => {
   // **bump 도 합집합에 넣는다.** 토너먼트는 핸드마다 전적만 적고 골드는 끝에 한 번
   // 옮기므로, 카운터만 있는 쓰기가 실제로 온다. 만든 것만 넣고 빼는 쓰기도 마찬가지.
   const ids = parseIds([...new Set(
-    [...Object.values(maps), bump, craftOps, foes].flatMap((m) => Object.keys(m)),
+    [...Object.values(maps), bump, craftOps, foes, fishes].flatMap((m) => Object.keys(m)),
   )]);
   if (typeof ids === 'string') return res.status(400).json({ error: ids });
 
@@ -488,6 +514,16 @@ exports.applyDeltas = (req, res) => {
       enemies[name] = { met: (was.met ?? 0) + (rec.met ?? 0), won: (was.won ?? 0) + (rec.won ?? 0) };
     }
 
+    // 물고기 도감 — 마릿수는 더하고 **길이는 큰 쪽만** 남긴다(stats 의 MAX_KEYS 와 같은 결).
+    const fish = { ...acct.fish };
+    for (const [key, rec] of Object.entries(fishes[id] ?? {})) {
+      const was = fish[key] ?? { caught: 0, best: 0 };
+      fish[key] = {
+        caught: (was.caught ?? 0) + (rec.caught ?? 0),
+        best: Math.max(was.best ?? 0, rec.best ?? 0),
+      };
+    }
+
     // 최고 잔액은 **서버가 알아서** 센다. 봇은 새 잔액을 모르는 채로 증감만 보내므로
     // (그게 이 설계의 핵심이다) 여기서 재는 것이 유일하게 맞는 자리다.
     const stats = { ...acct.stats, peak: Math.max(acct.stats?.peak ?? 0, gold) };
@@ -495,7 +531,7 @@ exports.applyDeltas = (req, res) => {
       stats[k] = MAX_KEYS.has(k) ? Math.max(stats[k] ?? 0, v) : (stats[k] ?? 0) + v;
     }
 
-    next[id] = { ...acct, gold, mt, hp, items, crafts, enemies, stats, updatedAt: now() };
+    next[id] = { ...acct, gold, mt, hp, items, crafts, enemies, fish, stats, updatedAt: now() };
   }
 
   Object.assign(data.accounts, next);
@@ -579,6 +615,43 @@ exports.claim = (req, res) => {
   return res.json({ ...out, heal: { ...heal, amount: DAILY_HEAL, max: MAX_HP }, floor: DAILY_FLOOR, today });
 };
 
+/** 하루에 낚을 수 있는 횟수. 낚시는 아이템이 **새로 생기는** 길이라 여기서만 막는다. */
+const FISH_TRIES = 5;
+
+/**
+ * POST /api/accounts/fish — `{ id }`. `/요트 낚시` 가 판을 열기 **전에** 한 번 부른다.
+ *
+ * 증감(`/deltas`)은 "검사하고 쓰기" 를 못 한다 — 그래서 출첵처럼 라우트를 따로 둔다.
+ * 날짜가 바뀌었으면 0 으로 되돌리고, 남아 있으면 **그 자리에서 한 번 쓰고** 남은 횟수를 준다.
+ * 못 받은 것도 오류가 아니라 답이라 200 이다(claim 과 같은 규약).
+ */
+exports.fishTry = (req, res) => {
+  const id = String((req.body && req.body.id) || '').trim();
+  if (!ID_RE.test(id)) return res.status(400).json({ error: 'id 모양이 아닙니다' });
+
+  const data = readOr503(res);
+  if (!data) return undefined;
+
+  const today = dayKey();
+  const acct = load(data, id, today);
+  const used = acct.fishedAt === today ? acct.fishedCount : 0;
+  if (used >= FISH_TRIES) {
+    return res.json({ ok: false, left: 0, tries: FISH_TRIES, today });
+  }
+
+  acct.fishedAt = today;
+  acct.fishedCount = used + 1;
+  acct.updatedAt = now();
+  data.accounts[id] = acct;
+  try {
+    store.write(data);
+  } catch (e) {
+    return res.status(503).json({ error: `계정 데이터를 쓰지 못했습니다: ${e.message}` });
+  }
+  return res.json({ ok: true, left: FISH_TRIES - acct.fishedCount, tries: FISH_TRIES, today });
+};
+
+module.exports.FISH_TRIES = FISH_TRIES;
 module.exports.START_GOLD = START_GOLD;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;
 module.exports.DAILY_HEAL = DAILY_HEAL;

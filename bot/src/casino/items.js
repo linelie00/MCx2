@@ -147,6 +147,36 @@ export const ITEMS = [
   { key: 'waveTail',        name: '파도꼬리',                 kind: '재료', cat: 'meat',  price:   10, sell: true,  heal: 10,         desc: '꼬리 힘이 대단하여 바다에서는 이것 10마리로 파도를 만들 수 있다는 것 같다.' },
   { key: 'catfish',         name: '메기',                     kind: '재료', cat: 'meat',  price:    3, sell: true,  heal: 5,          desc: '수염이 있다.' },
 
+  // ---- 낚시로 올라오는 것들(`/요트 낚시`). 길이와 뽑기 가중치는 casino/fish.js 가 따로 안다.
+  { key: 'chipFish',        name: '칩붕어',                   kind: '재료', cat: 'meat',  price:   25, sell: true,  heal: 5,          desc: '비늘이 칩처럼 동그랗고 납작하다. bard 에서 흘러간 것이 여기까지 왔다.' },
+  { key: 'glassMinnow',     name: '유리 송사리',              kind: '재료', cat: 'meat',  price:    2, sell: true,  heal: 1,          desc: '물에 넣으면 어디 갔는지 못 찾는다.' },
+  { key: 'stoneSucker',     name: '돌붙이',                   kind: '재료', cat: 'meat',  price:    4, sell: true,  heal: 3,          desc: '돌에 붙어 산다. 떼어 내면 돌이 따라온다.' },
+  { key: 'bigEyeCarp',      name: '왕눈 잉어',                kind: '재료', cat: 'meat',  price:   12, sell: true,  heal: 10,         desc: '눈이 몸의 절반이다. 무엇을 그렇게 보고 있나.' },
+  { key: 'moonSweetfish',   name: '달빛 은어',                kind: '재료', cat: 'meat',  price:   18, sell: true,  heal: 15,         desc: '밤에만 은빛이 돈다. 낮에는 그냥 물고기다.' },
+  { key: 'rainbowTrout',    name: '무지개 송어',              kind: '재료', cat: 'meat',  price:   20, sell: true,  heal: 15,         desc: '비늘이 볼 때마다 다른 색이다.' },
+  { key: 'sawPiranha',      name: '톱니 피라냐',              kind: '재료', cat: 'meat',  price:   22, sell: true,  heal: -20,        desc: '물 밖에서도 이를 간다. 손가락을 세지 말고 던져 넣자.' },
+  { key: 'lanternAngler',   name: '등불 아귀',                kind: '재료', cat: 'meat',  price:   26, sell: true,  heal: 20,         desc: '이마의 등불로 먹이를 부른다. 건져 올려도 불은 안 꺼진다.' },
+  { key: 'starRay',         name: '별무늬 가오리',            kind: '재료', cat: 'meat',  price:   30, sell: true,  heal: 25,         desc: '등에 밤하늘이 있다. 별자리는 매번 다르다.' },
+  { key: 'toothClam',       name: '이빨 조개',                kind: '재료', cat: 'meat',  price:    8, sell: true,  heal: -10,        monster: true, desc: '열면 이가 가득하다. 닫을 때도 조심해야 한다.' },
+  { key: 'inkSquid',        name: '먹물 오징어',              kind: '재료', cat: 'meat',  price:   14, sell: true,  heal: 12,         desc: '건져 올리면 먼저 먹물부터 뿌린다. 옷은 포기하자.' },
+  { key: 'threeLegOctopus', name: '세 발 문어',               kind: '재료', cat: 'meat',  price:   22, sell: true,  heal: 18,         desc: '다리가 셋뿐이다. 나머지 다섯은 어디에 두고 왔을까.' },
+  { key: 'hermitCrab',      name: '참집게',                   kind: '재료', cat: 'meat',  price:    8, sell: true,  heal: 5,          desc: '남의 집을 쓴다. 더 좋은 껍데기를 보면 미련 없이 이사한다.' },
+  { key: 'oneArmCrab',      name: '외팔 집게',                kind: '재료', cat: 'meat',  price:   16, sell: true,  heal: 12,         desc: '집게발 한쪽만 크다. 그쪽으로만 인사한다.' },
+  { key: 'spiralConch',     name: '나선 소라',                kind: '재료', cat: 'meat',  price:   10, sell: true,  heal: 8,          desc: '귀에 대면 파도 소리가 난다. 여기는 강인데.' },
+
+  // ---- 전설 물고기. **던전에서는 안 나온다**(loot: false) — 낚시로만 만난다.
+  { key: 'goldChipShark',   name: '황금 칩상어',              kind: '재료', cat: 'meat',  price:  500, sell: true,  heal: 40,         loot: false, desc: '스무 해 전, 빚에 쫓기던 노름꾼이 bard 의 뒷문으로 나가 강가에 앉았다. 주머니에 남은 마지막 칩 한 장을 미끼 삼아 던졌더니, 물속에서 칩 무리가 헤엄쳐 오더란다. 그는 그날 이후 카지노에 나타나지 않았고, 강에는 비늘이 전부 금빛 칩인 상어가 산다는 말만 남았다. 한 장만 떼어도 하이 자리에 앉는다고 한다. 떼어 본 사람은 아직 없다.' },
+  { key: 'abyssLantern',    name: '심연의 등불',              kind: '재료', cat: 'meat',  price:  420, sell: true,  heal: 40,         loot: false, desc: '안개가 짙던 밤, 늙은 어부가 물밑에서 올라오는 등불을 보았다. 마중 나온 배인 줄 알고 노를 저어 갔더니 불빛은 자꾸 뒤로 물러났고, 정신을 차렸을 때 그는 강 한복판에 있었다. 사흘 뒤 빈 배만 돌아왔다. 그때부터 뱃사람들은 물속의 불빛을 보면 노를 반대로 저으라고 가르친다. 등불은 아귀의 이마에 달려 있고, 아귀는 백 년을 산다.' },
+  { key: 'centuryCarp',     name: '백년 잉어',                kind: '재료', cat: 'meat',  price:  400, sell: true,  heal: 50,         loot: false, desc: '강가 마을에서 제일 오래 산 노인이 어릴 적에도 잡으려다 놓쳤고, 노인이 죽던 해에 손자도 놓쳤다. 비늘마다 나이테가 있어 세어 보면 나이를 알 수 있다는데, 세다가 백을 넘기면 손이 떨려 놓친다는 말이 있다. 이 잉어를 낚은 사람은 강물이 기억하는 만큼 오래 산다고 한다.' },
+  { key: 'lordOfWater',     name: '물의 주인',                kind: '재료', cat: 'meat',  price:  500, sell: true,  heal: 50,         loot: false, desc: '가뭄이 들면 마을 사람들이 강에 소를 바쳤다. 물이 한 번 크게 숨을 쉬면 이튿날 비가 왔고, 숨을 쉬지 않으면 그해는 아무도 물가에 가지 않았다. 지금은 아무도 소를 바치지 않지만, 강 한가운데가 이유 없이 부풀어 오르는 날이 있다. 그런 날 낚싯대를 드리운 사람은 셋인데, 돌아온 사람은 하나다. 그 하나는 아무 말도 하지 않았다.' },
+  { key: 'wreckGhostFish',  name: '난파선의 유령어',          kind: '재료', cat: 'meat',  price:  450, sell: true,  heal: 30,         loot: false, desc: '요트 한 척이 강 어귀에서 뒤집힌 적이 있다. 배는 끝내 못 찾았고, 그 자리에서 낚시하던 이들이 창백한 물고기를 보았다고 했다. 비늘 사이에 배에서 떨어져 나온 나뭇조각이 끼어 있고, 건져 올리면 물 대신 뱃밥 냄새가 난다. 뱃사람들은 이 물고기를 잡으면 그 배가 어디 가라앉았는지 알게 된다고 믿는다.' },
+
+  // ---- 낚시에 걸려 올라오는 잡동사니
+  { key: 'soggyBoot',       name: '물먹은 장화',              kind: '잡화', price:    2, sell: true,  heal: -2,         desc: '한 짝뿐이다. 나머지 한 짝은 아직 물속에 있다.' },
+  { key: 'wetRope',         name: '젖은 밧줄 토막',           kind: '잡화', price:    3, sell: true,  heal: 0,          desc: '매듭이 단단하다. 무엇을 묶어 두었던 걸까.' },
+  { key: 'soakedBook',      name: '불어 터진 책',             kind: '잡화', price:    1, sell: true,  heal: 0,          desc: '글자가 다 번졌다. 딱 한 줄만 읽힌다 — "물가에서는".' },
+  { key: 'rustyHook',       name: '녹슨 낚싯바늘',            kind: '잡화', price:    4, sell: true,  heal: -5,         desc: '누군가 놓친 것이다. 그 사람도 여기 앉아 있었다.' },
+
   // ---------------------------------------------------------------- 재료
   { key: 'wheat',           name: '밀 이삭',                  kind: '재료', cat: 'grain', price:    2, sell: true,  heal: 1,   shop: true,               desc: '빻으면 가루, 안 빻으면 그냥 풀. 모험단은 주로 후자를 씹는다.' },
   { key: 'flour',           name: '밀가루',                   kind: '재료', cat: 'grain', price:    5, sell: true,  heal: -2,  shop: true,  loot: false, desc: '한 줌 집어 먹으면 목이 막힌다. 반죽이 되기를 기다리는 가루.' },

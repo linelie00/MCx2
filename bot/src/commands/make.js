@@ -36,6 +36,7 @@ import { checkRate } from '../ai/client.js';
 import { base, fail, trunc } from '../embeds.js';
 import { displayOf } from '../casino/accounts.js';
 import { forgetCrafts, itemsFor } from '../casino/bag.js';
+import { isLegend } from '../casino/fish.js';
 
 const SLOTS = 5;
 
@@ -328,6 +329,8 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
       ...(monstrous(keys) && grade.rank >= GRADE_BY_KEY.gold.rank ? { monsterDish: 1 } : {}),
     }
     : { crafted: 1, bestCraft: grade.rank, ...(stone ? { craftBroke: 1 } : {}) };
+  // 「만찬」 — 전설 물고기를 재료로 썼다. 등급은 안 따진다. 전설을 먹어 치우는 것 자체가 조건이다.
+  if (keys.some(isLegend)) bump.legendDish = 1;
 
   const saved = await apply({
     items: { [me]: Object.fromEntries(Object.entries(counts).map(([k, n]) => [k, -n])) },

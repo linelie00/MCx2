@@ -231,6 +231,13 @@ export const postAccountDeltas = (body) =>
 export const setTitle = (id, title) =>
   request('/api/accounts/title', { method: 'POST', bot: true, json: { id, title } });
 
+/**
+ * 낚시 한 판을 쓴다. `{ ok, left, tries, today }` — 하루 횟수를 **서버가** 센다.
+ * 못 받는 것도 오류가 아니라 답이라 200 으로 온다(출첵과 같은 규약).
+ */
+export const tryFish = (id) =>
+  request('/api/accounts/fish', { method: 'POST', bot: true, json: { id } });
+
 /** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
 export const claimDaily = (id, { heal = true } = {}) =>
   request('/api/accounts/claim', { method: 'POST', bot: true, json: { id, heal } });
@@ -280,5 +287,5 @@ export async function checkBotKey() {
 
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
-  getAccounts, postAccountDeltas, claimDaily, setTitle, checkBotKey,
+  getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
 };

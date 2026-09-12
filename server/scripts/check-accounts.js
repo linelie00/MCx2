@@ -359,6 +359,31 @@ const server = app.listen(0, async () => {
   eq('요트·토너먼트 카운터를 받는다', [yt1.status, yt1.body.accounts[YT].stats.bestYacht], [200, 180]);
   eq('요트 최고 점수는 큰 쪽만', (await post('/deltas', { bump: { [YT]: { bestYacht: 120 } } })).body.accounts[YT].stats.bestYacht, 180);
 
+  // --- 물고기 도감 — 마릿수는 더하고 길이는 큰 쪽만
+  const FI = '4000004';
+  const fi1 = await post('/deltas', { fish: { [FI]: { minnow: { caught: 1, best: 12 } } } });
+  eq('낚으면 적힌다', [fi1.status, fi1.body.accounts[FI].fish], [200, { minnow: { caught: 1, best: 12 } }]);
+  const fi2 = await post('/deltas', { fish: { [FI]: { minnow: { caught: 1, best: 7 } } } });
+  eq('마릿수는 더하고 길이는 큰 쪽만', fi2.body.accounts[FI].fish.minnow, { caught: 2, best: 12 });
+  eq('더 큰 것을 잡으면 갱신', (await post('/deltas', { fish: { [FI]: { minnow: { caught: 1, best: 30 } } } })).body.accounts[FI].fish.minnow, { caught: 3, best: 30 });
+  eq('도감만 쓰는 것도 id 로 친다', (await post('/deltas', { fish: { [FI]: { chipFish: { caught: 1, best: 9 } } } })).status, 200);
+  eq('아이템 키 모양이 아니면 400', (await post('/deltas', { fish: { [FI]: { Minnow: { caught: 1 } } } })).status, 400);
+  eq('모르는 칸은 400', (await post('/deltas', { fish: { [FI]: { minnow: { length: 1 } } } })).status, 400);
+  eq('음수는 400', (await post('/deltas', { fish: { [FI]: { minnow: { caught: -1 } } } })).status, 400);
+  eq('낚시 카운터를 받는다',
+    (await post('/deltas', { bump: { [FI]: { fishRounds: 1, fishCaught: 1, fishEmpty: 1, fishFirstTry: 1, fishJunk: 1, fishCentipede: 1, fishLegend: 1, legendDish: 1, bestFishCm: 40 } } })).body.accounts[FI].stats.bestFishCm, 40);
+  eq('최고 길이는 큰 쪽만', (await post('/deltas', { bump: { [FI]: { bestFishCm: 20 } } })).body.accounts[FI].stats.bestFishCm, 40);
+  eq('옛 기록에는 도감이 빈 객체', (await hit('?ids=1000009')).body.accounts['1000009'].fish, {});
+
+  // --- 낚시 하루 다섯 번
+  const FT = '4000005';
+  const tries = [];
+  for (let i = 0; i < 6; i += 1) tries.push((await post('/fish', { id: FT })).body);
+  eq('다섯 번까지 된다', tries.slice(0, 5).map((t) => [t.ok, t.left]), [[true, 4], [true, 3], [true, 2], [true, 1], [true, 0]]);
+  eq('여섯 번째는 거절', [tries[5].ok, tries[5].left], [false, 0]);
+  eq('도장이 찍혔다', (await hit(`?ids=${FT}`)).body.accounts[FT].fishedCount, 5);
+  eq('이상한 id 는 400', (await post('/fish', { id: 'drop-table' })).status, 400);
+
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

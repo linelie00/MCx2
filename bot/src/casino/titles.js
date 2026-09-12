@@ -15,6 +15,7 @@
  */
 import { CATEGORIES } from './poker.js';
 import { MOBS, NORMALS } from '../holdem/mobs.js';
+import { FISH as FISH_TABLE, isFish } from './fish.js';
 
 /** 전적이 비어 있어도 안전하게 읽는다. 처음 보는 계정은 stats 가 통째로 없다. */
 const n = (s, k) => Number(s?.[k] ?? 0);
@@ -38,6 +39,13 @@ export const enemiesMet = (account) => Object.entries(account?.enemies ?? {})
 /** 한 에너미를 가장 많이 쓰러뜨린 횟수. `천적` 이 본다. */
 export const mostBeaten = (account) => Math.max(0, ...Object.values(account?.enemies ?? {})
   .map((r) => Number(r?.won ?? 0)));
+
+/** 도감에 오른 물고기 종수. 잡동사니·전설은 안 센다 — 「어보」가 묻는 것은 물고기다. */
+export const fishKinds = (account) => Object.entries(account?.fish ?? {})
+  .filter(([key, r]) => isFish(key) && (r?.caught ?? 0) > 0).length;
+
+/** 물고기 전종. 「어보」의 분모. */
+export const FISH_TOTAL = FISH_TABLE.length;
 
 /** 최소 표본을 걸고 재는 비율. 열 판에서 6승은 60% 지만 아무 뜻이 없다. */
 const rate = (s, min) => (n(s, 'hands') >= min ? n(s, 'won') / n(s, 'hands') : 0);
@@ -112,6 +120,7 @@ export const TITLES = [
   { key: 'lastSupper', name: '최후의 만찬', tier: 2, cond: '만든 요리를 먹고 쓰러지면', group: '요리', desc: '마지막 한 입까지 맛있었다.', when: (s) => n(s, 'diedEating') >= 1 },
   { key: 'oishii', name: '오이쉬', tier: 2, cond: '만든 요리 10번 먹기', group: '요리', desc: '맛있는 건 열 번 먹어도 맛있다.', when: (s) => n(s, 'ateMade') >= 10 },
   { key: 'goldenTongue', name: '황금의 혀', tier: 3, cond: '다이아몬드 요리', group: '요리', desc: '한 입에 모험단이 조용해졌다.', when: (s) => n(s, 'bestCook') >= 5 },
+  { key: 'grandFeast', name: '만찬', tier: 3, cond: '전설 물고기로 요리', group: '요리', desc: '응당 누릴 것을 누렸다.', when: (s) => n(s, 'legendDish') >= 1 },
 
   // ---- 제작
   { key: 'apprenticeSmith', name: '견습 장인', tier: 1, cond: '제작 1회', group: '제작', desc: '처음으로 무언가를 제 손으로 만들었다.', when: (s) => n(s, 'crafted') >= 1 },
@@ -136,6 +145,17 @@ export const TITLES = [
   // ---- 동료 — 남을 일으켜 세운 것. /사용 으로 쓰러진 사람에게 부활의 영약을 먹여 **일어났을 때만** 센다
   { key: 'healer', name: '힐러', tier: 1, cond: '쓰러진 사람에게 부활의 영약 1번', group: '동료', desc: '쓰러진 이를 일으켜 세웠다.', when: (s) => n(s, 'reviveGiven') >= 1 },
   { key: 'trueHero', name: '용사', tier: 3, cond: '쓰러진 사람에게 부활의 영약 10번', group: '동료', desc: '진정한 용사란 이런 것이죠.', when: (s) => n(s, 'reviveGiven') >= 10 },
+
+  // ---- 낚시 — /요트 낚시. 접거나 방치한 판은 안 센다
+  { key: 'firstBite', name: '입질', tier: 1, cond: '처음 무언가를 낚으면', group: '낚시', desc: '무엇이든 걸렸다. 시작은 그걸로 된다.', when: (s) => n(s, 'fishCaught') >= 1 },
+  { key: 'skunked', name: '꽝', tier: 1, cond: '여섯 기회를 다 쓰고 빈손', group: '낚시', desc: '오늘은 물이 나빴다. 내일도 그럴 수 있다.', when: (s) => n(s, 'fishEmpty') >= 1 },
+  { key: 'trashPicker', name: '쓰레기 수집가', tier: 1, cond: '잡동사니 10번', group: '낚시', desc: '물가가 조금 깨끗해졌다.', when: (s) => n(s, 'fishJunk') >= 10 },
+  { key: 'angler', name: '강태공', tier: 2, cond: '물고기 50마리', group: '낚시', desc: '기다리는 법을 아는 사람.', when: (s) => n(s, 'fishCaught') >= 50 },
+  { key: 'firstCast', name: '한 방에', tier: 2, cond: '첫 기회에 낚음', group: '낚시', desc: '던지자마자 걸렸다. 이런 날도 있다.', when: (s) => n(s, 'fishFirstTry') >= 1 },
+  { key: 'bigCatch', name: '대물', tier: 2, cond: '100cm 넘는 것을 낚으면', group: '낚시', desc: '두 팔로도 모자란다. 사진은 못 찍었다.', when: (s) => n(s, 'bestFishCm') >= 100 },
+  { key: 'noMoreCentipede', name: '물지네는 이제 그만', tier: 2, cond: '물지네 5번', group: '낚시', desc: '다섯 번째쯤 되면 손이 먼저 안다.', when: (s) => n(s, 'fishCentipede') >= 5 },
+  { key: 'legendAngler', name: '전설의 낚시꾼', tier: 3, cond: '전설 물고기 1마리', group: '낚시', desc: '이야기 속의 것을 손으로 들어 올렸다.', when: (s) => n(s, 'fishLegend') >= 1 },
+  { key: 'fishBook', name: '어보', tier: 3, cond: `물고기 ${FISH_TABLE.length}종 모두`, group: '낚시', desc: '물속에 사는 것은 이제 다 안다.', when: (s, a) => fishKinds(a) >= FISH_TOTAL },
 
   // ---- 요트 — 끝까지 둔 판에서만 센다(접거나 방치로 끝난 판은 아니다). 1위·꼴찌는 둘 이상 앉은 판에서
   { key: 'firstVoyage', name: '첫 항해', tier: 1, cond: '요트 한 판을 끝까지', group: '요트', desc: '돛을 올렸다. 어디로 갈지는 주사위가 정한다.', when: (s) => n(s, 'yachtPlayed') >= 1 },

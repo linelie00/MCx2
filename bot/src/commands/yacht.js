@@ -263,14 +263,33 @@ async function runNpcTurns(game) {
 // 버튼은 요트와 같은 `yacht:` 를 쓰되 판 번호가 `f` 로 시작한다 — `component()` 가 그걸 보고
 // 갈라낸다. 새 prefix 를 만들면 라우팅만 하나 더 늘 뿐이다.
 
-const fishPayload = (round) => (round.phase === 'done'
-  ? { embeds: [fishResultEmbed(round, round.result ?? {})], components: [] }
-  : { embeds: [fishBoardEmbed(round)], components: fishBoardRows(round) });
+// **판이 끝나도 표는 그 자리에 둔다.** 예전에는 표를 결과 카드로 덮어썼는데, 그러면 맨 위
+// 글이 통째로 바뀌고(수정됨) 중간에 올라온 기척들이 결과보다 아래에 남아 순서가 뒤집혔다.
+// 이제 끝난 판은 버튼만 떼고, 결과는 **아래에 새 글로** 나간다.
+const fishPayload = (round) => ({
+  embeds: [fishBoardEmbed(round)],
+  components: round.phase === 'done' ? [] : fishBoardRows(round),
+});
 
 async function drawFish(round) {
   if (!round.message) return;
   await round.message.edit(fishPayload(round))
     .catch((err) => console.warn('[낚시] 판 갱신 실패:', err.message));
+}
+
+/** 결과 카드. 판마다 한 번만 나간다(끝나는 길이 버튼·방치 둘이라 두 번 들어올 수 있다). */
+async function sendFishResult(round) {
+  if (round.resultSent) return;
+  round.resultSent = true;
+  await round.message?.channel?.send({ embeds: [fishResultEmbed(round, round.result ?? {})] })
+    .catch((err) => console.warn('[낚시] 결과 카드 실패:', err.message));
+}
+
+/** 판을 접는다 — 표에서 버튼을 떼고, 정산하고, 결과를 새 글로 올린다. */
+async function endFish(round) {
+  await drawFish(round);
+  await finishFishing(round);
+  await sendFishResult(round);
 }
 
 /** `/요트 낚시` — 대기실도 자리도 없다. 하루 횟수를 서버에 물어야 해서 먼저 defer 한다. */
@@ -417,7 +436,7 @@ async function finishFishing(round) {
     forgetBag(id);
 
     round.result = { line: round.line, book: saved.accounts[id]?.fish ?? null };
-    await drawFish(round);
+    await sendFishResult(round);
 
     if (legend) {
       await round.message?.channel?.send({
@@ -574,7 +593,7 @@ function kickNpc(game) {
 setInterval(() => {
   for (const game of state.expired()) draw(game);
   // 낚시는 혼자 하는 판이라 드라이버가 시간을 갱신해 주지 않는다 — 여기서 같이 걷는다.
-  for (const round of fishing.expired()) drawFish(round);
+  for (const round of fishing.expired()) endFish(round);
 }, 60_000).unref();
 
 const data = new SlashCommandBuilder()
@@ -787,11 +806,12 @@ async function fishComponent(interaction, serial, rev, action, arg) {
   }
 
   await ack(interaction, '낚시');
+  if (round.phase === 'done') { await endFish(round); return; }
+
   await drawFish(round);
-  if (last?.hint && round.phase !== 'done') {
+  if (last?.hint) {
     await round.message?.channel?.send({ content: `🎣 _${last.hint}_` }).catch(() => {});
   }
-  if (round.phase === 'done') await finishFishing(round);
 }
 
 /** 대기실 버튼. 거절했으면 true 를 돌려준다(호출부가 더 진행하지 않게). */

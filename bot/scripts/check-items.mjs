@@ -28,7 +28,7 @@ const eq = (name, got, want) => {
 };
 
 console.log('\n모양');
-eq('181종 — 시트 95 + 요리 재료 42 + 독 8 + 괴식 10 + 낚시 24 + 미끼 2', ITEMS.length, 181);
+eq('205종 — 시트 95 + 요리 재료 42 + 독 8 + 괴식 10 + 낚시 24+24 + 미끼 2', ITEMS.length, 205);
 eq('키가 안 겹친다', Object.keys(ITEM_BY_KEY).length, ITEMS.length);
 eq('이름이 안 겹친다', new Set(ITEMS.map((i) => i.name)).size, ITEMS.length);
 eq('키는 영문 카멜케이스', ITEMS.filter((i) => !/^[a-z][A-Za-z0-9]*$/.test(i.key)).map((i) => i.key), []);
@@ -45,14 +45,14 @@ eq('임베드 한 칸에 들어간다', ITEMS.filter((i) => i.desc.length > 200)
 
 console.log('\n재료');
 const FOOD = ITEMS.filter((i) => i.kind === '재료');
-eq('재료 백열하나 — 낚시로 스물이 늘었다', FOOD.length, 111);
+eq('재료 백서른다섯 — 낚시 둘째 배치로 스물넷이 늘었다', FOOD.length, 135);
 eq('잡화는 예순넷 — 낚시 잡동사니 넷', ITEMS.filter((i) => i.kind === '잡화').length, 64);
 eq('진열대가 다 있다', FOOD.filter((i) => !CATS.some((c) => c.key === i.cat)).map((i) => i.key), []);
 eq('진열대는 재료만', ITEMS.filter((i) => i.kind !== '재료' && (i.cat || i.shop)).map((i) => i.key), []);
 eq('상점에서 파는 재료는 값이 있다', FOOD.filter((i) => i.shop && !(i.price > 0)).map((i) => i.key), []);
 eq('값이 0 인 재료는 옮겨 온 넷뿐 — 못 판다', FOOD.filter((i) => !i.price).map((i) => i.key).sort(), ['bugPile', 'fallenBread', 'wetMoss', 'wrinkledSausage']);
 eq('상점 서른둘', FOOD.filter((i) => i.shop).length, 32);
-eq('던전 여든여덟', FOOD.filter((i) => i.loot !== false).length, 88);
+eq('던전 백열둘', FOOD.filter((i) => i.loot !== false).length, 112);
 // 낚시로만 나오는 것(전설)은 던전에서 막아 뒀다 — 그건 "안 나는" 것이 아니다.
 eq('어디서도 안 나는 재료는 없다',
   FOOD.filter((i) => !i.shop && i.loot === false && !FISH_BY_KEY[i.key]).map((i) => i.key), []);
@@ -63,7 +63,7 @@ eq('들에서 나는 것은 상점에 없다', ['raspberry', 'pineMushroom', 'ra
 
 console.log('\n독과 괴식');
 const POISONED = ITEMS.filter((i) => i.poison);
-eq('독은 열세 가지', POISONED.length, 13);
+eq('독은 열네 가지', POISONED.length, 14);
 eq('독은 1~3 단계', POISONED.filter((i) => ![1, 2, 3].includes(i.poison)).map((i) => i.key), []);
 eq('독은 날로 먹으면 아플 수 있다', POISONED.filter((i) => !(Math.min(...[i.heal].flat()) < 0)).map((i) => i.key), []);
 eq('독 재료는 상점에 없다 — 던전에서만', POISONED.filter((i) => i.shop || i.loot === false).map((i) => i.key), []);
@@ -73,7 +73,7 @@ eq('약한 독은 −20 안쪽', worst(1).every((h) => h >= -20), true);
 eq('치명은 −50 넘게', worst(3).every((h) => h <= -50), true);
 eq('독 이름에 독이라고 안 적는다', POISONED.filter((i) => /독|죽음|치명/.test(i.name)).map((i) => i.name), []);
 eq('괴식은 참/거짓만', ITEMS.filter((i) => i.monster !== undefined && i.monster !== true).map((i) => i.key), []);
-eq('괴식 열여덟', ITEMS.filter((i) => i.monster).length, 18);
+eq('괴식 스물다섯', ITEMS.filter((i) => i.monster).length, 25);
 
 console.log('\n회복력');
 const shape = (h) => (Array.isArray(h)
@@ -83,7 +83,7 @@ eq('숫자 아니면 [a, b]', ITEMS.filter((i) => !shape(i.heal)).map((i) => i.k
 eq('최대치를 안 넘는다', ITEMS.filter((i) => Math.max(...[i.heal].flat()) > MAX_HP).map((i) => i.key), []);
 eq('HP 최대치는 100', MAX_HP, 100);
 eq('범위로 적힌 것은 다섯 — 회복약 넷과 비명 뿌리', ITEMS.filter((i) => Array.isArray(i.heal)).length, 5);
-eq('먹으면 깎이는 것 쉰셋', ITEMS.filter((i) => i.heal < 0).length, 53);
+eq('먹으면 깎이는 것 예순넷', ITEMS.filter((i) => i.heal < 0).length, 64);
 
 const small = ITEM_BY_KEY.potionSmall;
 const rolled = new Set(Array.from({ length: 500 }, () => healOf(small)));
@@ -166,8 +166,8 @@ const lines = (body) => body.split(String.fromCharCode(10)).filter((l) => l && !
 
 console.log('\n/아이템 — 목록');
 let c = read(await show(null));
-eq('전체 181종', c.fields[0], '종류=**181**');
-eq('열 쪽', c.fields[1], '쪽=1 / 10');
+eq('전체 205종', c.fields[0], '종류=**205**');
+eq('열한 쪽', c.fields[1], '쪽=1 / 11');
 eq('한 쪽에 스무 줄', lines(c.body).length, 20);
 eq('갈래 버튼 넷', c.labels.slice(0, 4), ['전체', '소비', '잡화', '재료']);
 eq('넘김 버튼', c.labels.slice(4), ['◀', '▶']);
@@ -208,14 +208,14 @@ eq('값 칸은 비운다', c.fields[1], '값=_없음_');
 
 eq('먹어 봐야 안다', read(await show('redFeather')).footer, '먹으면 어떻게 될지는 먹어 봐야 알아요');
 eq('목록에도 회복 칸이 없다', /\s[−-]?\d+\s*$/m.test(read(await click('item:list:use:0')).body.replace(/[\d,]+골드/g, '')), false);
-eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**181**');
+eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**205**');
 eq('독은 카드에 안 적는다 — 먹어 봐야 안다', /☠️|독/.test(read(await show('deathCap')).body), false);
 eq('괴식이면 카드에 적는다', /🪱 \*\*괴식\*\*/.test(read(await show('bugPile')).body), true);
 eq('멀쩡한 것은 아무 표시 없다', /☠️|🪱/.test(read(await show('honey')).body), false);
 
 console.log('\n/아이템 — 재료');
 c = read(await click('item:list:food:0'));
-eq('재료 탭', [c.fields[0], c.fields[1]], ['종류=**111**', '쪽=1 / 6']);
+eq('재료 탭', [c.fields[0], c.fields[1]], ['종류=**135**', '쪽=1 / 7']);
 eq('재료가 보인다', /이쁘니 버섯/.test(c.body), true);
 eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
 c = read(await show('honey'));

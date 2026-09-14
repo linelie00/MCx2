@@ -30,14 +30,21 @@ const TAB_PAGE = 't';
 const WATER = 0x4a7a8c;
 const LEGEND_COLOR = 0xc9a227;
 
+/**
+ * **흔한 것부터 귀한 것 순.** 표(`casino/fish.js`)의 순서를 그대로 쓰면 배치를 더할 때마다
+ * 뒤에 붙어서 "흔함 · 귀함 · 흔함 · 귀함" 이 된다 — 넣은 순서지 도감의 순서가 아니다.
+ * 무게가 곧 희귀도라 무게 내림차순이면 등급 순서가 된다(같은 무게는 표에 적힌 순서 그대로).
+ */
+const byTier = (list) => [...list].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+
 const TABS = [
-  { key: 'f', label: '물고기', icon: '🐟', list: FISH },
-  { key: 'j', label: '잡동사니', icon: '🪵', list: JUNK },
+  { key: 'f', label: '물고기', icon: '🐟', list: byTier(FISH) },
+  { key: 'j', label: '잡동사니', icon: '🪵', list: byTier(JUNK) },
   { key: 'l', label: '전설', icon: '✨', list: LEGENDS },
 ];
 const tabOf = (key) => TABS.find((t) => t.key === key) ?? TABS[0];
 
-/** 도감 전체. 표의 순서가 곧 도감의 순서다 — `???` 자리도 그대로 남는다. */
+/** 도감 전체. 이 순서가 곧 도감의 순서다 — `???` 자리도 그대로 남는다. */
 export const ENTRIES = TABS.flatMap((t) => t.list.map((f) => ({ ...f, tab: t.key })));
 const BY_KEY = Object.fromEntries(ENTRIES.map((f) => [f.key, f]));
 

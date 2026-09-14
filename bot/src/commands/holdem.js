@@ -18,7 +18,7 @@
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
 import * as state from '../holdem/state.js';
 import { chooseAction, readRange } from '../holdem/ai.js';
-import { live } from '../holdem/rules.js';
+import { live, actionable } from '../holdem/rules.js';
 import { loadAccounts, buyIn } from '../casino/wallet.js';
 import * as payout from '../holdem/payout.js';
 import { roll, listText, TIER as LOOT } from '../casino/loot.js';
@@ -105,6 +105,10 @@ function payloadFor(game) {
   if (game.phase === 'lobby') {
     return { embeds: [lobbyEmbed(game)], components: lobbyRows(game) };
   }
+  // **판에 보드가 그려지면 그만큼 본 것이다.** `showBoard` 에서만 세면, 드라이버가 그
+  // 스트리트에서 새로 시작했을 때(사람이 누를 때마다 그렇다) 안 알린 것으로 남는다.
+  game.boardSeen = Math.max(game.boardSeen ?? 0, shownBoard(game).length);
+
   // 차례인 사람을 판 위에 같이 부른다. 따로 보내면 판이 또 밀린다.
   const call = turnCall(game);
   return {
@@ -353,8 +357,13 @@ const RUNOUT_MS = 1600;
  * 정상으로 온 판(마지막 스트리트에서 올인이 났으면 새로 깔 카드가 없다).
  */
 export async function runout(game) {
-  const from = game.boardSeen ?? 0;
+  // **칩이 다 들어간 판에서만 한다.** 둘 다 체크로 리버까지 내려온 판은 사람이 판단해서
+  // 거기까지 온 것이라 되감을 것이 없다 — 그런 판까지 되감아서 "올인도 안 했는데 갑자기
+  // 패를 깠다" 가 됐다. 더 둘 수 있는 사람이 둘 이상이면 올인 판이 아니다.
+  if (actionable(game.seats).length >= 2) return;
   if (live(game.seats).length < 2) return;
+
+  const from = game.boardSeen ?? 0;
   if (game.board.length <= from) return;
 
   game.boardShown = from;

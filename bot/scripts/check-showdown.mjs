@@ -81,6 +81,22 @@ state.nextHand(game);
 eq('다시 덮는다', [game.revealed, game.boardShown, game.boardSeen], [false, null, 0]);
 eq('화면에도 남의 패가 없다', /패를 깠습니다/.test(boardEmbed(game).data.description), false);
 
+console.log('\n체크로만 내려온 판');
+// 올인도 안 했는데 갑자기 패를 깐다는 신고 — 리버까지 체크로 내려온 판까지 되감았다.
+// 사람이 판단해서 거기까지 온 판은 되감을 것이 없다.
+const quiet = table('c3');
+quiet.message = await room.send({ content: '판3' });
+for (let i = 0; i < 40 && !['showdown', 'settled'].includes(quiet.phase); i += 1) {
+  const legal = state.actionsFor(quiet);
+  state.act(quiet, legal.has('check') ? 'check' : legal.has('call') ? 'call' : 'fold', 0);
+}
+eq('아무도 안 죽고 리버까지 갔다',
+  [quiet.phase, quiet.board.length, quiet.seats.some((s) => s.allIn || s.folded)],
+  ['showdown', 5, false]);
+said.length = 0;
+await runout(quiet);
+eq('되감지 않는다', [said.length, Boolean(quiet.revealed)], [0, false]);
+
 console.log('\n접어서 끝난 판');
 const folded = table('c2');
 folded.message = await room.send({ content: '판2' });

@@ -51,7 +51,7 @@ eq('진열대가 다 있다', FOOD.filter((i) => !CATS.some((c) => c.key === i.c
 eq('진열대는 재료만', ITEMS.filter((i) => i.kind !== '재료' && (i.cat || i.shop)).map((i) => i.key), []);
 eq('상점에서 파는 재료는 값이 있다', FOOD.filter((i) => i.shop && !(i.price > 0)).map((i) => i.key), []);
 eq('값이 0 인 재료는 옮겨 온 넷뿐 — 못 판다', FOOD.filter((i) => !i.price).map((i) => i.key).sort(), ['bugPile', 'fallenBread', 'wetMoss', 'wrinkledSausage']);
-eq('상점 서른둘', FOOD.filter((i) => i.shop).length, 32);
+eq('상점 서른셋', FOOD.filter((i) => i.shop).length, 33);
 eq('던전 백열둘', FOOD.filter((i) => i.loot !== false).length, 112);
 // 낚시로만 나오는 것(전설)은 던전에서 막아 뒀다 — 그건 "안 나는" 것이 아니다.
 eq('어디서도 안 나는 재료는 없다',

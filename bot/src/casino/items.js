@@ -83,7 +83,7 @@ export const ITEMS = [
   { key: 'whiteShell',      name: '하얀 조개껍데기',          kind: '잡화', price:    5, sell: true,  heal: 0,          desc: '부드럽고 매끈한 하얀 조개껍데기. 귀에 대면 바다 소리가 들릴 것 같다.' },
   { key: 'brokenBracelet',  name: '끊어진 팔찌',              kind: '잡화', price:    3, sell: true,  heal: 0,          desc: '낡고 끊어진 은 팔찌. 수리하면 다시 사용할 수 있을 것 같다.' },
   { key: 'softFig',         name: '무른 무화과',              kind: '재료', cat: 'veg',   price:    1, sell: true,  heal: 2,          desc: '땅에 떨어진 지 오래되었는지 과육이 흐물거리고 단향이 진동한다. 아직 먹을 수 있다.' },
-  { key: 'spicyBerry',      name: '맵싹한 열매',              kind: '재료', cat: 'spice', price:    3, sell: true,  heal: 10,         desc: '새빨간 열매. 매운 향기가 멀리서부터 진동해온다! 눈물을 쏙 빼놓기에 딱인 열매.' },
+  { key: 'spicyBerry',      name: '맵싹한 열매',              kind: '재료', cat: 'spice', price:    3, sell: true,  heal: 10, shop: true, desc: '새빨간 열매. 매운 향기가 멀리서부터 진동해온다! 눈물을 쏙 빼놓기에 딱인 열매.' },
   { key: 'fallenBread',     name: '떨어져 있던 빵',           kind: '재료', cat: 'grain', price:    0, sell: false, heal: 2,          desc: '축축하면서도 동시에 딱딱하다. 완벽한 조화.' },
   { key: 'silverCoin',      name: '은화',                     kind: '잡화', price:    5, sell: true,  heal: -5,         desc: '앗, 골드! ...가 아니고 실버. 상점에서 5 골드로 바꿀 수 있다.' },
   { key: 'copperCoin',      name: '동화',                     kind: '잡화', price:    1, sell: true,  heal: -10,        desc: '앗, 골드! ...가 아니고 코퍼. 상점에서 1 골드로 바꿀 수 있다.' },

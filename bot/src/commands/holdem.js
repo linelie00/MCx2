@@ -105,10 +105,6 @@ function payloadFor(game) {
   if (game.phase === 'lobby') {
     return { embeds: [lobbyEmbed(game)], components: lobbyRows(game) };
   }
-  // **판에 보드가 그려지면 그만큼 본 것이다.** `showBoard` 에서만 세면, 드라이버가 그
-  // 스트리트에서 새로 시작했을 때(사람이 누를 때마다 그렇다) 안 알린 것으로 남는다.
-  game.boardSeen = Math.max(game.boardSeen ?? 0, shownBoard(game).length);
-
   // 차례인 사람을 판 위에 같이 부른다. 따로 보내면 판이 또 밀린다.
   const call = turnCall(game);
   return {
@@ -171,9 +167,7 @@ async function repost(game) {
  */
 async function showBoard(game, label, { again = true } = {}) {
   if (!game.message?.channel) return;
-  const shown = shownBoard(game);
-  game.boardSeen = shown.length;
-  const cards = handText(shown);
+  const cards = handText(shownBoard(game));
   const content = isJumboable(cards) ? cards : `**${label}**\n${cards}`;
   game.boardBottom = false;
   await game.message.channel.send({ content })
@@ -363,7 +357,9 @@ export async function runout(game) {
   if (actionable(game.seats).length >= 2) return;
   if (live(game.seats).length < 2) return;
 
-  const from = game.boardSeen ?? 0;
+  // 규칙이 적어 준 자리 — 마지막 액션 때의 보드 길이. 없으면 되감을 일이 없던 판이다.
+  const from = game.dealtFrom;
+  if (from === null || from === undefined) return;
   if (game.board.length <= from) return;
 
   game.boardShown = from;

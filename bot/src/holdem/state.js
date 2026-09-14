@@ -349,7 +349,7 @@ export function beginHand(game) {
   // **핸드마다 지워야 한다** — 안 지우면 다음 핸드에서 패가 깔린 채로 시작한다.
   game.revealed = false;
   game.boardShown = null;
-  game.boardSeen = 0;
+  game.dealtFrom = null;
 
   // 버튼을 다음 참가자로.
   let b = game.button;
@@ -469,10 +469,21 @@ export function advance(game) {
   nextStreet(game);
 }
 
-/** 스트리트를 넘긴다. 행동할 사람이 없으면 남은 보드를 끝까지 깐다. */
+/**
+ * 스트리트를 넘긴다. 행동할 사람이 없으면 남은 보드를 끝까지 깐다.
+ *
+ * 그때 **마지막 액션이 있었던 시점의 보드 길이**를 `game.dealtFrom` 에 적는다. 그 뒤에 깔린
+ * 카드는 아무도 못 두고 깔린 것이라, 화면 쪽이 이걸 보고 한 장씩 되감아 깐다
+ * (`commands/holdem.js` 의 `runout`). 베팅이 이어지면 `null` 로 지운다 — 되감을 것이 없다.
+ *
+ * **화면이 짐작으로 재면 안 된다.** 예전에는 "어디까지 알렸나" 를 그림 쪽에서 셌는데,
+ * 버튼을 누른 그 순간 이미 쇼다운 보드가 그려져서 "다 봤다" 가 되어 버렸다(올인을 콜했는데
+ * 아무것도 안 깔렸다). 여기가 유일하게 확실히 아는 자리다.
+ */
 function nextStreet(game) {
   const order = ['preflop', 'flop', 'turn', 'river'];
   let at = order.indexOf(game.phase);
+  game.dealtFrom = game.board.length;
 
   for (;;) {
     if (at >= order.length - 1) { game.phase = 'showdown'; game.turn = -1; return; }
@@ -488,7 +499,7 @@ function nextStreet(game) {
     // 아직 베팅할 사람이 둘 이상이면 여기서 멈추고 차례를 준다.
     if (actionable(game.seats).length >= 2) {
       game.turn = firstToAct(game.seats, game.button, street);
-      if (game.turn >= 0) return;
+      if (game.turn >= 0) { game.dealtFrom = null; return; }
     }
     // 아니면 다음 스트리트로 계속 — 보드만 깔면서 쇼다운까지 간다.
     game.turn = -1;

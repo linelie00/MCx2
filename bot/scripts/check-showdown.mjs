@@ -78,7 +78,7 @@ console.log('\n다음 핸드');
 state.settle(game);
 for (const s of game.seats) s.gold = 500;      // 둘 다 살아남아 다음 핸드가 열리게
 state.nextHand(game);
-eq('다시 덮는다', [game.revealed, game.boardShown, game.boardSeen], [false, null, 0]);
+eq('다시 덮는다', [game.revealed, game.boardShown, game.dealtFrom], [false, null, null]);
 eq('화면에도 남의 패가 없다', /패를 깠습니다/.test(boardEmbed(game).data.description), false);
 
 console.log('\n체크로만 내려온 판');
@@ -96,6 +96,26 @@ eq('아무도 안 죽고 리버까지 갔다',
 said.length = 0;
 await runout(quiet);
 eq('되감지 않는다', [said.length, Boolean(quiet.revealed)], [0, false]);
+
+console.log('\n작은 올인을 콜한 판');
+// 신고 — 올인을 콜했는데 아무것도 안 깔렸다. 버튼을 누른 순간 판이 이미 쇼다운 보드로
+// 그려져서, "어디까지 봤나" 를 그림 쪽에서 세던 그때의 셈이 "다 봤다" 가 됐다.
+// 되감을 자리는 **규칙이 적어 준다**(state.dealtFrom) — 그림을 먼저 그려도 안 흔들린다.
+const called = table('c4');
+called.message = await room.send({ content: '판4' });
+called.seats[0].gold = 4;                       // 짧은 쪽이 먼저 올인, 큰 쪽이 콜
+for (let i = 0; i < 8 && called.phase !== 'showdown'; i += 1) {
+  const legal = state.actionsFor(called);
+  state.act(called, legal.has('allin') ? 'allin' : legal.has('call') ? 'call' : 'check', 0);
+}
+eq('한쪽만 올인이어도 쇼다운까지 간다',
+  [called.phase, called.board.length, called.seats.some((x) => x.allIn), called.dealtFrom],
+  ['showdown', 5, true, 0]);
+boardEmbed(called);                             // 판을 먼저 그려도(= 다 보여도) 흔들리면 안 된다
+said.length = 0;
+await runout(called);
+eq('그래도 한 장씩 깐다',
+  [said.length >= 4, Boolean(called.revealed)], [true, true]);
 
 console.log('\n접어서 끝난 판');
 const folded = table('c2');

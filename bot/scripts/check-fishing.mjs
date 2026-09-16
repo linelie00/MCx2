@@ -117,6 +117,43 @@ check('이미 적은 칸은 다시 못 쓴다', () => {
   assert.ok(!fishing.canWrite(s, 'aces', [1, 1, 1, 2, 3]));
 });
 
+console.log('\n소계 전설 판');
+const BONUS_LEGEND = { key: 'centuryCarp', row: BONUS_ROW, legend: true };
+check('위칸은 같은 눈이 하나만 있어도 열린다', () => {
+  const s = newSheet();
+  assert.ok(fishing.canWrite(s, 'sixes', [6, 1, 2, 3, 4], BONUS_LEGEND));
+  assert.ok(fishing.canWrite(s, 'aces', [1, 1, 2, 3, 4], BONUS_LEGEND));
+});
+check('그래도 0점은 못 적는다', () => {
+  const s = newSheet();
+  assert.ok(!fishing.canWrite(s, 'sixes', [1, 2, 3, 4, 5], BONUS_LEGEND));
+  for (let i = 0; i < 10000; i += 1) {
+    const dice = Array.from({ length: 5 }, () => 1 + Math.floor(Math.random() * 6));
+    for (const key of fishing.writable(s, dice, BONUS_LEGEND)) {
+      assert.ok(scoreFor(key, dice) > 0, `${key} 가 0점인데 열렸다: ${dice}`);
+    }
+  }
+});
+check('풀리는 것은 위칸뿐 — 초이스·아랫칸은 그대로', () => {
+  const s = newSheet();
+  assert.ok(!fishing.canWrite(s, 'choice', [6, 6, 5, 2, 1], BONUS_LEGEND));
+  assert.ok(!fishing.canWrite(s, 'yacht', [6, 6, 6, 6, 1], BONUS_LEGEND));
+});
+check('다른 판에서는 여전히 셋 이상', () => {
+  const s = newSheet();
+  const dice = [6, 6, 1, 2, 3];
+  assert.ok(!fishing.canWrite(s, 'sixes', dice));
+  assert.ok(!fishing.canWrite(s, 'sixes', dice, { key: 'minnow', row: 'sixes', legend: false }));
+  assert.ok(!fishing.canWrite(s, 'sixes', dice, { key: 'goldChipShark', row: 'yacht', legend: true }));
+});
+check('판에 적을 때도 그 판의 규칙을 본다', () => {
+  const r = round({ hidden: BONUS_LEGEND });
+  r.dice = [6, 6, 1, 2, 3];
+  assert.ok(fishing.writeTo(r, 'sixes'), '소계 전설 판인데 6 두 개를 못 적었다');
+  assert.equal(r.sheet.sixes, 12);
+  drop(r);
+});
+
 console.log('\n기척');
 check('같은 거리면 위아래가 같은 갈래', () => {
   // **이 검사가 "방향을 안 흘린다" 의 증거다.** 열세 줄의 모든 짝을 뒤집어 본다.

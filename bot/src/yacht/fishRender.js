@@ -16,7 +16,7 @@ import {
 } from './rules.js';
 import { faces, faceEmoji, PREFIX } from './render.js';
 import {
-  writable, canWrite, openingLine, legendNeed, legendBanner,
+  writable, canWrite, bonusLegend, openingLine, legendNeed, legendBanner,
 } from './fishing.js';
 import { BONUS_ROW, itemOf, isFish, isLegend, tierOf } from '../casino/fish.js';
 import { base, THEME_COLOR } from '../embeds.js';
@@ -58,7 +58,7 @@ export function fishTable(round) {
   const mark = (key) => {
     if (!dice) return '';
     if (sheet[key] !== null) return '✗';
-    return canWrite(sheet, key, dice) ? `○ ${scores[key]}점` : '✗';
+    return canWrite(sheet, key, dice, round.hidden) ? `○ ${scores[key]}점` : '✗';
   };
   const row = (label, value, right = '') =>
     padEndW(label, LABEL_W) + cell(value) + (right ? `   ${right}` : '');
@@ -81,6 +81,13 @@ const RULE_LINES = [
   '나머지는 **조건이 맞아 0점이 아닐 때**만 적을 수 있어요. 0점을 버려 떠볼 수는 없어요.',
 ];
 
+/** 소계 전설 판. 위칸만 풀린다(fishing.bonusLegend). */
+const BONUS_RULE_LINES = [
+  '**■ 적을 수 있는 칸**',
+  '1~6 은 그 눈이 **하나라도** 있으면(이 판에서만), 초이스는 **눈의 합 21 이상**,',
+  '나머지는 **조건이 맞아 0점이 아닐 때**만 적을 수 있어요.',
+];
+
 /**
  * 전설 판을 여는 카드.
  *
@@ -99,7 +106,7 @@ const legendOpenEmbed = (round) => base({
     legendNeed(round.hidden),
     `기회는 **${round.tries}번**, 기회마다 주사위는 **${MAX_ROLLS}번**. 빗나가도 자리는 그대로예요.`,
     '',
-    ...RULE_LINES,
+    ...(bonusLegend(round.hidden) ? BONUS_RULE_LINES : RULE_LINES),
     '',
     '_놓치면 오늘의 강은 다시 잠잠해진다._',
   ].join('\n'),
@@ -171,7 +178,7 @@ export function boardRows(round) {
   ];
 
   const canRoll = round.rollsLeft > 0 && !round.held.every(Boolean);
-  const open = writable(round.sheet, round.dice);
+  const open = writable(round.sheet, round.dice, round.hidden);
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(cid(round, 'roll'))
       .setLabel(round.rollsLeft > 0 ? `다시 굴리기 (${round.rollsLeft}번 남음)` : '더 못 굴려요')

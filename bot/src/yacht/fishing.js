@@ -59,29 +59,42 @@ const rounds = new Map();
 // ---------------------------------------------------------------- 규칙
 
 /**
+ * 소계 전설 판인가. 이 판에서만 위칸 규칙이 풀린다(`canWrite`).
+ *
+ * 그 판은 **칸을 이미 알려 줬다** — 떠볼 것이 없으니 "셋 이상" 이 막던 것(칸 훑기)이 애초에
+ * 없다. 남는 것은 가혹함뿐이었다. 여섯 번을 전부 같은 눈 셋으로 채워야 63 에 닿았다.
+ */
+export const bonusLegend = (hidden) => Boolean(hidden?.legend && hidden.row === BONUS_ROW);
+
+/**
  * 그 칸에 적을 수 있는지. **0점을 버리는 길을 막는 것이 전부다** — 그게 되면 다섯 번이 아니라
  * 열두 번 떠볼 수 있고, 낚시가 그냥 순서대로 훑기가 된다.
  *
- *   위칸(1~6)  그 눈이 세 개 이상
+ *   위칸(1~6)  그 눈이 세 개 이상 — **소계 전설 판에서는 하나라도** 있으면(`bonusLegend`)
  *   초이스      눈의 합 21 이상
  *   나머지      실제로 조합이 됐을 것(점수가 0 이 아닐 것)
  *
+ * 소계 전설 판에서도 **0점은 여전히 못 적는다.** 그 판에서 0 을 적는 것은 떠보기가 아니라
+ * 그냥 한 번을 버리는 것이라 막을 까닭은 약하지만, "0점은 안 된다" 는 한 줄을 판마다 다르게
+ * 두면 규칙을 외워야 할 것이 늘어난다. 버릴 때는 [이번 기회 넘기기] 가 있다.
+ *
  * 보너스는 **적는 칸이 아니라 이루는 칸**이라 여기 오지 않는다.
  */
-export function canWrite(sheet, key, dice) {
+export function canWrite(sheet, key, dice, hidden = null) {
   if (!dice || key === BONUS_ROW || sheet[key] !== null) return false;
   const cat = categoryOf(key);
   if (!cat) return false;
   if (UPPER_KEYS.includes(key)) {
-    return dice.filter((d) => d === cat.face).length >= UPPER_NEED;
+    const need = bonusLegend(hidden) ? 1 : UPPER_NEED;
+    return dice.filter((d) => d === cat.face).length >= need;
   }
   if (key === 'choice') return dice.reduce((a, b) => a + b, 0) >= CHOICE_NEED;
   return scoreFor(key, dice) > 0;
 }
 
-/** 지금 눈으로 적을 수 있는 칸들. 셀렉트가 이 목록만 올린다. */
-export const writable = (sheet, dice) =>
-  openCategories(sheet).filter((k) => canWrite(sheet, k, dice));
+/** 지금 눈으로 적을 수 있는 칸들. 셀렉트가 이 목록만 올린다. `hidden` 은 판의 숨은 것. */
+export const writable = (sheet, dice, hidden = null) =>
+  openCategories(sheet).filter((k) => canWrite(sheet, k, dice, hidden));
 
 /**
  * 빗나갔을 때의 기척.
@@ -146,7 +159,7 @@ export function openingLine(hidden) {
 
 /** 전설에 닿는 **유일한 길**. 거리 기척이 뜻이 없는 판이라 이 줄이 그 자리를 대신한다. */
 export const legendNeed = (hidden) => (hidden.row === BONUS_ROW
-  ? `1~6 칸을 메워 **윗칸 소계 ${BONUS_NEED}**. 여섯 번을 전부 같은 눈 셋으로 채워야 겨우 닿아요.`
+  ? `1~6 칸을 메워 **윗칸 소계 ${BONUS_NEED}**. 이 판에서는 1~6 칸을 **같은 눈이 하나만 있어도** 적을 수 있어요.`
   : '**요트 칸에 같은 눈 다섯.** 그 한 수 말고는 닿는 길이 없어요.');
 
 /** 판이 도는 동안 표 위에 남는 한 줄. 무엇을 쫓고 있는지 잊지 않게. */
@@ -255,7 +268,7 @@ export function land(round, key, rand = Math.random) {
  * 위한 그물이다(rev 가 대부분 걸러 주지만 전부는 아니다).
  */
 export function writeTo(round, key, rand = Math.random) {
-  if (!canWrite(round.sheet, key, round.dice)) return null;
+  if (!canWrite(round.sheet, key, round.dice, round.hidden)) return null;
   const { sheet, gained } = commit(round.sheet, key, round.dice);
   round.sheet = sheet;
 
@@ -301,7 +314,7 @@ export const caughtInfo = (round) => (round.caught ? BY_KEY[round.caught.key] ??
 
 export default {
   TRIES, BAITS, BAIT_KEYS, triesFor, CHOICE_NEED, UPPER_NEED, IDLE_MS,
-  canWrite, writable, hintFor, openingLine, legendNeed, legendBanner, isCatch,
+  canWrite, writable, bonusLegend, hintFor, openingLine, legendNeed, legendBanner, isCatch,
   create, get, forChannel, remove, touch, writeTo, skipTurn, nextTurn, land, end, expired,
   caughtInfo,
 };

@@ -410,7 +410,7 @@ async function handleFish(interaction, round, action, arg) {
   }
 
   if (action === 'skip') {
-    if (fishing.writable(round.sheet, round.dice).length) {
+    if (fishing.writable(round.sheet, round.dice, round.hidden).length) {
       await deny(interaction, '아직 적을 수 있는 칸이 있어요.');
       return true;
     }

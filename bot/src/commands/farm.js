@@ -31,7 +31,7 @@ import {
 } from 'discord.js';
 import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather,
 } from '../api.js';
 import { base, fail, trunc } from '../embeds.js';
 import { forget } from '../casino/alive.js';
@@ -39,7 +39,7 @@ import { forgetBag } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
 import {
-  FARM_COLOR, farmEmbed, cropName, cellEmoji, plotNo, stars, modsBadge,
+  FARM_COLOR, farmEmbed, cropName, cellEmoji, plotNo, stars, modsBadge, seasonsText, SEASON_NAME, skyLine,
 } from '../farm/render.js';
 
 export const PREFIX = 'farm';
@@ -82,9 +82,10 @@ function why(r, crops) {
     case 'notOwner': return `농사일은 주인 <@${r.owner}> 님만 할 수 있어요. 물은 누구나 줄 수 있어요!`;
     case 'already': return `오늘 물이 필요한 작물엔 이미 다 줬어요${r.by?.length ? ` — ${r.by.map((id) => `<@${id}>`).join(' ')}` : ''}. 내일 또 부탁해요.`;
     case 'noPlants': return '물을 줄 작물이 없어요. 다 자란 작물은 물이 필요 없어요 — 수확하세요!';
+    case 'rain': return '오늘은 비가 와서 물을 이미 줬어요 ☔ — 체력을 아끼세요.';
     case 'tired': return r.stamina
       ? `오늘 개간 기력을 다 썼어요(${r.stamina.max}). 내일 다시 채워져요.`
-      : `체력이 모자라 물을 못 줘요(체력 **${num(r.hp)}**). 물 한 포기에 체력 1, 1은 남겨 둬요. \`/출첵\` 이나 먹을 것으로 채우세요.`;
+      : `체력이 모자라 물을 못 줘요(체력 **${num(r.hp)}**). 물 한 포기에 체력 ${r.cost ?? 1}${r.cost > 1 ? '(🥵 폭염)' : ''}, 1은 남겨 둬요. \`/출첵\` 이나 먹을 것으로 채우세요.`;
     case 'locked': return '아직 잠긴 밭이에요.';
     case 'level': return `**${cropName(crops, r.crop)}** 은(는) 농장 **Lv.${r.need}** 부터 심을 수 있어요.`;
     case 'otherCrop': return `그 밭엔 이미 **${cropName(crops, r.crop)}** 이(가) 자라고 있어요. 한 밭엔 한 작물만 심어요.`;
@@ -179,7 +180,8 @@ function harvestLine(items, crops) {
 }
 
 function waterNote(who, r) {
-  const bits = [`<@${who}> 님이 **${r.watered}포기**에 물을 줬어요 · 체력 −${r.watered} (남은 체력 ${num(r.hp)})`];
+  const cost = r.cost ?? 1;
+  const bits = [`<@${who}> 님이 **${r.watered}포기**에 물을 줬어요 · 체력 −${r.watered * cost}${cost > 1 ? ' 🥵 폭염' : ''} (남은 체력 ${num(r.hp)})`];
   if (r.revived) bits.push(`🍂 ${r.revived}포기가 살아났어요`);
   if (r.ripened) bits.push(`🧺 ${r.ripened}포기가 다 자랐어요`);
   if (r.left) bits.push(`_체력이 모자라 **${r.left}포기**는 못 줬어요 — 다른 분이 이어서 줄 수 있어요_`);
@@ -336,6 +338,12 @@ function plantPayload({
     lines.push(`${c.emoji} **${c.name}** · ${c.seedOnly ? `**🎒 주머니 씨앗** 칸당 하나(가진 것 ${num(pouch[c.key] ?? 0)})` : `씨앗 칸당 **${num(c.seed)}골드**`} · 물을 **${c.days}번** 받으면 다 자라요`
       + (c.regrow ? ` · 거둔 뒤 ${c.regrow}일마다 또 열려요` : ''));
     if (c.note) lines.push(`📜 ${c.note}`);
+    const now = farm.sky?.today.season;
+    if (now && c.seasons) {
+      lines.push(c.seasons.includes(now.key)
+        ? `🗓️ 제철 ${seasonsText(c)} — 지금 ${now.name}, 제철이에요`
+        : `🥀 제철 ${seasonsText(c)} — 지금 ${now.name}은 제철이 아니라 **느리게 자라고 품질이 떨어져요**`);
+    }
     if (!c.seedOnly) lines.push(`_거두면 칸마다 ${num(c.price)}골드어치(최소 1개) — 씨앗값을 빼도 칸당 **${num(c.profit)}골드** 이상 남아요._`);
   } else {
     lines.push('_먼저 심을 작물을 고르세요._');
@@ -361,7 +369,7 @@ function plantPayload({
             label: trunc(x.seedOnly ? `${x.name} — 🎒 주머니 ${pouch[x.key]}` : `${x.name} — 씨앗 ${x.seed}골드`, 100),
             value: x.key,
             emoji: x.emoji,
-            description: trunc(`${modsBadge(preview?.all?.[x.key]) ? `${modsBadge(preview.all[x.key])} · ` : ''}${x.days}일${x.seedOnly ? ' · 희귀' : ` · 거두면 칸당 +${x.profit}골드 이상`}${x.regrow ? ` · ${x.regrow}일마다 또 열림` : ''}`, 100),
+            description: trunc(`${farm.sky && x.seasons ? (x.seasons.includes(farm.sky.today.season.key) ? '🗓️제철 · ' : '🥀제철 아님 · ') : ''}${modsBadge(preview?.all?.[x.key]) ? `${modsBadge(preview.all[x.key])} · ` : ''}${x.days}일${x.seedOnly ? ' · 희귀' : ` · 거두면 칸당 +${x.profit}골드 이상`}${x.regrow ? ` · ${x.regrow}일마다 또 열림` : ''}`, 100),
             default: x.key === c?.key,
           })),
           ...(pages > 1 ? [{
@@ -688,6 +696,42 @@ async function openTools(interaction) {
   return interaction.editReply(toolsPayload({ owner: me, tools, account: accounts[me] }));
 }
 
+// ---------------------------------------------------------------- 날씨 (4a)
+
+/** 날씨 효과 한 줄(설명). */
+const SKY_NOTE = {
+  clear: '보통 날', cloudy: '성장 ×0.9', rain: '비가 물을 줘요(체력 안 듦)', downpour: '비가 물을 줘요 · 뿌리 작물 품질 −10',
+  heat: '물 한 포기에 체력 2 · 용의 고추 ×2', frost: '제철이 아닌 작물이 상해요', storm: '키 큰 작물(옥수수·해바라기)이 쓰러져요',
+  rainbow: '오늘 거두면 품질 +10',
+};
+
+/** `/농장 날씨` — 오늘·내일, 앞으로 이레, 오늘 제철인 작물. */
+function weatherPayload({ wf, crops }) {
+  const t = wf.today; const n = wf.tomorrow;
+  const week = (wf.ahead ?? []).map((a) => `${a.weather.emoji}`).join(' ');
+  const inSeason = crops.filter((c) => wf.inSeason.includes(c.key) && !c.seedOnly);
+  const lines = [
+    `**오늘** ${t.weather.emoji} ${t.weather.name} — ${SKY_NOTE[t.weather.key]}`,
+    `**내일** ${n.weather.emoji} ${n.weather.name} — ${SKY_NOTE[n.weather.key]}`,
+    '',
+    `${t.season.emoji} **${t.season.name}** ${t.season.day}일째 / 14 — 계절은 2주마다 바뀌어요`,
+    week ? `앞으로 이레 ${week}` : null,
+    '',
+    `🗓️ **지금 제철** (${inSeason.length}종) — ${inSeason.map((c) => `${c.emoji}${c.name}`).join(' ')}`,
+    '_제철이 아니면 성장 ×0.7 · 품질이 떨어져요_',
+  ].filter((l) => l != null);
+  return {
+    embeds: [base({ title: `${t.weather.emoji} 오늘의 날씨`, description: lines.join('\n'), color: FARM_COLOR, footer: '모든 농장이 같은 날씨예요 · 날씨는 미리 정해져 있어요' })],
+    allowedMentions: QUIET,
+  };
+}
+
+async function weatherCmd(interaction) {
+  await interaction.deferReply({ flags: EPH });
+  const [wf, crops] = await Promise.all([getWeather(7), getFarmCrops()]);
+  return interaction.editReply(weatherPayload({ wf, crops }));
+}
+
 // ---------------------------------------------------------------- 도감 (3b)
 
 /**
@@ -741,6 +785,7 @@ const data = new SlashCommandBuilder()
     .addIntegerOption((o) => o.setName('개수').setDescription('만들 퇴비 수 (기본 1)').setMinValue(1).setMaxValue(100)))
   .addSubcommand((s) => s.setName('곡괭이').setDescription('곡괭이를 봅니다 · 더 좋은 것으로 바꿉니다'))
   .addSubcommand((s) => s.setName('도감').setDescription('키워 본 작물 · 최고 품질 · 대왕 작물을 봅니다'))
+  .addSubcommand((s) => s.setName('날씨').setDescription('오늘 · 내일 날씨와 계절, 지금 제철인 작물'))
   .addSubcommand((s) => s.setName('폐농').setDescription('내 농장을 없앱니다 — 등록 24시간 안이면 무르기'));
 
 async function register(interaction) {
@@ -925,6 +970,7 @@ const RUN = {
   퇴비: compostCmd,
   곡괭이: toolsCmd,
   도감: bookCmd,
+  날씨: weatherCmd,
   폐농: abandonCmd,
 };
 
@@ -1192,7 +1238,7 @@ async function component(interaction) {
 
 /** 검사용(scripts/check-farm.mjs). 화면은 상태가 없어 그대로 불러 볼 수 있다. */
 export {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 };
 

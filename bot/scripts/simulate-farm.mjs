@@ -27,12 +27,13 @@ import { ITEM_BY_KEY } from '../src/casino/items.js';
 const require = createRequire(import.meta.url);
 const rules = require('../../server/src/farm/rules.js');
 const affinity = require('../../server/src/farm/affinity.js');
+const weather = require('../../server/src/farm/weather.js');
 const land = require('../../server/src/farm/land.js');
 const { CROPS, seedPrice, guaranteed } = require('../../server/src/farm/crops.js');
 
 const DAYS = Number(process.argv[2]) || 60;
 const RUNS = Number(process.argv[3]) || 20;
-const D0 = '2026-10-01';
+const D0 = '2026-09-21';     // 가을 1일째 — 실제 배포 때처럼 가을에 시작한다
 const MAX_HP = 100;
 const CHECKIN_HEAL = 20;
 /** 비료 한 포대(봇 명부의 값 — `FERT_PRICE=20` 으로 바꿔 볼 수 있다). 사고 나서도 이만큼은 남긴다. */
@@ -61,12 +62,13 @@ const bestCrop = (level) => CROPS.filter((c) => c.lv <= level && !c.seedOnly)
  */
 const longRun = (c) => (c.regrow ? c.price / c.regrow : guaranteed(c) / c.days);
 
-/** 궁합 미리보기를 보고 고른다 — 하루당 가치 × 성장 배율, 연작(토질 0)은 20% 덜 친다. */
-function smartCrop(farm, plot, level) {
+/** 궁합 미리보기와 제철을 보고 고른다 — 하루당 가치 × 성장 배율 × 제철, 연작(토질 0)은 20% 덜 친다. */
+function smartCrop(farm, plot, level, today) {
   let best = null; let score = -1;
   for (const c of CROPS.filter((x) => x.lv <= level && !x.seedOnly)) {
     const m = affinity.modsFor(farm, plot, c.key);
-    const v = longRun(c) * (m?.rate ?? 1) * (m?.soil === 0 ? 0.8 : 1);
+    const season = weather.inSeason(c, today) ? 1 : weather.OFF_SEASON_GROWTH;
+    const v = longRun(c) * (m?.rate ?? 1) * season * (m?.soil === 0 ? 0.8 : 1);
     if (v > score) { score = v; best = c; }
   }
   return best;
@@ -155,15 +157,17 @@ function play({ eat, neighbor, fert, compost, naive }, seed) {
       // 연작(⚔️)이 걸린 밭은 **더 심지 않고 비운다** — 다 거두면 작물이 풀려 다른 것을 심는다.
       // 이어 심으면 밭이 영영 안 비어 연작이 풀리지 않는다(칸 하나로 연작을 피하지 못하게 한 규칙).
       if (!naive && p.crop && affinity.modsFor(farm, pi)?.rotation === 'same') continue;
-      const crop = p.crop ?? (naive ? bestCrop(level) : smartCrop(farm, pi, level)).key;
+      const crop = p.crop ?? (naive ? bestCrop(level) : smartCrop(farm, pi, level, today)).key;
       const r = rules.plant(farm, today, { plot: pi, cells: soil, crop });
       if (r.ok) { seeds += r.cost; gold -= r.cost; }
     }
 
     // 물 — 이웃 먼저(체력 20), 그다음 나
-    if (neighbor) rules.water(farm, today, 'neighbor', { budget: CHECKIN_HEAL, rand });
-    const w = rules.water(farm, today, 'me', { budget: Math.max(0, hp - 1), rand });
-    if (w.ok) { hp -= w.watered; waterMissed += w.left; } else if (w.reason === 'tired') waterMissed += w.need;
+    // 폭염이면 한 포기에 체력 2(4a). 비 오는 날은 비가 준다(water → rain).
+    const cost = weather.hpCost(today);
+    if (neighbor) rules.water(farm, today, 'neighbor', { budget: Math.floor(CHECKIN_HEAL / cost), rand });
+    const w = rules.water(farm, today, 'me', { budget: Math.floor(Math.max(0, hp - 1) / cost), rand });
+    if (w.ok) { hp -= w.watered * cost; waterMissed += w.left; } else if (w.reason === 'tired') waterMissed += w.need;
     if (hp < 30) lowHpDays += 1;
 
     const lv = rules.levelOf(farm);

@@ -23,9 +23,9 @@ process.env.GEMINI_API_KEY ||= '';
 
 import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
-import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge } from '../src/farm/render.js';
+import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge, skyLine, seasonsText, waterLine } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 } from '../src/commands/farm.js';
 import { flatShare } from '../src/casino/crafts.js';
@@ -36,6 +36,7 @@ const require = createRequire(import.meta.url);
 const { CROPS, publicCrop } = require('../../server/src/farm/crops.js');
 const land = require('../../server/src/farm/land.js');
 const rules = require('../../server/src/farm/rules.js');
+const weather = require('../../server/src/farm/weather.js');
 const affinity = require('../../server/src/farm/affinity.js');
 
 let ok = 0; let bad = 0;
@@ -55,7 +56,7 @@ const crops = CROPS.map(publicCrop);
 eq('씨앗값 < 파는 값', crops.filter((c) => !c.seedOnly && !(c.seed >= 1 && c.seed < c.price)).map((c) => c.key), []);
 eq('희귀 작물은 씨앗값 0', crops.filter((c) => c.seedOnly && c.seed !== 0).map((c) => c.key), []);
 eq('이모지가 있다', crops.filter((c) => !c.emoji).map((c) => c.key), []);
-eq('심을 수 있는 작물은 최근에 풀린 것부터', unlocked(crops, 10)[0].lv, 8);
+eq('심을 수 있는 작물은 최근에 풀린 것부터', unlocked(crops, 10)[0].lv, 10);
 eq('Lv1 이면 Lv1 작물만(희귀 빼고)', unlocked(crops, 1).every((c) => c.lv === 1 && !c.seedOnly), true);
 eq('희귀는 주머니에 있을 때만 · 맨 앞', unlocked(crops, 1, { walkingCap: 2 }).map((c) => c.key)[0], 'walkingCap');
 eq('주머니가 0 이면 안 보인다', unlocked(crops, 10, { walkingCap: 0 }).some((c) => c.seedOnly), false);
@@ -187,7 +188,7 @@ eq('윤작(성장은 그대로)', modsBadge({ rate: 1, rotation: 'varied' }), '�
   const all = Object.fromEntries(crops.map((c) => [c.key, affinity.modsFor({ ...f, plots: f.plots.map((p, i) => (i === 4 ? { ...p, crop: null } : p)) }, 4, c.key)]).filter(([, m]) => m));
   const pp = plantPayload({ ch: CH, plot: 4, crop: null, mask: 0, owner: OWNER, farm: rules.view({ ...f, plots: f.plots.map((p, i) => (i === 4 ? { ...p, crop: null, cells: p.cells.map(() => ({ t: 'soil' })) } : p)) }, D), crops, preview: { all, mods: null } });
   const carrotOpt = pp.components[0].toJSON().components[0].options.find((o) => o.value === 'carrot');
-  eq('셀렉트 줄에 궁합', carrotOpt.description.startsWith('🤝 +10% · '), true);
+  eq('셀렉트 줄에 제철 · 궁합', /^(🗓️제철|🥀제철 아님) · 🤝 \+10% · /.test(carrotOpt.description), true);
   eq('궁합 문구 줄', modsLines(affinity.modsFor(f, 4)), ['🤝 파속 이웃 +10% · 벌레를 쫓는다 (2번)']);
   const withNotes = plantPayload({ ch: CH, plot: 4, crop: 'carrot', mask: 0, owner: OWNER, farm: vv, crops, preview: { all, mods: vv.plots[4].mods } });
   eq('고른 작물의 궁합이 창에 적힌다', withNotes.embeds[0].toJSON().description.includes('🤝 파속 이웃 +10%'), true);
@@ -241,11 +242,33 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('도감은 임베드 한도 안', e.description.length < 4096, true);
 }
 
+// 4a — 날씨 · 제철
+{
+  const sky = weather.forecast('2026-09-21');
+  eq('날씨 줄', skyLine(sky).includes('🍂 가을 1일째 · 내일 '), true);
+  eq('제철 글', [seasonsText(crops.find((c) => c.key === 'carrot')), seasonsText(crops.find((c) => c.key === 'greenOnion'))], ['봄·가을·겨울', '사계절']);
+  const rainy = { ...sky, today: { ...sky.today, weather: weather.WEATHERS.rain } };
+  eq('비 오는 날 물 줄', waterLine({ sky: rainy, need: 0, waterBy: [] }), '💧 오늘은 ☔ 비 — 비가 물을 줬어요');
+  const wf = { ...sky, inSeason: crops.filter((c) => c.seasons.includes('autumn')).map((c) => c.key), ahead: [sky.today, sky.tomorrow] };
+  const wp = weatherPayload({ wf, crops }).embeds[0].toJSON();
+  eq('날씨 창 — 계절 · 제철', [wp.description.includes('🍂 **가을** 1일째 / 14'), wp.description.includes('🥕당근')], [true, true]);
+  eq('날씨 창은 한도 안', wp.description.length < 4096, true);
+  const pf = { ...rules.view(rules.newFarm({ channelId: CH, guildId: '1', owner: OWNER, today: D, now: `${D}T00:00:00.000Z` }), '2026-09-21'), level: 10 };
+  pf.sky = sky;
+  pf.plots[4].cells = pf.plots[4].cells.map(() => 'soil');
+  const pw = plantPayload({ ch: CH, plot: 4, crop: 'tomato', mask: 0, owner: OWNER, farm: pf, crops }).embeds[0].toJSON().description;
+  eq('심기 창 — 가을 토마토는 제철 아님', pw.includes('🥀 제철 여름 — 지금 가을은 제철이 아니라'), true);
+  const pc = plantPayload({ ch: CH, plot: 4, crop: 'carrot', mask: 0, owner: OWNER, farm: pf, crops }).embeds[0].toJSON().description;
+  eq('심기 창 — 가을 당근은 제철', pc.includes('🗓️ 제철 봄·가을·겨울 — 지금 가을, 제철이에요'), true);
+  eq('폭염 물 문구', harvestNote.length >= 0 && why({ reason: 'tired', hp: 3, cost: 2 }, crops).includes('체력 2(🥵 폭염)'), true);
+  eq('비 오는 날 사유', why({ reason: 'rain' }, crops).startsWith('오늘은 비가 와서'), true);
+}
+
 // ---------------------------------------------------------------- 5. 사유
 
 const REASONS = ['none', 'notOwner', 'already', 'noPlants', 'tired', 'locked', 'level', 'otherCrop', 'occupied', 'gold',
   'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown',
-  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed'];
+  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain'];
 const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1, item: 'compost', have: 0, perDay: 3 };
 eq('사유마다 문장이 있다', REASONS.filter((r) => why({ ...sample, reason: r }, crops).startsWith('하지 못했어요')), []);
 eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 }, crops) !== why({ reason: 'tired', stamina: st }, crops), true);

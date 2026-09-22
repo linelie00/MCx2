@@ -290,6 +290,8 @@ export const getPreview = (channelId, plot, crop = null) => request(
   `/api/farms/${encodeURIComponent(channelId)}/preview?plot=${plot}${crop ? `&crop=${encodeURIComponent(crop)}` : ''}`,
   { bot: true },
 );
+/** 날씨(4a) — 오늘·내일·앞으로 `days` 일 · 오늘 제철인 작물. 모든 농장이 같다. */
+export const getWeather = (days = 0) => request(`/api/farms/weather${days ? `?days=${days}` : ''}`, { bot: true });
 /** 도감(3b) — `{ book: { 작물: { n, best, giant } }, total }`. */
 export const getBook = (userId) => request(`/api/farms/book/${encodeURIComponent(userId)}`, { bot: true });
 /** 곡괭이 표 · 그 사람의 곡괭이 · 농장 레벨. */
@@ -342,5 +344,5 @@ export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook, getWeather,
 };

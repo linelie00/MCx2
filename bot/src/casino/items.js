@@ -288,6 +288,8 @@ export const ITEMS = [
   { key: 'lavender',        name: '라벤더',                  kind: '재료', cat: 'spice', price:    6, sell: true,  heal:   2,  loot: false, desc: '밭 둑을 지나기만 해도 향이 따라온다. 옆에서 자라는 것들이 덩달아 좋아진다.' },
   { key: 'koreanMelon',     name: '참외',                    kind: '재료', cat: 'fruit', price:    6, sell: true,  heal:   6,  loot: false, desc: '노랗고 줄무늬가 있다. 씨째로 먹는 사람과 긁어내는 사람이 있다.' },
   { key: 'melon',           name: '멜론',                    kind: '재료', cat: 'fruit', price:   14, sell: true,  heal:   9,  loot: false, desc: '겉에 그물 무늬가 있다. 잘 익으면 꼭지 쪽에서 단내가 난다.' },
+  { key: 'dragonChili',     name: '용의 고추',               kind: '재료', cat: 'veg',   price:   15, sell: true,  heal:  -8,  loot: false, desc: '폭염 속에서 가장 잘 자란다. 씨앗 하나로 입 안이 불바다가 된다. 날로 먹지 말자.' },
+  { key: 'moonHerb',        name: '월광초',                  kind: '재료', cat: 'spice', price:   20, sell: true,  heal:   8,  loot: false, desc: '맑은 날에만 자란다. 밤이 되면 잎맥이 은은하게 빛난다.' },
   { key: 'pepper',          name: '통후추',                   kind: '재료', cat: 'spice', price:   25, sell: true,  heal: -3,  shop: true,  loot: false, desc: '한 알에 은화 한 닢이던 시절도 있었다. 지금이 그 시절이다.' },
   { key: 'cinnamon',        name: '계피',                     kind: '재료', cat: 'spice', price:   20, sell: true,  heal: 0,   shop: true,  loot: false, desc: '나무껍질인데 비싸다. 향이 모든 걸 설명한다.' },
   { key: 'saffron',         name: '사프란',                   kind: '재료', cat: 'spice', price:   60, sell: true,  heal: 0,   shop: true,  loot: false, desc: '꽃술 세 가닥. 금보다 비싸다는 소문이 있다.' },
@@ -334,7 +336,7 @@ export const FARM_CROPS = [
   'napaCabbage', 'broccoli', 'paprika', 'beet', 'buckwheat', 'strawberry', 'rosemary', 'basil', 'mint',
   'pumpkin', 'taro', 'sesame', 'raspberry', 'blueberry', 'rice', 'sunflower',
   'asparagus', 'teaLeaf', 'ginger', 'lavender', 'koreanMelon', 'watermelon', 'melon',
-  'pineMushroom', 'saffron', 'screamRoot', 'walkingCap', 'keeperBerry',
+  'pineMushroom', 'saffron', 'dragonChili', 'moonHerb', 'screamRoot', 'walkingCap', 'keeperBerry',
 ];
 /** 대왕 작물이 되는 작물. */
 export const GIANT_CROPS = ['radish', 'cabbage', 'napaCabbage', 'pumpkin', 'watermelon', 'melon'];

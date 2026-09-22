@@ -20,6 +20,18 @@ const CELL = {
   seed: '🌱', grow: '🌿', dry: '🍂', dead: '💀', locked: '🔒',
 };
 
+/** 계절 이름(4a). 서버 `weather.SEASONS` 와 같다. */
+export const SEASON_NAME = { spring: '봄', summer: '여름', autumn: '가을', winter: '겨울' };
+/** 작물의 제철 한 토막 — `봄·가을` · `사계절`. */
+export const seasonsText = (crop) => (crop?.seasons?.length === 4 ? '사계절' : (crop?.seasons ?? []).map((k) => SEASON_NAME[k]).join('·'));
+
+/** 날씨 한 줄(4a). `🌤️ 맑음 · 🍂 가을 3일째 · 내일 ☔ 비` */
+export function skyLine(sky) {
+  if (!sky) return null;
+  const t = sky.today; const n = sky.tomorrow;
+  return `${t.weather.emoji} ${t.weather.name} · ${t.season.emoji} ${t.season.name} ${t.season.day}일째 · 내일 ${n.weather.emoji} ${n.weather.name}`;
+}
+
 /** 토질 ★ 다섯 칸. */
 export const stars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
 
@@ -74,7 +86,7 @@ export function plotLines(farm, crops) {
     const count = (st) => p.cells.filter((s) => s === st).length;
     const head = `**${plotNo(i)}번 밭** ${stars(p.star)}`;
     const bits = [];
-    if (p.crop) bits.push(`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}${modsBadge(p.mods) ? ` ${modsBadge(p.mods)}` : ''}`);
+    if (p.crop) bits.push(`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}${modsBadge(p.mods) ? ` ${modsBadge(p.mods)}` : ''}${p.inSeason === false ? ' 🥀 제철 아님' : ''}`);
     if (p.ripe) bits.push(`🧺 수확 ${p.ripe}`);
     if (p.growing) bits.push(`자라는 중 ${p.growing}${p.left != null ? ` (물 ${p.left}번 더)` : ''}`);
     if (p.need) bits.push(`💧 오늘 ${p.need}`);
@@ -106,6 +118,7 @@ export function nextLine(farm, crops) {
 
 /** 오늘 물 상태 한 줄. */
 export function waterLine(farm) {
+  if (farm.sky?.today.weather.water) return `💧 오늘은 ${farm.sky.today.weather.emoji} ${farm.sky.today.weather.name} — 비가 물을 줬어요`;
   const who = farm.waterBy?.length ? ` — ${farm.waterBy.map((id) => `<@${id}>`).join(' ')}` : '';
   if (farm.need) return `💧 오늘 물이 필요한 포기 **${farm.need}**${who}`;
   return farm.waterBy?.length ? `💧 오늘 물을 다 줬어요${who}` : '💧 _물을 줄 작물이 없어요._';
@@ -118,6 +131,7 @@ export function farmEmbed(farm, crops, { name } = {}) {
     title: `${farm.sign} ${name ? `#${name} ` : ''}농장`,
     description: [
       `<#${farm.channelId}> · 주인 <@${farm.owner}>`,
+      skyLine(farm.sky),
       levelLine(farm),
       waterLine(farm),
       '',
@@ -133,4 +147,5 @@ export function farmEmbed(farm, crops, { name } = {}) {
 
 export default {
   FARM_COLOR, plotNo, stars, cropName, cropEmoji, cellEmoji, grid, modsBadge, plotLines, levelLine, nextLine, waterLine, farmEmbed,
+  SEASON_NAME, seasonsText, skyLine,
 };

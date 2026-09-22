@@ -851,7 +851,7 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('게시판 — 희귀 작물은 없다', b1.some((o) => CROP_BY_KEY[o.crop].seedOnly), false);
   const o0 = b1[0]; const c0 = CROP_BY_KEY[o0.crop];
   eq('기한 = 성장일 + 2', o0.due, rules.addDays('2026-10-01', c0.days + 2));
-  eq('보상 = 값 × 수량 × 품질 × 1.6', o0.gold, Math.ceil(c0.price * o0.qty * STAR_MULT[o0.minStar] * orders.BOARD_GOLD));
+  eq('보상 = 값 × 수량 × 품질 × 4 + 성장일 × 12', o0.gold, Math.ceil(c0.price * o0.qty * STAR_MULT[o0.minStar] * orders.BOARD_GOLD) + c0.days * orders.BOARD_DAY_GOLD);
   eq('게시판 경험치 = 급 + 5', b1.map((o) => o.xp), [10, 15, 20]);
   const days = Array.from({ length: 200 }, (_, n) => rules.addDays('2026-09-21', n));
   const all = days.flatMap(orders.boardOf);

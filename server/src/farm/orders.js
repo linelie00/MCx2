@@ -35,8 +35,14 @@ const REQUEST_MAX = 3;
 /** 기한 = 성장일 + 이만큼. */
 const DUE_EXTRA = 2;
 /** 보상 골드 배수 — 기본가 × 수량 × 품질 배수 × 이것. 게시판은 경쟁이라 더 준다. */
-const BOARD_GOLD = 1.6;
-const REQUEST_GOLD = 1.2;
+const BOARD_GOLD = 4;
+const REQUEST_GOLD = 3;
+/**
+ * 기다린 값 — 성장일 하루마다 더 준다. 밭 하나를 그 주문에 며칠 내주는 셈이라, 싼 작물 주문도
+ * 밭을 쓸 만하게(simulate-farm +주문 — 값 × 수량만으로는 판 수익보다 적었다).
+ */
+const BOARD_DAY_GOLD = 12;
+const REQUEST_DAY_GOLD = 8;
 /** 농장 경험치 — 작물 급(Lv1~3 · 4~6 · 7+)마다. 게시판은 +5. (simulate-farm 으로 맞춘다) */
 const REQUEST_XP = [5, 10, 15];
 const BOARD_XP_BONUS = 5;
@@ -49,10 +55,10 @@ const tierOf = (crop) => (crop.lv <= 3 ? 0 : crop.lv <= 6 ? 1 : 2);
 /** 수량 — 쌀수록 많이. 과수는 한 번에 많이 나오니 두 배. */
 function qtyOf(crop, rand) {
   let q;
-  if (crop.price <= 3) q = between(rand, 6, 10);
-  else if (crop.price <= 6) q = between(rand, 4, 7);
-  else if (crop.price <= 14) q = between(rand, 2, 4);
-  else q = between(rand, 1, 2);
+  if (crop.price <= 3) q = between(rand, 3, 6);
+  else if (crop.price <= 6) q = between(rand, 2, 4);
+  else if (crop.price <= 14) q = between(rand, 1, 3);
+  else q = 1;
   return crop.tree ? q * 2 : q;
 }
 
@@ -68,7 +74,7 @@ function makeOrder({
     crop: crop.key,
     qty,
     minStar,
-    gold: Math.ceil(crop.price * qty * STAR_MULT[minStar] * mult),
+    gold: Math.ceil(crop.price * qty * STAR_MULT[minStar] * mult) + crop.days * (kind === 'board' ? BOARD_DAY_GOLD : REQUEST_DAY_GOLD),
     xp: REQUEST_XP[tierOf(crop)] + (kind === 'board' ? BOARD_XP_BONUS : 0),
     day,
     due: keyOf(dayNum(day) + crop.days + DUE_EXTRA),
@@ -159,6 +165,6 @@ function pruneTaken(taken, today) {
 }
 
 module.exports = {
-  BOARD_PER_DAY, BOARD_SHOWN, LOOKBACK, REQUEST_MAX, DUE_EXTRA, BOARD_GOLD, REQUEST_GOLD, REQUEST_XP, BOARD_XP_BONUS,
+  BOARD_PER_DAY, BOARD_SHOWN, LOOKBACK, REQUEST_MAX, DUE_EXTRA, BOARD_GOLD, REQUEST_GOLD, BOARD_DAY_GOLD, REQUEST_DAY_GOLD, REQUEST_XP, BOARD_XP_BONUS,
   tierOf, boardOf, activeBoard, ensureRequests, takeFor, pruneTaken,
 };

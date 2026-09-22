@@ -651,11 +651,12 @@ exports.weather = (req, res) => {
     const day = rules.addDays(today, n);
     ahead.push({ day, weather: weather.weatherOf(day), season: weather.seasonOf(day) });
   }
+  // **`today` 를 날짜로 덮지 않는다** — forecast 의 today(오늘의 날씨·계절)와 이름이 겹친다. 날짜는 `day`.
   return res.json({
     ...weather.forecast(today),
     inSeason: CROPS.filter((c) => weather.inSeason(c, today)).map((c) => c.key),
     ahead,
-    today,
+    day: today,
   });
 };
 

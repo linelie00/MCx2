@@ -886,7 +886,7 @@ const server = app.listen(0, async () => {
 
     // --- 4a: 날씨 · 폭염 체력
     const wf = (await hit('/farms/weather?days=3')).body;
-    eq('날씨 라우트', [typeof wf.today.weather.key, wf.tomorrow.day, wf.ahead.length, Array.isArray(wf.inSeason)], ['string', rules.addDays(dayKey(), 1), 3, true]);
+    eq('날씨 라우트', [typeof wf.today, typeof wf.today.weather.emoji, typeof wf.today.season.name, wf.day, wf.tomorrow.day, wf.ahead.length, Array.isArray(wf.inSeason)], ['object', 'string', 'string', dayKey(), rules.addDays(dayKey(), 1), 3, true]);
     weather.pin({ weather: 'heat', inSeason: true });
     const d20 = readFile();
     d20.farms[CH2].plots[4].cells = d20.farms[CH2].plots[4].cells.map(() => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: dayKey(), wet: null }));

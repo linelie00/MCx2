@@ -394,6 +394,7 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('큰 의뢰 한마디엔 작물이 다 들어 있다', rq.parts.every((p) => rv.line.includes(`${nameOf(p.crop)} ${p.qty}개`)), true);
 
   const board = orders.activeBoard('2026-10-01', {});
+  eq('게시판은 세 칸', board.length, 3);
   const mine = [rq];
   const p0 = board[0].parts[0];
   const items = { [`${p0.crop}S${board[0].minStar}`]: p0.qty, ...Object.fromEntries(rq.parts.map((p) => [`${p.crop}S3`, p.qty])) };
@@ -401,16 +402,21 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   const oj = op.embeds[0].toJSON();
   const rows = limits('주문 창', op);
   const odIds = rows.flatMap((r) => r.components).filter((c) => c.custom_id.startsWith('farm:od:'));
-  eq('주문 창 — 게시판 여섯 · 의뢰 하나 · 납품 버튼 일곱', [board.length, odIds.length], [6, 7]);
-  eq('채울 수 있는 것만 켜진다', [odIds[0].disabled, odIds[6].disabled], [false, false]);
+  eq('주문 창 — 게시판 셋 · 의뢰 하나 · 납품 버튼 넷', odIds.length, 4);
+  eq('채울 수 있는 것만 켜진다', [odIds[0].disabled, odIds[3].disabled], [false, false]);
   eq('하나라도 모자라면 꺼진다', ordersPayload({ owner: OWNER, board: [], mine, crops, items: { [`${rq.parts[0].crop}S3`]: 99 }, today: '2026-10-01' }).components[0].toJSON().components[0].disabled, true);
   eq('customId 에서 주문 id 를 되살린다', odIds[0].custom_id.split(':')[2].replaceAll('~', ':'), board[0].id);
-  eq('주문 창에 한마디 · 작물마다 가진 것', [oj.description.includes('」'), oj.description.includes(`✅${cropEmoji0(p0.crop)} ${nameOf(p0.crop)} ${p0.qty}/${p0.qty}`)], [true, true]);
-  eq('주문 창은 한도 안', oj.description.length <= 4096, true);
+  eq('주문마다 필드 하나 — 머리 둘 + 주문 넷', oj.fields.length, 6);
+  eq('필드 — 의뢰인 · 한마디 · 가진 것', [oj.fields[1].name.startsWith('1. '), oj.fields[1].value.startsWith('> '), oj.fields[1].value.includes(`✅ ${cropEmoji0(p0.crop)} ${nameOf(p0.crop)} **${p0.qty} / ${p0.qty}**`)], [true, true, true]);
+  eq('큰 의뢰는 전부 모아야', oj.fields[5].value.includes('전부 모아야 해요'), true);
+  eq('필드는 한도 안', oj.fields.every((f) => f.name.length <= 256 && f.value.length <= 1024), true);
   const late = orders.activeBoard('2026-10-02', {}).find((o) => o.reserve) ?? orders.boardOf('2026-10-01').find((o) => o.reserve);
-  if (late) eq('예약 주문 표시', ordersPayload({ owner: OWNER, board: [late], mine: [], crops, items: {}, today: '2026-10-01' }).embeds[0].toJSON().description.includes('예약 주문'), true);
+  if (late) {
+    const show = (season) => ordersPayload({ owner: OWNER, board: [late], mine: [], crops, items: {}, today: '2026-10-01', season }).embeds[0].toJSON().fields[1].value.includes('오면 심으세요');
+    eq('예약 주문 — 그 계절 전에만 "오면 심으세요"', [show('autumn'), show(late.reserve)], [late.reserve !== 'autumn', false]);
+  }
   const empty = ordersPayload({ owner: OWNER, board: [], mine: [], crops, items: {}, today: '2026-10-01' });
-  eq('빈 주문 창 — 새로고침만', [empty.components.length, empty.embeds[0].toJSON().description.includes('와 있는 의뢰가 없어요')], [1, true]);
+  eq('빈 주문 창 — 새로고침만', [empty.components.length, empty.embeds[0].toJSON().fields[1].value.includes('와 있는 의뢰가 없어요')], [1, true]);
   eq('사유 — 늦음 · 끝남', [why({ reason: 'orderTaken', by: '1' }, crops).startsWith('한발 늦었어요'), why({ reason: 'orderExpired' }, crops).startsWith('기한이')], [true, true]);
   eq('noItem 에 ★', why({ reason: 'noItem', item: 'carrot', minStar: 1, have: 2, need: 5 }, crops), '**당근 ★ 이상** 이(가) 모자라요 — 가진 것 2 / 필요 5.');
 }

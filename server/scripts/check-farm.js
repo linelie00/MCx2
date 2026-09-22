@@ -306,6 +306,26 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('완벽 두 번 뽑기 중 화석은 하나만', [r.fossils, r.loot], [1, { oddFossil: 1, crackleStone: 1 }]);
 }
 
+// --- 돌이 남은 밭도 다 거두면 작물이 풀린다(2a 버그)
+{
+  const f = fresh();
+  f.plots[P].cells[8] = { t: 'rock' };
+  f.plots[P].cells[7] = { t: 'boulder', grain: 1, swings: 0, cracked: false };
+  rules.plant(f, D0, { plot: P, cells: [0], crop: 'potato' });
+  W(f, 0); at(f, 1); W(f, 1);
+  rules.harvest(f, day(1), {}, { rand: ZERO });
+  eq('돌이 남아도 작물이 풀린다', [f.plots[P].crop, f.plots[P].history], [null, ['root']]);
+  eq('다른 작물을 심을 수 있다', rules.plant(f, day(1), { plot: P, cells: [0], crop: 'lettuce' }).ok, true);
+  const stuck = fresh();
+  stuck.plots[P].crop = 'potato';
+  stuck.plots[P].cells[8] = { t: 'rock' };
+  eq('묶여 있던 밭은 읽을 때 푼다', rules.upgrade(stuck).plots[P].crop, null);
+  const alive = fresh();
+  alive.plots[P].crop = 'potato';
+  alive.plots[P].cells[0] = { t: 'dead', why: 'dry' };
+  eq('죽은 칸이 남았으면 안 푼다(치워야 한다)', rules.upgrade(alive).plots[P].crop, 'potato');
+}
+
 // --- 3a: 궁합 · 세 자매 · 윤작과 연작
 {
   /** 원하는 밭에 원하는 작물이 심긴 농장. `{ 밭: 작물 }` */

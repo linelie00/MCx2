@@ -117,6 +117,8 @@ function upgrade(farm) {
     if (!Array.isArray(p.history)) p.history = [];     // 3a — 다 거두고 비운 작물 계열
     if (!Number.isFinite(p.streak)) p.streak = 0;      // 3a — 비우지 않고 이어 거둔 칸 수
     if (!Array.isArray(p.cells)) p.cells = [];
+    // 2a 버그로 작물에 묶인 밭 — 작물 칸이 없는데 `crop` 이 남아 있으면 푼다
+    if (p.crop && p.cells.length && !holdsCrop(p)) { p.crop = null; p.streak = 0; }
     for (const c of p.cells) {
       if (c.t === 'plant' && c.wet === undefined) c.wet = farm.water.day ?? null;
     }
@@ -155,6 +157,13 @@ function rateOf(farm, pi) {
 }
 
 const loseSoil = (plot, n) => { plot.soilXp = Math.max(0, (plot.soilXp ?? 0) - n); };
+
+/**
+ * 밭에 그 작물이 **남아 있나** — 자라는 칸이나 죽은 칸(치우기 전)이 하나라도 있으면 그렇다.
+ * 돌·바위·잡초·빈 흙만 남았으면 작물은 끝난 것이다. "전부 빈 흙" 으로 보면 돌 하나 때문에
+ * 다 거둔 밭이 작물에 묶여 다른 것을 못 심는다(2a 의 버그 — simulate-farm 이 잡았다).
+ */
+const holdsCrop = (plot) => plot.cells.some((c) => c.t === 'plant' || c.t === 'dead');
 
 /** 퇴비 조각을 퇴비로 바꾼다. 바꾼 개수(계정에 넣을 것)를 돌려준다. 수확·개간이 부른다. */
 function takeCompost(farm) {
@@ -310,6 +319,7 @@ function plant(farm, today, { plot, cells, crop }) {
  *
  * 칸마다 **토질 ★ 과 작물 등급**으로 1~3개(§4). 품질은 3단계 — 지금은 전부 보통.
  * 재수확 작물은 칸이 남아 `regrow` 일 뒤에 다시 익는다.
+ * 작물 칸이 하나도 안 남으면(돌·잡초는 남아도) 밭의 작물을 비운다 — 다른 것을 심을 수 있게.
  * 토질 경험: 거둔 칸마다 +1, 콩 계열 밭이면 한 번에 +10 — 여기에 윤작 ×1.5 · 연작 ×0 · 콩 이웃 ×1.5
  * (`affinity.js`). 농장 경험치: 칸마다 +1, 처음 거둔 작물 +10.
  * 밭이 다 비면 그 작물 계열을 `history` 에 적는다(최근 셋) — 다음 작물의 윤작·연작이 이걸 본다.
@@ -350,7 +360,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
       if (!farm.grown.includes(crop.key)) { farm.grown.push(crop.key); xp += land.XP.firstCrop; }
       harvested += here;
     }
-    if (p.crop && p.cells.every((cell) => cell.t === 'soil')) {
+    if (p.crop && !holdsCrop(p)) {
       if (crop && !crop.perennial) p.history = [...(p.history ?? []), crop.family].slice(-3);
       p.crop = null;
       p.streak = 0;

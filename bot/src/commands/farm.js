@@ -871,41 +871,40 @@ const haveOf = (crop, minStar, items) => [1, 2, 3].filter((s) => s >= minStar).r
 /** 주문을 다 채울 수 있나 — 작물마다. */
 const canFill = (o, items) => o.parts.every((p) => haveOf(p.crop, o.minStar, items) >= p.qty);
 
+/** 납품할 수 있는 주문의 색 — 눈에 띄게 초록. 아니면 흙빛. */
+const ORDER_READY = 0x6b8f3a;
+
 /**
- * 주문 한 칸(임베드 필드) — 제목은 번호 · 의뢰인, 내용은 한마디 · 작물마다 가진 것 · 기한 · 보상.
+ * 주문 하나 = **임베드 하나.** 한 덩어리 글도, 필드만 이어 놓은 것도 주문끼리 구분이 안 됐다.
+ * 임베드는 왼쪽 색 띠와 간격이 있어 카드처럼 나뉜다(한 메시지에 열 개까지).
  * 예약 주문(`reserve`)은 **그 계절이 오기 전까지만** "오면 심으세요" 를 붙인다.
  */
-function orderField(o, n, { crops, items, today, season }) {
+function orderEmbed(o, n, {
+  crops, items, today, season,
+}) {
   const { who, line } = voiceOf(o, (k) => itemName(crops, k));
   const left = daysLeft(o.due, today);
+  const ready = canFill(o, items);
   const need = o.parts.map((p) => {
     const have = haveOf(p.crop, o.minStar, items);
     return `${have >= p.qty ? '✅' : '▫️'} ${cropEmoji(crops, p.crop)} ${itemName(crops, p.crop)} **${num(Math.min(have, p.qty))} / ${p.qty}**`;
   });
-  const value = [
-    `> ${line}`,
-    `**${STARS[o.minStar]} 이상**${o.parts.length > 1 ? ' — 전부 모아야 해요' : ''}`,
-    ...need,
-    `⏳ ${left ? `${left}일 남음` : '**오늘까지**'} · 🪙 ${num(o.gold)} · ✨ +${o.xp}`,
-  ];
-  if (o.reserve && o.reserve !== season) value.push(`🗓️ _${SEASON_NAME[o.reserve]} 작물 — ${SEASON_NAME[o.reserve]}이 오면 심으세요_`);
-  return {
-    name: trunc(`${n}. ${who.emoji} ${who.name}${who.title ? ` (${who.title})` : ''}`, 256),
-    value: trunc(value.join('\n'), 1024),
-  };
+  const desc = [`_「${line}」_`];
+  if (o.reserve && o.reserve !== season) desc.push(`🗓️ _${SEASON_NAME[o.reserve]} 작물 — ${SEASON_NAME[o.reserve]}이 오면 심으세요_`);
+  return base({
+    title: `${o.kind === 'board' ? '📜' : '✉️'} ${n}. ${who.emoji} ${who.name}${who.title ? ` · ${who.title}` : ''}`,
+    description: desc.join('\n'),
+    color: ready ? ORDER_READY : FARM_COLOR,
+  }).addFields(
+    { name: `${STARS[o.minStar]} 이상${o.parts.length > 1 ? ' (전부)' : ''}`, value: need.join('\n'), inline: true },
+    { name: '기한', value: left ? `⏳ ${left}일 남음` : '⏳ **오늘까지**', inline: true },
+    { name: '보상', value: `🪙 ${num(o.gold)}\n✨ +${o.xp}`, inline: true },
+  );
 }
 
-/** 게시판 안내 · 내 의뢰 안내(필드 머리). */
-const ORDER_HEAD = {
-  board: '📜 마을 게시판',
-  boardNote: '급마다 한 칸 · 빈 칸은 **월·목**에 채워져요 · 먼저 채운 농장이 가져가요',
-  mine: '✉️ 내 의뢰',
-  mineNote: '우리 농장에만 온 큰 의뢰 · **월요일**마다 한 건',
-};
-
 /**
- * 주문 창 — 📜 마을 게시판(모든 농장이 같다, 세 칸) · ✉️ 내 의뢰. 주문마다 필드 하나 — 한 덩어리 글로
- * 적으면 주문끼리 구분이 안 됐다. 채울 수 있는 주문만 납품 버튼이 켜진다.
+ * 주문 창 — 첫 임베드는 안내, 그다음은 주문마다 하나씩(📜 게시판 세 칸 → ✉️ 내 의뢰).
+ * 채울 수 있는 주문만 납품 버튼이 켜지고, 그 주문은 초록으로 보인다.
  * customId `farm:od:<주문>:<주인>` · 새로고침 `farm:or:-:<주인>`.
  */
 function ordersPayload({
@@ -915,16 +914,18 @@ function ordersPayload({
   const ctx = {
     crops, items, today, season,
   };
-  const fields = [
-    { name: ORDER_HEAD.board, value: board.length ? ORDER_HEAD.boardNote : `${ORDER_HEAD.boardNote}\n_지금은 붙은 주문이 없어요._` },
-    ...board.map((o, i) => orderField(o, i + 1, ctx)),
-    { name: ORDER_HEAD.mine, value: mine.length ? ORDER_HEAD.mineNote : `${ORDER_HEAD.mineNote}\n_와 있는 의뢰가 없어요._` },
-    ...mine.map((o, i) => orderField(o, board.length + i + 1, ctx)),
-  ];
-  const embed = base({
-    title: '📜 주문', description: note ?? undefined, color: FARM_COLOR,
-    footer: '★ 이상 작물만 받아요 · 낮은 ★ 부터 내요 · 보상은 골드와 농장 경험치',
-  }).addFields(fields.slice(0, 25));
+  const head = base({
+    title: '📜 주문',
+    description: [
+      `**📜 마을 게시판** ${board.length ? `— ${board.length}건` : '— 비어 있어요'}`,
+      '-# 급마다 한 칸 · 빈 칸은 월·목에 채워져요 · 먼저 채운 농장이 가져가요',
+      `**✉️ 내 의뢰** ${mine.length ? `— ${mine.length}건` : '— 아직 없어요'}`,
+      '-# 우리 농장에만 온 큰 의뢰 · 월요일마다 한 건',
+      note ? `\n${note}` : null,
+    ].filter((l) => l != null).join('\n'),
+    color: FARM_COLOR,
+    footer: '★ 이상 작물만 받아요 · 낮은 ★ 부터 내요 · 초록 칸이 지금 낼 수 있는 주문이에요',
+  });
 
   const buttons = all.map((o, i) => new ButtonBuilder()
     .setCustomId(`${PREFIX}:od:${orderToken(o.id)}:${owner}`)
@@ -937,7 +938,12 @@ function ordersPayload({
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${PREFIX}:or:-:${owner}`).setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
   ));
-  return { embeds: [embed], components: rows, allowedMentions: QUIET };
+  // 한 메시지에 임베드 열 개까지 — 안내 하나 + 주문 아홉
+  return {
+    embeds: [head, ...all.slice(0, 9).map((o, i) => orderEmbed(o, i + 1, ctx))],
+    components: rows,
+    allowedMentions: QUIET,
+  };
 }
 
 async function openOrders(interaction, { owner = interaction.user.id, note } = {}) {

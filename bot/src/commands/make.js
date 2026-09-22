@@ -326,7 +326,8 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
       cooked: 1,
       bestCook: grade.rank,
       ...(stone ? { burnt: 1 } : {}),
-      ...(monstrous(keys) && grade.rank >= GRADE_BY_KEY.gold.rank ? { monsterDish: 1 } : {}),
+      // 「던전밥」 — 괴식으로 실버 이상. 골드였을 때는 주사위 하나에 너무 많이 걸려 있었다.
+      ...(monstrous(keys) && grade.rank >= GRADE_BY_KEY.silver.rank ? { monsterDish: 1 } : {}),
     }
     : { crafted: 1, bestCraft: grade.rank, ...(stone ? { craftBroke: 1 } : {}) };
   // 「만찬」 — 전설 물고기를 재료로 썼다. 등급은 안 따진다. 전설을 먹어 치우는 것 자체가 조건이다.

@@ -114,7 +114,7 @@ export const TITLES = [
   { key: 'apprenticeCook', name: '견습 요리사', tier: 1, cond: '요리 1회', group: '요리', desc: '처음으로 불 앞에 섰다.', when: (s) => n(s, 'cooked') >= 1 },
   { key: 'charcoal', name: '숯덩이', tier: 1, cond: '요리를 태우면 (🎲 1)', group: '요리', desc: '불 조절은 다음에 배우기로 했다.', when: (s) => n(s, 'burnt') >= 1 },
   { key: 'foodPoisoning', name: '식중독', tier: 1, cond: '만든 요리를 먹고 탈이 나면', group: '요리', desc: '맛은 있었다. 그게 문제였다.', when: (s) => n(s, 'foodSick') >= 1 },
-  { key: 'dungeonMeshi', name: '던전밥', tier: 2, cond: '괴식 재료로 골드 이상 요리', group: '요리', desc: '벌레든 지네든, 잘 익히면 밥이 된다.', when: (s) => n(s, 'monsterDish') >= 1 },
+  { key: 'dungeonMeshi', name: '던전밥', tier: 2, cond: '괴식 재료로 실버 이상 요리', group: '요리', desc: '벌레든 지네든, 잘 익히면 밥이 된다.', when: (s) => n(s, 'monsterDish') >= 1 },
   { key: 'dungeonChef', name: '던전의 셰프', tier: 2, cond: '요리 20회', group: '요리', desc: '모험단의 끼니는 이제 이 사람 손에 달렸다.', when: (s) => n(s, 'cooked') >= 20 },
   { key: 'attemptedPoisoning', name: '독살 미수', tier: 2, cond: '남에게 먹인 요리가 탈을 내면', group: '요리', desc: '일부러 그런 건 아니었다. 아마도.', when: (s) => n(s, 'fedBad') >= 1 },
   { key: 'lastSupper', name: '최후의 만찬', tier: 2, cond: '만든 요리를 먹고 쓰러지면', group: '요리', desc: '마지막 한 입까지 맛있었다.', when: (s) => n(s, 'diedEating') >= 1 },

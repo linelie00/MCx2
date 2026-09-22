@@ -25,7 +25,7 @@ import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
 import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge, skyLine, seasonsText, waterLine, riskLine, sprinklerLine, farmEmbed } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, ordersPayload, waterNote, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 } from '../src/commands/farm.js';
 import { flatShare } from '../src/casino/crafts.js';
@@ -370,11 +370,46 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   weather.pin(null);
 }
 
+// 5a — 주문 · 의뢰인
+{
+  const { REQUESTERS, voiceOf, josa } = await import('../src/farm/requesters.js');
+  const orders = require('../../server/src/farm/orders.js');
+  eq('조사', [josa('당근', ['을', '를']), josa('감자', ['을', '를']), josa('새빨간 사과', ['을', '를'])], ['당근을', '감자를', '새빨간 사과를']);
+  eq('의뢰인 — 미겔·마티암 · 이름 있는 다섯 · 익명 셋', [REQUESTERS.length, REQUESTERS.filter((r) => r.anon).length], [10, 3]);
+  eq('의뢰인마다 한마디가 둘 이상', REQUESTERS.filter((r) => r.lines.length < 2).map((r) => r.key), []);
+  const days = Array.from({ length: 120 }, (_, n) => rules.addDays('2026-09-21', n));
+  const all = days.flatMap(orders.boardOf);
+  const voices = all.map((o) => voiceOf(o, crops.find((c) => c.key === o.crop).name));
+  eq('같은 주문은 늘 같은 사람 · 같은 말', JSON.stringify(voiceOf(all[0], '당근')) === JSON.stringify(voiceOf(all[0], '당근')), true);
+  eq('게시판엔 모두가 나온다', REQUESTERS.every((r) => voices.some((v) => v.who.key === r.key)), true);
+  eq('한마디에 작물과 수량', voices.every((v, i) => v.line.includes(String(all[i].qty)) || v.line.startsWith('사과.')), true);
+  const apple = { id: 'b:x', crop: 'redApple', qty: 5, seed: 0 };
+  eq('헨젤은 사과를 좋아한다', voiceOf(apple, '새빨간 사과').who.key, 'hansel');
+  eq('헨젤의 사과 한마디', voiceOf({ ...apple, seed: 0 }, '새빨간 사과').line, '사과 파이에 넣을 새빨간 사과 5개가 필요해. 벌레 먹은 거 가져오면 두꺼비로 만든다.');
+
+  const board = orders.activeBoard('2026-10-01', {});
+  const mine = [{ ...board[0], id: 'r:1:2026-10-01', kind: 'mine' }];
+  const star = `${board[0].crop}S${board[0].minStar}`;
+  const op = ordersPayload({ owner: OWNER, board, mine, crops, items: { [star]: board[0].qty }, today: '2026-10-01' });
+  const oj = op.embeds[0].toJSON();
+  const rows = limits('주문 창', op);
+  const odIds = rows.flatMap((r) => r.components).filter((c) => c.custom_id.startsWith('farm:od:'));
+  eq('주문 창 — 게시판 여섯 · 의뢰 하나 · 납품 버튼 일곱', [board.length, odIds.length], [6, 7]);
+  eq('채울 수 있는 것만 켜진다', odIds.map((c) => c.disabled).filter((d) => !d).length, 2);
+  eq('customId 에서 주문 id 를 되살린다', odIds[0].custom_id.split(':')[2].replaceAll('~', ':'), board[0].id);
+  eq('주문 창에 한마디 · 가진 것', [oj.description.includes('」'), oj.description.includes(`✅ 가진 것 ${board[0].qty}/${board[0].qty}`)], [true, true]);
+  eq('주문 창은 한도 안', oj.description.length <= 4096, true);
+  const empty = ordersPayload({ owner: OWNER, board: [], mine: [], crops, items: {}, today: '2026-10-01' });
+  eq('빈 주문 창 — 새로고침만', [empty.components.length, empty.embeds[0].toJSON().description.includes('와 있는 의뢰가 없어요')], [1, true]);
+  eq('사유 — 늦음 · 끝남', [why({ reason: 'orderTaken', by: '1' }, crops).startsWith('한발 늦었어요'), why({ reason: 'orderExpired' }, crops).startsWith('기한이')], [true, true]);
+  eq('noItem 에 ★', why({ reason: 'noItem', item: 'carrot', minStar: 1, have: 2, need: 5 }, crops), '**당근 ★ 이상** 이(가) 모자라요 — 가진 것 2 / 필요 5.');
+}
+
 // ---------------------------------------------------------------- 5. 사유
 
 const REASONS = ['none', 'notOwner', 'already', 'noPlants', 'tired', 'locked', 'level', 'otherCrop', 'occupied', 'gold',
   'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown',
-  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain', 'owned', 'equipLevel', 'noPlot', 'needClear', 'notPlant'];
+  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain', 'owned', 'equipLevel', 'noPlot', 'needClear', 'notPlant', 'orderTaken', 'orderExpired'];
 const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1, item: 'compost', have: 0, perDay: 3 };
 eq('사유마다 문장이 있다', REASONS.filter((r) => why({ ...sample, reason: r }, crops).startsWith('하지 못했어요')), []);
 eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 }, crops) !== why({ reason: 'tired', stamina: st }, crops), true);

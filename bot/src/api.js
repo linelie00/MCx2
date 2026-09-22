@@ -301,6 +301,10 @@ export const getPreview = (channelId, plot, crop = null) => request(
 export const getWeather = (days = 0) => request(`/api/farms/weather${days ? `?days=${days}` : ''}`, { bot: true });
 /** 도감(3b) — `{ book: { 작물: { n, best, giant } }, total }`. */
 export const getBook = (userId) => request(`/api/farms/book/${encodeURIComponent(userId)}`, { bot: true });
+/** 게시판(5a) — 오늘 마을 주문과, `channelId` 를 주면 그 농장의 개인 의뢰 `{ board, mine, today }`. */
+export const getBoard = (channelId = null) => request(`/api/farms/board${channelId ? `?channel=${encodeURIComponent(channelId)}` : ''}`, { bot: true });
+/** 주문 납품(5a). 주인만. */
+export const deliverOrder = ({ channelId, userId, orderId }) => farmPost('deliver', { channelId, userId, orderId });
 /** 설비 표(4b) — `{ equips: [{ key, name, emoji, lv, gold, per, note }] }`. */
 export const getEquips = () => request('/api/farms/equips', { bot: true });
 /** 곡괭이 표 · 그 사람의 곡괭이 · 농장 레벨. */
@@ -353,5 +357,5 @@ export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook, getWeather, getEquips, buyEquip,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook, getWeather, getEquips, buyEquip, getBoard, deliverOrder,
 };

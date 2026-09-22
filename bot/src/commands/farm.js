@@ -32,13 +32,14 @@ import {
 } from 'discord.js';
 import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather, getEquips, buyEquip,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather, getEquips, buyEquip, getBoard, deliverOrder,
 } from '../api.js';
 import { base, fail, trunc } from '../embeds.js';
 import { forget } from '../casino/alive.js';
 import { forgetBag } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
+import { voiceOf } from '../farm/requesters.js';
 import {
   FARM_COLOR, farmEmbed, cropName, plantName, cropEmoji, cellEmoji, plotNo, stars, modsBadge, seasonsText, SEASON_NAME, skyLine,
 } from '../farm/render.js';
@@ -104,7 +105,7 @@ function why(r, crops) {
     case 'fertCap': return `오늘 이 밭엔 **${FERTS[r.item]?.name ?? r.item}** 을(를) 더 못 넣어요 — 밭마다 하루 ${r.perDay}개.`;
     case 'soilMax': return '이 밭은 이미 토질 ★5 예요. 더 넣어도 소용없어요.';
     case 'noSeed': return `주머니에 **${cropName(crops, r.crop)}** 씨앗이 모자라요 — 가진 것 ${num(r.have)} / 필요 ${num(r.need)}. 희귀 씨앗은 개간하다 가끔 나와요.`;
-    case 'noItem': return `**${r.item === 'ore' ? '원석' : itemName(crops, r.item)}** 이(가) 모자라요 — 가진 것 ${num(r.have)}${r.need ? ` / 필요 ${num(r.need)}` : ''}.`;
+    case 'noItem': return `**${r.item === 'ore' ? '원석' : itemName(crops, r.item)}${r.minStar ? ` ${STARS[r.minStar]} 이상` : ''}** 이(가) 모자라요 — 가진 것 ${num(r.have)}${r.need ? ` / 필요 ${num(r.need)}` : ''}.`;
     case 'noFarm': return '곡괭이는 농장이 있어야 올릴 수 있어요. `/농장 등록`';
     case 'maxTool': return '이미 가장 좋은 곡괭이예요.';
     case 'toolLevel': return `그 곡괭이는 농장 **Lv.${r.need}** 부터 만들 수 있어요.`;
@@ -113,6 +114,8 @@ function why(r, crops) {
     case 'noPlot': return '열린 밭에만 놓을 수 있어요.';
     case 'needClear': return `나무는 밭 하나를 통째로 써요 — **아홉 칸이 다 빈 흙**이어야 심을 수 있어요. 돌·잡초는 \`/농장 개간\`, 작물은 개간 창에서 뽑을 수 있어요.`;
     case 'notPlant': return '거긴 뽑을 작물이 없어요.';
+    case 'orderTaken': return r.by ? `한발 늦었어요 — <@${r.by}> 님이 먼저 채웠어요.` : '한발 늦었어요 — 다른 농장이 먼저 채웠어요.';
+    case 'orderExpired': return '기한이 지났거나 이미 끝난 주문이에요.';
     case 'notStone': return '거기엔 캘 게 없어요.';
     case 'taken': return `이미 <@${r.owner}> 님의 땅이에요. 물은 누구나 줄 수 있어요 — \`/농장 물주기\``;
     case 'mine': return '이미 내 농장이에요. `/농장 보기`';
@@ -854,6 +857,107 @@ async function equipButton(interaction, act, [key, owner]) {
   return openEquip(interaction, { owner, note });
 }
 
+// ---------------------------------------------------------------- 주문 (5a)
+
+/** 주문 id → customId 조각. id 에 `:` 이 들어 있어 `~` 로 바꿔 싣는다. */
+const orderToken = (id) => id.replaceAll(':', '~');
+const orderOfToken = (t) => t.replaceAll('~', ':');
+
+/** 며칠 남았나 — 오늘 마감이면 0. */
+const daysLeft = (due, today) => Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+
+/** 주문을 채울 수 있는 가진 수 — 요구 ★ 이상 전부. */
+const haveFor = (o, items) => [1, 2, 3].filter((s) => s >= o.minStar).reduce((a, s) => a + (items?.[`${o.crop}S${s}`] ?? 0), 0);
+
+/** 주문 두 줄 — 의뢰인의 한마디, 그리고 작물 · 기한 · 보상 · 가진 것. */
+function orderLines(o, n, { crops, items, today }) {
+  const name = itemName(crops, o.crop);
+  const { who, line } = voiceOf(o, name);
+  const left = daysLeft(o.due, today);
+  const have = haveFor(o, items);
+  const ready = have >= o.qty;
+  return [
+    `**${n}.** ${who.emoji} **${who.name}**${who.title ? ` _(${who.title})_` : ''} — 「${line}」`,
+    `　└ ${cropEmoji(crops, o.crop)} ${name} **${STARS[o.minStar]} 이상 ${o.qty}개** · ⏳ ${left ? `${left}일 남음` : '오늘까지'} · 🪙 ${num(o.gold)} · ✨ +${o.xp}`
+      + ` · ${ready ? '✅' : '❌'} 가진 것 ${num(have)}/${o.qty}`,
+  ];
+}
+
+/**
+ * 주문 창 — 📜 마을 게시판(모든 농장이 같다) · ✉️ 내 의뢰. 채울 수 있는 주문만 납품 버튼이 켜진다.
+ * customId `farm:od:<주문>:<주인>` · 새로고침 `farm:or:-:<주인>`.
+ */
+function ordersPayload({
+  owner, board, mine, crops, items, today, note,
+}) {
+  const all = [...board, ...mine];
+  const lines = ['**📜 마을 게시판** — 먼저 채운 농장이 가져가요'];
+  if (!board.length) lines.push('_지금은 올라온 주문이 없어요._');
+  board.forEach((o, i) => lines.push(...orderLines(o, i + 1, { crops, items, today })));
+  lines.push('', '**✉️ 내 의뢰** — 우리 농장에만 온 것 · 하루 한 건, 세 건까지');
+  if (!mine.length) lines.push('_와 있는 의뢰가 없어요._');
+  mine.forEach((o, i) => lines.push(...orderLines(o, board.length + i + 1, { crops, items, today })));
+  if (note) lines.push('', note);
+
+  const buttons = all.map((o, i) => new ButtonBuilder()
+    .setCustomId(`${PREFIX}:od:${orderToken(o.id)}:${owner}`)
+    .setLabel(`${i + 1}번 납품`)
+    .setEmoji(o.kind === 'board' ? '📜' : '✉️')
+    .setStyle(ButtonStyle.Success)
+    .setDisabled(haveFor(o, items) < o.qty));
+  const rows = [];
+  for (let k = 0; k < buttons.length && rows.length < 4; k += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(k, k + 5)));
+  rows.push(new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId(`${PREFIX}:or:-:${owner}`).setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
+  ));
+  return {
+    embeds: [base({
+      title: '📜 주문', description: trunc(lines.join('\n'), 4000), color: FARM_COLOR,
+      footer: '★ 이상 작물만 받아요 · 낮은 ★ 부터 내요 · 보상은 골드와 농장 경험치',
+    })],
+    components: rows,
+    allowedMentions: QUIET,
+  };
+}
+
+async function openOrders(interaction, { owner = interaction.user.id, note } = {}) {
+  const { farm } = await getFarmOf(owner);
+  if (!farm) return interaction.editReply({ embeds: [fail('주문은 내 농장으로 받아요. 먼저 `/농장 등록` 을 해 주세요.')], components: [] });
+  const [{ board, mine, today }, { accounts }, crops] = await Promise.all([getBoard(farm.channelId), getAccounts([owner]), getFarmCrops()]);
+  return interaction.editReply(ordersPayload({
+    owner, board, mine: mine ?? [], crops, items: accounts[owner]?.items, today, note,
+  }));
+}
+
+async function ordersCmd(interaction) {
+  await interaction.deferReply({ flags: EPH });
+  return openOrders(interaction);
+}
+
+/** 납품(`od`) · 새로고침(`or`). 주인만(customId 맨 뒤). */
+async function orderButton(interaction, act, [token, owner]) {
+  if (interaction.user.id !== owner) {
+    return interaction.reply({ embeds: [fail('자기 주문 창에서만 누를 수 있어요.')], flags: EPH });
+  }
+  await interaction.deferUpdate();
+  if (act === 'or') return openOrders(interaction, { owner });
+  const { farm } = await getFarmOf(owner);
+  if (!farm) return interaction.editReply({ embeds: [fail('농장이 없어요.')], components: [] });
+  const [r, crops] = await Promise.all([deliverOrder({ channelId: farm.channelId, userId: owner, orderId: orderOfToken(token) }), getFarmCrops()]);
+  if (!r.ok) return openOrders(interaction, { owner, note: `⚠️ ${why(r, crops)}` });
+
+  forgetBag(owner);
+  const name = itemName(crops, r.order.crop);
+  const { who } = voiceOf(r.order, name);
+  await openOrders(interaction, { owner, note: `🧺 ${who.name}의 주문을 채웠어요 — 🪙 **+${num(r.order.gold)}** · ✨ +${r.xp} · 가진 골드 **${num(r.account?.gold)}**` });
+  // 채널에 공개로 — 게시판 주문은 다른 농장도 노리던 것이다
+  await interaction.followUp({
+    content: `🧺 <@${owner}> 님이 ${who.emoji} **${who.name}**의 ${r.order.kind === 'board' ? '게시판 주문' : '의뢰'}(${name} ${r.order.qty}개)을 채웠어요 · 🪙 ${num(r.order.gold)}`,
+    allowedMentions: QUIET,
+  });
+  return announceLevel(interaction, r.levelUp, crops);
+}
+
 // ---------------------------------------------------------------- 날씨 (4a)
 
 /** 날씨 효과 한 줄(설명). */
@@ -958,6 +1062,7 @@ const data = new SlashCommandBuilder()
     .addIntegerOption((o) => o.setName('개수').setDescription('만들 퇴비 수 (기본 1)').setMinValue(1).setMaxValue(100)))
   .addSubcommand((s) => s.setName('곡괭이').setDescription('곡괭이를 봅니다 · 더 좋은 것으로 바꿉니다'))
   .addSubcommand((s) => s.setName('설비').setDescription('빗물통 · 덮개 · 배수로 · 지지대 · 스프링클러를 봅니다 · 놓습니다'))
+  .addSubcommand((s) => s.setName('주문').setDescription('마을 게시판과 내 농장에 온 의뢰를 보고 납품합니다'))
   .addSubcommand((s) => s.setName('도감').setDescription('키워 본 작물 · 최고 품질 · 대왕 작물을 봅니다'))
   .addSubcommand((s) => s.setName('날씨').setDescription('오늘 · 내일 날씨와 계절, 지금 제철인 작물'))
   .addSubcommand((s) => s.setName('폐농').setDescription('내 농장을 없앱니다 — 등록 24시간 안이면 무르기'));
@@ -1144,6 +1249,7 @@ const RUN = {
   퇴비: compostCmd,
   곡괭이: toolsCmd,
   설비: equipCmd,
+  주문: ordersCmd,
   도감: bookCmd,
   날씨: weatherCmd,
   폐농: abandonCmd,
@@ -1417,6 +1523,7 @@ async function component(interaction) {
     if (act === 'ab' || act === 'abx') return await abandonButton(interaction, act, rest);
     if (act === 'k') return await toolButton(interaction, rest);
     if (act === 'bk') return await bookButton(interaction, rest);
+    if (act === 'od' || act === 'or') return await orderButton(interaction, act, rest);
     if (act === 'eb' || act === 'ep') return await equipButton(interaction, act, rest);
     if (act.startsWith('f')) return await fertButton(interaction, act, rest);
     if (act.startsWith('c')) return await clearButton(interaction, act, rest);
@@ -1429,7 +1536,7 @@ async function component(interaction) {
 
 /** 검사용(scripts/check-farm.mjs). 화면은 상태가 없어 그대로 불러 볼 수 있다. */
 export {
-  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, ordersPayload, waterNote, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 };
 

@@ -54,6 +54,12 @@ export function sprinklerLine(farm) {
   return last && farm.today && last === yesterday(farm.today) ? '⛲ _어제 못 준 물을 스프링클러가 줬어요 — 이번 주는 다 썼어요_' : null;
 }
 
+/** 개인 의뢰가 있으면 한 줄(5a). */
+export function ordersLine(farm) {
+  const n = farm.requests?.length ?? 0;
+  return n ? `📜 _의뢰 ${n}건이 와 있어요 — \`/농장 주문\`_` : null;
+}
+
 /** 밭에 놓인 설비 표시(4b) — `⛺`(덮개) · `🎋`(지지대). */
 export const equipBadge = (p) => `${p.cover ? '⛺' : ''}${p.stakes ? '🎋' : ''}`;
 
@@ -167,6 +173,7 @@ export function farmEmbed(farm, crops, { name } = {}) {
       riskLine(farm),
       sprinklerLine(farm),
       levelLine(farm),
+      ordersLine(farm),
       waterLine(farm),
       '',
       grid(farm, crops),
@@ -181,5 +188,5 @@ export function farmEmbed(farm, crops, { name } = {}) {
 
 export default {
   FARM_COLOR, plotNo, stars, cropName, plantName, cropEmoji, cellEmoji, grid, modsBadge, plotLines, levelLine, nextLine, waterLine, farmEmbed,
-  SEASON_NAME, seasonsText, skyLine, riskLine, sprinklerLine, equipBadge,
+  SEASON_NAME, seasonsText, skyLine, riskLine, sprinklerLine, equipBadge, ordersLine,
 };

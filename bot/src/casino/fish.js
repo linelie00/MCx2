@@ -75,6 +75,9 @@ export const FISH = [
   { key: 'lanternAngler', cm: [25, 50], weight: 3 },
   { key: 'chipFish', cm: [8, 20], weight: 3 },
   { key: 'starRay', cm: [60, 110], weight: 2 },
+  // 원래 시트의 말하는 바닷것 둘. 던전에서만 나오던 것을 물에서도 만난다.
+  { key: 'bobSponge',        cm: [10, 30], weight: 6 },
+  { key: 'starGari',         cm: [15, 35], weight: 6 },
   // 둘째 배치 — 기괴한 것 · 마법 붙은 것 · 이야기 붙은 것 · 물에서 나는 바닷것
   { key: 'hollowEel',       cm: [30, 80], weight: 10 },
   { key: 'glassShrimp',     cm: [2, 8], weight: 10 },

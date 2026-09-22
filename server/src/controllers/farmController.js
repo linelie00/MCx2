@@ -807,9 +807,9 @@ exports.deliver = (req, res) => {
   let order;
   if (orderId.startsWith('b:')) {
     if (data.board[orderId]) return res.json({ ok: false, reason: 'orderTaken', by: data.board[orderId].by, today });
-    order = orders.activeBoard(today, data.board).find((o) => o.id === orderId)
-      ?? orders.boardOf(orderId.split(':')[1] ?? '').find((o) => o.id === orderId);
-    if (!order || order.due < today) return res.json({ ok: false, reason: 'orderExpired', today });
+    // 게시판에 지금 붙어 있는 것만 — 칸에서 밀려났거나 기한이 지난 것은 끝난 주문이다
+    order = orders.activeBoard(today, data.board).find((o) => o.id === orderId);
+    if (!order) return res.json({ ok: false, reason: 'orderExpired', today });
   } else {
     order = (farm.requests ?? []).find((o) => o.id === orderId);
     if (!order) return res.json({ ok: false, reason: 'orderExpired', today });
@@ -827,7 +827,6 @@ exports.deliver = (req, res) => {
 
   // 농장 먼저 — 주문 완료 · 경험치
   if (order.kind === 'board') {
-    data.board = orders.pruneTaken(data.board, today);
     data.board[orderId] = { by: userId, channelId, day: today };
   } else {
     farm.requests = farm.requests.filter((o) => o.id !== orderId);

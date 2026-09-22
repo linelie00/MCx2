@@ -871,10 +871,21 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('예약 주문 기한 = 다음 계절 첫날 + 성장일 + 3', reserve.every((o) => o.due === rules.addDays(orders.nextSeasonStart(o.day), CROP_BY_KEY[o.parts[0].crop].days + orders.DUE_EXTRA)), true);
   eq('다음 계절 첫날', [orders.nextSeasonStart('2026-09-21'), orders.nextSeasonStart('2026-10-04')], ['2026-10-05', '2026-10-05']);
   eq('요구 품질은 ★ 이나 ★★', [...new Set(all.map((o) => o.minStar))].sort(), [1, 2]);
-  const act = orders.activeBoard(THU, {});
-  eq('오늘 게시판 — 여섯 건 · 기한 안', [act.length, act.every((o) => o.due >= THU)], [6, true]);
-  eq('가져간 것은 빠진다', orders.activeBoard(THU, { [act[0].id]: { by: '1', channelId: '2', day: THU } }).some((o) => o.id === act[0].id), false);
-  eq('가져간 기록은 오래되면 지운다', Object.keys(orders.pruneTaken({ a: { day: '2026-08-01' }, b: { day: '2026-09-30' } }, THU)), ['b']);
+  // 게시판 칸 — 급마다 한 칸, 비었을 때만 새 주문
+  const everyDay = days.slice(0, 120).map((d) => orders.activeBoard(d, {}));
+  eq('게시판은 늘 세 건 이하 · 급마다 하나', everyDay.every((b) => b.length <= 3 && new Set(b.map((o) => orders.tierOf(CROP_BY_KEY[o.parts[0].crop]))).size === b.length), true);
+  eq('붙어 있는 주문은 기한 안', days.slice(0, 120).every((d, i) => everyDay[i].every((o) => o.due >= d && o.day <= d)), true);
+  eq('배포 전 주문은 없다', everyDay.flat().every((o) => o.day >= orders.BOARD_START), true);
+  const S0 = orders.BOARD_START; const S1 = rules.addDays(S0, 1); const S3 = rules.addDays(S0, 3);
+  const b0 = orders.activeBoard(S0, {});
+  eq('첫 월요일 — 세 칸이 그날 주문', b0.map((o) => o.day), [S0, S0, S0]);
+  const slow = b0.find((o) => o.due > S3);
+  eq('기한이 남은 주문은 목요일 새 주문에 안 밀린다', orders.activeBoard(S3, {}).some((o) => o.id === slow.id), true);
+  const tk = { [slow.id]: { by: '1', channelId: '2', day: S1 } };
+  eq('가져가면 바로 빠진다', orders.activeBoard(S1, tk).some((o) => o.id === slow.id), false);
+  const k = orders.tierOf(CROP_BY_KEY[slow.parts[0].crop]);
+  eq('빈 칸은 다음 월·목에 채워진다', orders.activeBoard(S3, tk).find((o) => orders.tierOf(CROP_BY_KEY[o.parts[0].crop]) === k)?.day, S3);
+  eq('가져간 기록은 지우지 않는다', Object.keys(orders.pruneTaken({ a: { day: '2026-08-01' }, b: { day: '2026-09-30' } })), ['a', 'b']);
 
   // 개인 의뢰 — 주 1회, 여러 작물
   const rq = days.map((d) => orders.requestOf('111111', d, 10)).filter(Boolean);

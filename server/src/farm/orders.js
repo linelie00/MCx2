@@ -3,9 +3,11 @@
  *
  * 순수 함수다. 파일도 시간도 모르고, 무작위는 **날짜·채널 해시**뿐이다 — 조회를 몇 번 해도 같다.
  *
- *   📜 게시판  **월·목**에 세 건씩, **모든 농장이 같은 목록**을 본다. 먼저 납품한 농장이 가져간다.
+ *   📜 게시판  **급마다 한 칸, 세 칸**(Lv1~3 · 4~6 · 7+). **월·목**에 새 주문이 올라오는데, 그 칸이
+ *             **비었을 때만**(누가 가져갔거나 기한이 지났을 때) 들어간다 — 게시판엔 늘 세 건 이하이고,
+ *             심어 둔 주문이 새 주문에 밀려 사라지지 않는다. **모든 농장이 같은 게시판**을 본다.
  *             주문 자체는 날짜로 다시 만들 수 있어 저장하지 않는다. 저장하는 것은 누가 가져갔는지뿐
- *             (`farms.json` 의 `board: { [id]: { by, channelId, day } }`)
+ *             (`farms.json` 의 `board: { [id]: { by, channelId, day } }`) — 칸의 역사를 다시 셈하므로 지우지 않는다
  *             작물은 지금 제철 — 계절 마지막 주(8~14일째)에는 절반이 **다음 계절 예약 주문**이다.
  *             예약 주문의 기한은 다음 계절 첫날부터 센다 — 계절이 바뀌자마자 심으면 맞출 수 있다
  *   ✉️ 개인 의뢰  **주 1회(월요일)**, 농장마다 한 건. 지금 제철 작물 **여러 종을 한꺼번에**, 수량도 많다.
@@ -35,10 +37,10 @@ const keyOf = (n) => new Date(n * DAY_MS).toISOString().slice(0, 10);
 const MONDAY = dayNum('2026-09-21');
 const weekdayOf = (key) => (((dayNum(key) - MONDAY) % 7) + 7) % 7;
 
-/** 게시판이 올라오는 요일(월 · 목) · 한 번에 올라오는 수 · 한 번에 보여 주는 수. */
+/** 게시판이 올라오는 요일(월 · 목) · 칸 수(급마다 하나) · 셈을 시작하는 날(5a 배포 — 그 전 주문은 없다). */
 const BOARD_DAYS = [0, 3];
 const BOARD_PER_POST = 3;
-const BOARD_SHOWN = 6;
+const BOARD_START = '2026-09-21';
 /** 개인 의뢰가 오는 요일(월) · 쌓이는 한도. */
 const REQUEST_DAYS = [0];
 const REQUEST_MAX = 2;
@@ -52,8 +54,6 @@ const REQUEST_TIERS = [
   { upTo: 10, kinds: [3], mult: 2, twoStar: 0.4 },
 ];
 const requestTier = (level) => REQUEST_TIERS.find((t) => level <= t.upTo) ?? REQUEST_TIERS.at(-1);
-/** 되돌아볼 날수 — 예약 주문(일주일 전에 올라와 다음 계절 + 성장일까지)을 덮는다. */
-const LOOKBACK = 30;
 /** 기한 = (심을 수 있는 날) + 성장일 + 이만큼. */
 const DUE_EXTRA = 3;
 /** 예약 주문이 나오는 때 — 계절의 이날 이후. 그때 올라온 게시판 주문의 이만큼이 예약이다. */
@@ -134,18 +134,23 @@ function boardOf(day) {
 }
 
 /**
- * 오늘 게시판 — 기한이 남았고 아직 아무도 안 가져간 주문. 새것부터 `BOARD_SHOWN` 건.
- * `taken` 은 `farms.json` 의 `board`.
+ * 오늘 게시판 — 칸마다 지금 붙어 있는 주문(세 건 이하). `taken` 은 `farms.json` 의 `board`.
+ *
+ * 칸마다 `BOARD_START` 부터 올라온 날을 따라간다. 올라온 날에 그 칸이 비어 있으면(아직 없거나, 기한이
+ * 지났거나, 그날까지 누가 가져갔으면) 새 주문이 들어간다. 늘 처음부터 셈하므로 몇 번 불러도 같다.
  */
 function activeBoard(today, taken = {}) {
   const t = dayNum(today);
-  const out = [];
-  for (let d = t; d > t - LOOKBACK; d -= 1) {
-    for (const o of boardOf(keyOf(d))) {
-      if (!taken[o.id] && dayNum(o.due) >= t) out.push(o);
-    }
+  const slots = Array(BOARD_PER_POST).fill(null);
+  for (let d = dayNum(BOARD_START); d <= t; d += 1) {
+    const posts = boardOf(keyOf(d));
+    if (!posts.length) continue;
+    slots.forEach((cur, k) => {
+      const free = !cur || dayNum(cur.due) < d || (taken[cur.id] && dayNum(taken[cur.id].day) <= d);
+      if (free) slots[k] = posts[k];
+    });
   }
-  return out.slice(0, BOARD_SHOWN);
+  return slots.filter((o) => o && !taken[o.id] && dayNum(o.due) >= t);
 }
 
 /** 그 농장의 그날 개인 의뢰 — 월요일에만. 지금 제철인 작물(심을 수 있는 것)로, 레벨에 따라 2~3종. */
@@ -219,14 +224,14 @@ function takeFor(order, items = {}) {
   return { take: short ? null : take, have };
 }
 
-/** 가져간 기록을 줄인다 — 되돌아보는 날수보다 오래된 것은 지운다. */
-function pruneTaken(taken, today) {
-  const t = dayNum(today);
-  return Object.fromEntries(Object.entries(taken ?? {}).filter(([, v]) => dayNum(v.day) > t - LOOKBACK - 1));
-}
+/**
+ * 가져간 기록 — **지우지 않는다.** 게시판 칸을 처음부터 다시 셈하므로, 지우면 그 칸에 지난 주문이 되살아난다.
+ * 주에 여섯 건쯤이라 1년에 300줄 남짓이다.
+ */
+const pruneTaken = (taken) => ({ ...(taken ?? {}) });
 
 module.exports = {
-  BOARD_DAYS, BOARD_PER_POST, BOARD_SHOWN, REQUEST_DAYS, REQUEST_MAX, REQUEST_TIERS, requestTier, LOOKBACK, DUE_EXTRA, RESERVE_FROM,
+  BOARD_DAYS, BOARD_PER_POST, BOARD_START, REQUEST_DAYS, REQUEST_MAX, REQUEST_TIERS, requestTier, DUE_EXTRA, RESERVE_FROM,
   BOARD_GOLD, REQUEST_GOLD, BOARD_DAY_GOLD, REQUEST_DAY_GOLD, BOARD_XP, REQUEST_XP, REQUEST_XP_PER_KIND,
   weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor, pruneTaken,
 };

@@ -9,8 +9,10 @@
  *
  *   kind   소비 · 잡화 · 재료
  *   cat    재료만. 진열대(`CATS`) — 상점이 이걸로 칸을 나눈다
- *   price  **상점 값 하나로 사고 판다.** 살 때 내는 돈이자 팔 때 받는 돈이다.
+ *   price  **팔 때 받는 값.** 요리 재료 가치·던전·프로필도 이 값을 본다.
+ *          살 때는 `buyPrice()` — 재료는 이 값의 두 배, 나머지는 같다.
  *          0 이면 상점에 아예 안 나온다
+ *   buy    살 때 값을 따로 정할 때만 적는다. 안 적으면 `buyPrice()` 의 규칙대로
  *   sell   플레이어가 **팔 수** 있는가. 회복약처럼 살 수는 있어도 못 파는 것이 있다
  *   shop   재료만. `true` 면 **상점에서 판다.** 밀가루·설탕처럼 가게에서 사는 물건이다
  *   loot   `false` 면 **던전에서 안 나온다.** 안 적으면 나온다. 이야기용 물건(피·수배지·
@@ -302,6 +304,21 @@ export const ITEM_BY_KEY = Object.fromEntries(ITEMS.map((i) => [i.key, i]));
 /** 상점에 나오는 것. 값이 0 인 물건은 살 수도 팔 수도 없다. */
 export const forSale = () => ITEMS.filter((i) => i.price > 0);
 
+/** 재료를 상점에서 살 때의 배수. 파는 값(`price`)의 두 배다. */
+export const BUY_MARKUP = 2;
+
+/**
+ * **상점에서 살 때** 내는 값. `price` 는 팔 때 받는 값으로 남는다.
+ *
+ * 재료만 비싸게 산다 — 농장(`docs/FARM.md`)에서 키우는 쪽이 채소를 가장 싸게 구하는 길이
+ * 되게 하려는 것이다. 회복약·미끼·잡화는 그대로다. 체력과 낚시의 셈을 흔들지 않는다.
+ * 명부에 `buy` 를 적으면 그 값이 이긴다.
+ *
+ * 요리 재료 가치(`worthOf`)·던전 가중치·홀덤 상품·프로필 재산은 전부 **파는 값**을 본다.
+ * 여기는 상점의 사기 쪽만 부른다.
+ */
+export const buyPrice = (item) => item?.buy ?? (item?.kind === '재료' ? item.price * BUY_MARKUP : item?.price ?? 0);
+
 /** 그 아이템을 먹었을 때의 증감. `[a, b]` 면 그 사이에서 뽑는다. */
 export function healOf(item, rand = Math.random) {
   const h = item?.heal ?? 0;
@@ -315,4 +332,4 @@ const NORMAL = (s) => String(s ?? '').replace(/\s+/g, '').toLowerCase();
 const BY_NAME = new Map(ITEMS.map((i) => [NORMAL(i.name), i]));
 export const findItem = (text) => ITEM_BY_KEY[text] ?? BY_NAME.get(NORMAL(text)) ?? null;
 
-export default { MAX_HP, ITEMS, ITEM_BY_KEY, forSale, healOf, findItem };
+export default { MAX_HP, ITEMS, ITEM_BY_KEY, forSale, buyPrice, healOf, findItem };

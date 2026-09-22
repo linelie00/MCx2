@@ -32,7 +32,7 @@ import { getAccounts } from '../api.js';
 import { apply } from '../casino/wallet.js';
 import { base, fail, trunc, THEME_COLOR } from '../embeds.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
-import { ITEMS, ITEM_BY_KEY, CATS } from '../casino/items.js';
+import { ITEMS, ITEM_BY_KEY, CATS, buyPrice } from '../casino/items.js';
 import { BAITS, BAIT_KEYS } from '../yacht/fishing.js';
 import { isDead, forget } from '../casino/alive.js';
 import { GRADE_BY_KEY } from '../casino/crafts.js';
@@ -171,7 +171,7 @@ function listPayload(side, owner, account, shelfKey = 'potion', page = 0) {
   const stock = stockFor(account, shelf);
   const embed = base({
     title: `${shelf.icon} 상점 — 사기 · ${shelf.label}`,
-    description: table(stock.map((i) => [clipW(i.name, 24), `${num(i.price)}골드`]))
+    description: table(stock.map((i) => [clipW(i.name, 24), `${num(buyPrice(i))}골드`]))
       + (dead
         ? '\n💀 _쓰러져 있어서 부활의 영약만 보여요._'
         : (shelf.key === 'potion' ? '\n_회복약만 효능이 적혀 있어요. 재료는 먹어 봐야 알아요._' : '')),
@@ -205,8 +205,8 @@ function listPayload(side, owner, account, shelfKey = 'potion', page = 0) {
           value: i.key,
           // 회복약에만 효능을 적는다(`/사용` 과 같은 원칙). 재료는 먹어 봐야 안다.
           description: trunc(BAIT.includes(i.key)
-            ? `${num(i.price)}골드 · ${baitNote(i.key)}`
-            : i.kind === '소비' ? `${num(i.price)}골드 · 먹으면 ${healText(i.heal)}` : `${num(i.price)}골드`, 100),
+            ? `${num(buyPrice(i))}골드 · ${baitNote(i.key)}`
+            : i.kind === '소비' ? `${num(buyPrice(i))}골드 · 먹으면 ${healText(i.heal)}` : `${num(buyPrice(i))}골드`, 100),
         }))),
     ),
     sideRow('buy', owner),
@@ -335,13 +335,16 @@ function cardPayload(side, key, owner, account) {
 
   const gold = Number(account?.gold ?? 0);
   const have = Number(account?.items?.[key] ?? 0);
-  const most = side === 'buy' ? Math.floor(gold / item.price) : have;
+  // 사는 값과 파는 값이 다르다(재료는 두 배). 카드에 적는 값도 쪽에 따라 고른다.
+  const unit = side === 'buy' ? buyPrice(item) : item.price;
+  const most = side === 'buy' ? Math.floor(gold / unit) : have;
 
   const lines = [`_${item.desc}_`, ''];
   lines.push(side === 'buy'
-    ? `개당 **${num(item.price)}골드**${BAIT.includes(key) ? ` · **${baitNote(key)}**`
+    ? `개당 **${num(unit)}골드**${BAIT.includes(key) ? ` · **${baitNote(key)}**`
       : item.kind === '소비' ? ` · 먹으면 **${healText(item.heal)}**` : ''}`
-    : `개당 **${num(item.price)}골드** · 가진 것 **${num(have)}개**`);
+      + (item.kind === '재료' && item.sell ? `\n_팔 때는 개당 ${num(item.price)}골드예요._` : '')
+    : `개당 **${num(unit)}골드** · 가진 것 **${num(have)}개**`);
   if (!most) {
     lines.push('', side === 'buy' ? '_골드가 모자라요._' : '_팔 게 없어요._');
   }
@@ -381,8 +384,8 @@ async function trade(side, key, count, owner, account) {
         flags: MessageFlags.Ephemeral,
       };
     }
-    if (Number(account.gold) < item.price * count) {
-      return { embeds: [fail(`골드가 모자라요. **${num(item.price * count)}골드**가 필요해요.`)], flags: MessageFlags.Ephemeral };
+    if (Number(account.gold) < buyPrice(item) * count) {
+      return { embeds: [fail(`골드가 모자라요. **${num(buyPrice(item) * count)}골드**가 필요해요.`)], flags: MessageFlags.Ephemeral };
     }
   } else {
     if (!sellable(item)) return { embeds: [fail(`**${item.name}** 은(는) 팔 수 없어요.`)], flags: MessageFlags.Ephemeral };
@@ -391,7 +394,7 @@ async function trade(side, key, count, owner, account) {
     }
   }
 
-  const amount = item.price * count;
+  const amount = (side === 'buy' ? buyPrice(item) : item.price) * count;
   // 골드와 아이템이 **한 번의 쓰기로** 같이 움직인다. 나누면 반쪽만 저장되는 상태가 생긴다.
   const saved = await apply({
     deltas: { [owner]: side === 'buy' ? -amount : amount },

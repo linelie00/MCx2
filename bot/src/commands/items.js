@@ -19,7 +19,7 @@ import {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder,
 } from 'discord.js';
-import { ITEMS, ITEM_BY_KEY, CATS } from '../casino/items.js';
+import { ITEMS, ITEM_BY_KEY, CATS, buyPrice } from '../casino/items.js';
 import { isFish, isLegend } from '../casino/fish.js';
 import { base, trunc, THEME_COLOR } from '../embeds.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
@@ -89,13 +89,14 @@ const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 /**
  * 사고팔기 한 줄.
  *
- * 값 하나로 사고 판다. 다만 **값이 있어도 못 파는 것**이 있어서(회복약) 셋으로 갈린다.
+ * 재료는 **사는 값이 파는 값의 두 배**다(`buyPrice`). 그리고 **값이 있어도 못 파는 것**이
+ * 있어서(회복약) 셋으로 갈린다.
  */
 function tradeText(item) {
   if (!item.price) return '상점에 없어요';
   return item.sell
-    ? `사기 **${num(item.price)}골드** · 팔기 **${num(item.price)}골드**`
-    : `사기 **${num(item.price)}골드** · _팔 수는 없어요_`;
+    ? `사기 **${num(buyPrice(item))}골드** · 팔기 **${num(item.price)}골드**`
+    : `사기 **${num(buyPrice(item))}골드** · _팔 수는 없어요_`;
 }
 
 // ---------------------------------------------------------------- 화면

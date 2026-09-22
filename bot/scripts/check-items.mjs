@@ -10,7 +10,7 @@
  * 있으면 끝까지 돌아서, 따로 띄울 것이 없다.
  */
 import {
-  ITEMS, ITEM_BY_KEY, MAX_HP, CATS, forSale, healOf, findItem,
+  ITEMS, ITEM_BY_KEY, MAX_HP, CATS, forSale, buyPrice, BUY_MARKUP, healOf, findItem,
 } from '../src/casino/items.js';
 import { BY_KEY as FISH_BY_KEY } from '../src/casino/fish.js';
 
@@ -100,6 +100,14 @@ eq('공백은 무시', findItem('소형회복약')?.key, 'potionSmall');
 eq('없으면 null', findItem('없는물건'), null);
 eq('상점에 나오는 것', forSale().length, ITEMS.filter((i) => i.price > 0).length);
 eq('값 0 인 것은 상점에 없다', forSale().filter((i) => i.price === 0).length, 0);
+
+// 사는 값 — 재료만 두 배, 나머지는 파는 값 그대로. 파는 값(`price`)은 건드리지 않는다.
+eq('재료는 파는 값의 두 배로 산다', ITEMS.filter((i) => i.kind === '재료' && !('buy' in i) && buyPrice(i) !== i.price * BUY_MARKUP).map((i) => i.key), []);
+eq('소비·잡화는 파는 값 그대로 산다', ITEMS.filter((i) => i.kind !== '재료' && !('buy' in i) && buyPrice(i) !== i.price).map((i) => i.key), []);
+eq('당근은 4골드에 산다', buyPrice(ITEM_BY_KEY.carrot), 4);
+eq('부활의 영약은 그대로 1000', buyPrice(ITEM_BY_KEY.potionRevive), 1000);
+eq('일반 미끼는 그대로 10', buyPrice(ITEM_BY_KEY.bait), 10);
+eq('따로 적은 buy 는 정수', ITEMS.filter((i) => 'buy' in i && !(Number.isSafeInteger(i.buy) && i.buy >= i.price)).map((i) => i.key), []);
 
 console.log('\n시트에서 옮긴 값 몇 개');
 eq('부활의 영약', [ITEM_BY_KEY.potionRevive.price, ITEM_BY_KEY.potionRevive.heal], [1000, [100, 100]]);

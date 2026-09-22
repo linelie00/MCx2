@@ -518,14 +518,15 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
         crop, soilStar: star, cell, mods, overripe, bonus, season: weather.qualityOf(crop, today, { drain: farm.equip?.drain }), rand,
       });
       if (crop.tree) {
-        // 나무(4c) — 열매마다 품질을 굴린다. 열매 하나가 한 칸처럼 센다(경험치 · 토질 · 도감).
+        // 나무(4c) — 열매마다 품질을 굴린다(도감도 열매마다). 경험치 · 토질은 **밭 한 판(아홉 칸)**
+        // 을 거둔 것으로 센다 — 열매 수로 세면 열매가 많은 나무가 레벨을 끌어올린다.
         for (let k = 0; k < n; k += 1) {
           const q = roll();
           add(starKey(crop.key, q.star), 1);
           (grades[crop.key] ??= [0, 0, 0, 0])[q.star] += 1;
         }
-        here += n;
-        if (cell.regrows) again += n;
+        here += CELLS;
+        if (cell.regrows) again += CELLS;
       } else {
         const q = roll();
         add(starKey(crop.key, q.star), n);

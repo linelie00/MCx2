@@ -780,7 +780,7 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   const tc = t1.plots[P].cells[rules.TREE_CELL];
   eq('사과는 열흘에 익는다', [tc.g, tc.ripeDay], [10, day(9)]);
   const th = rules.harvest(t1, day(9), {}, { rand: ZERO });
-  eq('첫 수확 — ★1 토질 3개 · 경험치 3 + 첫 작물 10', [crop(th.items, 'redApple'), th.harvested, th.xp], [3, 3, 13]);
+  eq('첫 수확 — ★1 토질 18개 · 경험치는 밭 한 판(9) + 첫 작물 10', [crop(th.items, 'redApple'), th.xp], [18, 19]);
   eq('나무는 남는다 · 그늘도', [t1.plots[P].crop, t1.plots[P].cells.filter((c) => c.t === 'canopy').length, tc.regrows], ['redApple', 8, 1]);
   eq('나무는 윤작 기록에 안 적힌다', t1.plots[P].history ?? [], []);
 
@@ -789,12 +789,12 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('휴면 — 물 필요 없음', [rules.view(t1, day(10)).need, rules.view(t1, day(10)).plots[P].cells[rules.TREE_CELL], rules.view(t1, day(10)).plots[P].tree], [0, 'dormant', { dormant: true, fruited: true }]);
   eq('휴면 — 물주기는 noPlants', W(t1, 10).reason, 'noPlants');
   at(t1, 20);
-  eq('휴면 — 열흘 굶어도 안 목마르고 안 자란다', [tc.thirst, tc.g, t1.plots[P].cells[rules.TREE_CELL].t], [0, 7, 'plant']);
+  eq('휴면 — 열흘 굶어도 안 목마르고 안 자란다', [tc.thirst, tc.g, t1.plots[P].cells[rules.TREE_CELL].t], [0, 8, 'plant']);
   weather.pin(NEUTRAL);
   eq('제철이 오면 다시 자란다', rules.view(t1, day(20)).need, 1);
   for (let n = 20; n < 23; n += 1) { at(t1, n); W(t1, n); }
   const th2 = rules.harvest(t1, day(22), {}, { rand: ZERO });
-  eq('재수확 3일 · 경험치 절반', [crop(th2.items, 'redApple'), th2.xp], [3, 1.5]);
+  eq('재수확 2일 · 경험치 절반', [crop(th2.items, 'redApple'), th2.xp], [18, 4.5]);
 
   // 익은 채 오래 두면 열매만 떨어진다
   for (let n = 23; n < 26; n += 1) { at(t1, n); W(t1, n); }

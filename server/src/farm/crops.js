@@ -89,20 +89,20 @@ const CROPS = [
   { key: 'blueberry',   name: '블루베리', lv: 5, family: 'berry',    price: 3, days: 4, regrow: 2, seasons: ['summer'], emoji: '🫐' },
   { key: 'rice',        name: '쌀',       lv: 5, family: 'grain',    price: 6, days: 5, thirsty: true, rainLove: true, seasons: ['summer'], emoji: '🍚', note: '물 욕심 — 하루만 굶어도 시들고, 사흘이면 죽어요. 비 오는 날엔 더 잘 자라요' },
   { key: 'sunflower',   name: '해바라기', lv: 5, family: 'grain',    price: 4, days: 5, tall: true, seasons: ['summer'], emoji: '🌻', note: '키가 커서 이웃 밭에 그늘을 드리워요 — 버섯·잎 +10%, 열매·박 −5%' },
-  { key: 'lemon',       name: '레몬',     lv: 5, family: 'tree',     price: 4, days: 10, regrow: 3, tree: true, tall: true, perennial: true, treeName: '레몬나무', seasons: ['winter', 'spring'], emoji: '🍋', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
-  { key: 'redApple',    name: '새빨간 사과', lv: 5, family: 'tree',  price: 5, days: 10, regrow: 3, tree: true, tall: true, perennial: true, treeName: '사과나무', seasons: ['autumn', 'winter'], emoji: '🍎', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
+  { key: 'lemon',       name: '레몬',     lv: 5, family: 'tree',     price: 4, days: 10, regrow: 2, tree: true, tall: true, perennial: true, treeName: '레몬나무', seasons: ['winter', 'spring'], emoji: '🍋', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
+  { key: 'redApple',    name: '새빨간 사과', lv: 5, family: 'tree',  price: 5, days: 10, regrow: 2, tree: true, tall: true, perennial: true, treeName: '사과나무', seasons: ['autumn', 'winter'], emoji: '🍎', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
   // ---- Lv6
   { key: 'asparagus',   name: '아스파라거스', lv: 6, family: 'leaf', price: 6, days: 7, regrow: 3, perennial: true, seasons: ['spring'], emoji: '🎍', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
   { key: 'teaLeaf',     name: '찻잎',     lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, seasons: ['spring'], emoji: '🍵', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
   { key: 'ginger',      name: '생강',     lv: 6, family: 'root',     price: 4, days: 5,            seasons: ['autumn'], emoji: '🫚' },
   { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, aura: 5, seasons: ['summer'], emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
   { key: 'koreanMelon', name: '참외',     lv: 6, family: 'gourd',    price: 6, days: 5,            seasons: ['summer'], emoji: '🍈' },
-  { key: 'grape',       name: '포도',     lv: 6, family: 'tree',     price: 4, days: 8, regrow: 3, tree: true, tall: true, perennial: true, treeName: '포도나무', seasons: ['summer', 'autumn'], emoji: '🍇', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
-  { key: 'peach',       name: '복숭아',   lv: 6, family: 'tree',     price: 6, days: 12, regrow: 4, tree: true, tall: true, perennial: true, treeName: '복숭아나무', seasons: ['spring', 'summer'], emoji: '🍑', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
+  { key: 'grape',       name: '포도',     lv: 6, family: 'tree',     price: 4, days: 8, regrow: 2, tree: true, tall: true, perennial: true, treeName: '포도나무', seasons: ['summer', 'autumn'], emoji: '🍇', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
+  { key: 'peach',       name: '복숭아',   lv: 6, family: 'tree',     price: 6, days: 12, regrow: 3, tree: true, tall: true, perennial: true, treeName: '복숭아나무', seasons: ['spring', 'summer'], emoji: '🍑', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
   // ---- Lv7
   { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7, giant: true, seasons: ['summer'], emoji: '🍉' },
   { key: 'melon',       name: '멜론',     lv: 7, family: 'gourd',    price: 14, days: 7, giant: true, seasons: ['summer'], emoji: '🍈' },
-  { key: 'pear',        name: '배',       lv: 7, family: 'tree',     price: 7, days: 12, regrow: 4, tree: true, tall: true, perennial: true, treeName: '배나무', seasons: ['autumn'], emoji: '🍐', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
+  { key: 'pear',        name: '배',       lv: 7, family: 'tree',     price: 7, days: 12, regrow: 3, tree: true, tall: true, perennial: true, treeName: '배나무', seasons: ['autumn'], emoji: '🍐', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
   // ---- Lv8
   { key: 'pineMushroom', name: '향송이',  lv: 8, family: 'fungus',   price: 25, days: 10, shadeNeed: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🍄', note: '그늘이 필요해요 — 옥수수·해바라기 옆이 아니면 절반만 자라요' },
   { key: 'saffron',     name: '사프란',   lv: 8, family: 'herb',     price: 60, days: 14,          seasons: ['autumn'], emoji: '🌸', note: '귀한 향신료 — 오래 걸리고 한 칸에서 많이 안 나와요' },
@@ -119,9 +119,11 @@ const CROP_BY_KEY = Object.fromEntries(CROPS.map((c) => [c.key, c]));
 
 /**
  * 나무 한 번 거둘 때의 열매 수 `[토질 ★1 … ★5]` 마다 `[최소, 최대]`(4c). 밭 하나에서 나온다.
- * 최소가 묘목값(`파는 값 × 2`)을 넘어 **첫 수확에서 이미 남는다.** (simulate-farm 으로 맞춘다)
+ * 최소가 묘목값(`파는 값 × 2`)을 넘어 **첫 수확에서 이미 남는다.**
+ * 기획서의 3~9개는 한 칸짜리 아홉 포기(9~27개)보다 한참 적었다 — simulate-farm 에서 나무 밭이 작물 밭의
+ * 1/20 을 벌었다. 휴면(한 해의 절반)과 물 한 포기(체력 1)를 셈에 넣어 다시 맞췄다.
  */
-const TREE_YIELD = [[3, 4], [4, 5], [5, 6], [6, 8], [7, 9]];
+const TREE_YIELD = [[18, 21], [21, 27], [27, 33], [33, 40], [40, 48]];
 /** 묘목값 — 밭에 한 번. */
 const SAPLING_MULT = 2;
 const sapling = (c) => c.price * SAPLING_MULT;

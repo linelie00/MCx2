@@ -270,9 +270,14 @@ export const abandonFarm = (userId) => farmPost('abandon', { userId });
 export const waterFarm = ({ channelId, userId, plot = null }) => farmPost('water', { channelId, userId, plot });
 export const plantFarm = ({ channelId, userId, plot, cells, crop }) => farmPost('plant', { channelId, userId, plot, cells, crop });
 export const harvestFarm = ({ channelId, userId, plot = null }) => farmPost('harvest', { channelId, userId, plot });
-/** 개간. `{ plot, all }` 돌 전부 · `{ plot, cell }` 돌 하나/잡초 · `{ plot, cell, pos }` 바위 휘두르기. */
-export const clearFarm = ({ channelId, userId, plot, cell = null, pos = null, all = false }) => farmPost('clear', {
-  channelId, userId, plot, cell, pos, all,
+/**
+ * 개간. `{ plot, all }` 돌 전부 · `{ plot, cell }` 돌 하나/잡초 · `{ plot, cell, pos }` 바위 휘두르기 ·
+ * `{ plot, cell, uproot: 'cell' | 'plot' }` 작물 뽑기(4c, 나무는 밭 전체).
+ */
+export const clearFarm = ({
+  channelId, userId, plot, cell = null, pos = null, all = false, uproot = null,
+}) => farmPost('clear', {
+  channelId, userId, plot, cell, pos, all, uproot,
 });
 /** 거름 — `item` 은 `fertilizer`(+15, 밭마다 하루 1) · `compost`(+5, 하루 3). 한도·가진 것만큼만 넣는다. */
 export const fertilizeFarm = ({ channelId, userId, plot, item, count = 1 }) => farmPost('fertilize', {

@@ -40,7 +40,7 @@ import { forgetBag } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
 import {
-  FARM_COLOR, farmEmbed, cropName, cropEmoji, cellEmoji, plotNo, stars, modsBadge, seasonsText, SEASON_NAME, skyLine,
+  FARM_COLOR, farmEmbed, cropName, plantName, cropEmoji, cellEmoji, plotNo, stars, modsBadge, seasonsText, SEASON_NAME, skyLine,
 } from '../farm/render.js';
 
 export const PREFIX = 'farm';
@@ -56,6 +56,13 @@ const START_PLOT = 4;
 const MAX_SWINGS = 3;
 /** 결 자리 수(서버 `land.GRAIN_SPOTS`). */
 const GRAIN_SPOTS = 5;
+/** 한 밭의 칸 수 · 나무가 서는 칸(서버 `rules.CELLS` · `rules.TREE_CELL`, 4c). */
+const CELL_COUNT = 9;
+const TREE_CELL = 4;
+/** 나무 한 번의 열매 수(서버 `TREE_YIELD` 의 ★1 최소 ~ ★5 최대 — 화면에 적는 용도). */
+const TREE_FRUITS = '3~9개';
+/** 개간 창에서 누르면 뽑기로 가는 칸 상태(4c). */
+const UPROOTABLE = ['seed', 'grow', 'dry', 'ripe', 'over', 'dead', 'dormant', 'canopy'];
 
 /** 거름 — 밭마다 하루 한도와 토질 경험(서버 `land.FERTS` 와 같다 — 화면에 적는 용도). */
 const FERTS = {
@@ -104,6 +111,8 @@ function why(r, crops) {
     case 'owned': return `이미 놓은 설비예요${r.name ? ` — ${r.name}` : ''}.`;
     case 'equipLevel': return `${r.name ?? '그 설비'} 은(는) 농장 **Lv.${r.need}** 부터 놓을 수 있어요.`;
     case 'noPlot': return '열린 밭에만 놓을 수 있어요.';
+    case 'needClear': return `나무는 밭 하나를 통째로 써요 — **아홉 칸이 다 빈 흙**이어야 심을 수 있어요. 돌·잡초는 \`/농장 개간\`, 작물은 개간 창에서 뽑을 수 있어요.`;
+    case 'notPlant': return '거긴 뽑을 작물이 없어요.';
     case 'notStone': return '거기엔 캘 게 없어요.';
     case 'taken': return `이미 <@${r.owner}> 님의 땅이에요. 물은 누구나 줄 수 있어요 — \`/농장 물주기\``;
     case 'mine': return '이미 내 농장이에요. `/농장 보기`';
@@ -331,7 +340,9 @@ function plantPayload({
   const all = maskOf(soil);
   const m = mask & all;
   const picked = cellsOf(m);
-  const cost = c ? c.seed * picked.length : 0;
+  const tree = Boolean(c?.tree);                 // 나무(4c) — 밭 하나에 한 그루, 칸을 고르지 않는다
+  const cost = c ? (tree ? c.seed : c.seed * picked.length) : 0;
+  const ready = tree ? soil.length === CELL_COUNT && !fixed : picked.length > 0;
 
   /** `farm:<동작>:<채널>:<밭>:<작물>:<칸>:<인자>:<주인>` — 주인은 맨 뒤. */
   const id = (act, { mm = m, arg = '-', cr = c?.key ?? '-' } = {}) => [PREFIX, act, ch, at, cr, mm, arg, owner].join(':');
@@ -339,7 +350,13 @@ function plantPayload({
   const lines = [`토질 ${stars(p.star)}`];
   const bag = Object.entries(pouch).filter(([, n]) => n > 0);
   if (bag.length) lines.push(`🎒 주머니 ${bag.map(([k, n]) => `${cropName(crops, k)} ×${n}`).join(' · ')}`);
-  if (c) {
+  if (c && tree) {
+    lines.push(`${c.emoji} **${c.treeName}** · 묘목 **${num(c.seed)}골드** — 밭 하나에 한 그루 · 물을 **${c.days}번** 받으면 첫 열매, 그 뒤 제철엔 ${c.regrow}일마다 열려요`);
+    if (c.note) lines.push(`📜 ${c.note}`);
+    const now = farm.sky?.today.season;
+    if (now && c.seasons) lines.push(`🗓️ 제철 ${seasonsText(c)} — 지금 ${now.name}${c.seasons.includes(now.key) ? ', 제철이에요' : '은 제철이 아니에요(첫 열매 전엔 느리게 자라요)'}`);
+    lines.push(`_거둘 때마다 토질에 따라 열매 ${TREE_FRUITS} — 첫 수확만으로 묘목값을 넘어요._`);
+  } else if (c) {
     lines.push(`${c.emoji} **${c.name}** · ${c.seedOnly ? `**🎒 주머니 씨앗** 칸당 하나(가진 것 ${num(pouch[c.key] ?? 0)})` : `씨앗 칸당 **${num(c.seed)}골드**`} · 물을 **${c.days}번** 받으면 다 자라요`
       + (c.regrow ? ` · 거둔 뒤 ${c.regrow}일마다 또 열려요` : ''));
     if (c.note) lines.push(`📜 ${c.note}`);
@@ -358,7 +375,11 @@ function plantPayload({
     const ml = modsLines(preview?.mods);
     if (ml.length) lines.push('', ...ml);
   }
-  lines.push('', soil.length
+  if (tree && !fixed) {
+    lines.push('', soil.length === CELL_COUNT
+      ? `밭 전체에 한 그루 · 묘목값 **${num(cost)}골드**`
+      : `⚠️ 나무는 **아홉 칸이 다 빈 흙**이어야 심어요 — 지금 빈 흙 ${soil.length} / ${CELL_COUNT}. 돌·잡초는 \`/농장 개간\`, 작물은 개간 창에서 뽑아요.`);
+  } else lines.push('', soil.length
     ? `고른 칸 **${picked.length}** / 빈 칸 ${soil.length}${c ? (c.seedOnly ? ` · 주머니 씨앗 **${picked.length}개**` : ` · 씨앗값 **${num(cost)}골드**`) : ''}`
     : '_이 밭엔 빈 흙이 없어요. 돌·잡초는 `/농장 개간` 으로 치워요._');
   if (note) lines.push('', note);
@@ -371,10 +392,10 @@ function plantPayload({
         .setPlaceholder('무엇을 심을까요?')
         .addOptions([
           ...list.slice(pg * PLANT_PAGE, (pg + 1) * PLANT_PAGE).map((x) => ({
-            label: trunc(x.seedOnly ? `${x.name} — 🎒 주머니 ${pouch[x.key]}` : `${x.name} — 씨앗 ${x.seed}골드`, 100),
+            label: trunc(x.seedOnly ? `${x.name} — 🎒 주머니 ${pouch[x.key]}` : x.tree ? `${x.treeName} — 묘목 ${x.seed}골드` : `${x.name} — 씨앗 ${x.seed}골드`, 100),
             value: x.key,
             emoji: x.emoji,
-            description: trunc(`${farm.sky && x.seasons ? (x.seasons.includes(farm.sky.today.season.key) ? '🗓️제철 · ' : '🥀제철 아님 · ') : ''}${modsBadge(preview?.all?.[x.key]) ? `${modsBadge(preview.all[x.key])} · ` : ''}${x.days}일${x.seedOnly ? ' · 희귀' : ` · 거두면 칸당 +${x.profit}골드 이상`}${x.regrow ? ` · ${x.regrow}일마다 또 열림` : ''}`, 100),
+            description: trunc(`${farm.sky && x.seasons ? (x.seasons.includes(farm.sky.today.season.key) ? '🗓️제철 · ' : '🥀제철 아님 · ') : ''}${modsBadge(preview?.all?.[x.key]) ? `${modsBadge(preview.all[x.key])} · ` : ''}${x.days}일${x.tree ? ' · 🌳 밭 전체' : x.seedOnly ? ' · 희귀' : ` · 거두면 칸당 +${x.profit}골드 이상`}${x.regrow ? ` · ${x.regrow}일마다 또 열림` : ''}`, 100),
             default: x.key === c?.key,
           })),
           ...(pages > 1 ? [{
@@ -396,14 +417,16 @@ function plantPayload({
       return new ButtonBuilder().setCustomId(id('pt', { arg: i }))
         .setEmoji(on ? (c?.emoji ?? '🌱') : '🟫')
         .setStyle(on ? ButtonStyle.Success : ButtonStyle.Secondary)
-        .setDisabled(!c);
+        .setDisabled(!c || tree);
     })));
   }
   const controls = [
     new ButtonBuilder().setCustomId(id('pa')).setLabel(m === all && all ? '전체 해제' : '전체')
-      .setStyle(ButtonStyle.Secondary).setDisabled(!c || !soil.length),
-    new ButtonBuilder().setCustomId(id('pg')).setLabel(c?.seedOnly ? `심기 · 🎒 ${picked.length}개` : `심기 · ${num(cost)}골드`).setEmoji('🌱')
-      .setStyle(ButtonStyle.Success).setDisabled(!c || !picked.length),
+      .setStyle(ButtonStyle.Secondary).setDisabled(!c || tree || !soil.length),
+    new ButtonBuilder().setCustomId(id('pg'))
+      .setLabel(tree ? `나무 심기 · ${num(cost)}골드` : c?.seedOnly ? `심기 · 🎒 ${picked.length}개` : `심기 · ${num(cost)}골드`)
+      .setEmoji(tree ? '🌳' : '🌱')
+      .setStyle(ButtonStyle.Success).setDisabled(!c || !ready),
   ];
   if (openPlots(farm).length > 1) {
     controls.push(new ButtonBuilder().setCustomId(id('pn', { mm: 0, cr: '-' })).setLabel('다른 밭').setStyle(ButtonStyle.Secondary));
@@ -467,7 +490,8 @@ function clearPayload({
     staminaLine(stamina) + (me?.pickaxe ? ` · ${pickaxeName(me.pickaxe)}` : ''),
     '🪨 돌은 기력 1로 치워요 · ⛰️ 바위는 결을 찾아 깨요(기회 3번, 첫 방에 맞히면 ✨ 완벽) · 🌼 잡초는 그냥 뽑아요',
   ];
-  if (!stoneCells(p).length) lines.push('', '_이 밭엔 치울 게 없어요._');
+  if (p.crop) lines.push(`🌱 작물 칸을 누르면 뽑을 수 있어요 — 씨앗값은 돌아오지 않아요${crops.find((x) => x.key === p.crop)?.tree ? ' · 🪓 나무는 밭 전체' : ''}`);
+  if (!stoneCells(p).length && !p.crop) lines.push('', '_이 밭엔 치울 게 없어요._');
   if (note) lines.push('', note);
 
   const rows = [];
@@ -485,8 +509,10 @@ function clearPayload({
         return new ButtonBuilder().setCustomId(id('cb', i)).setEmoji('⛰️').setStyle(ButtonStyle.Danger)
           .setDisabled(tired);
       }
-      return new ButtonBuilder().setCustomId(id('c-', i)).setEmoji(cellEmoji(state, crops, p.crop))
-        .setStyle(ButtonStyle.Secondary).setDisabled(true);
+      // 작물 칸 · 나무 그늘 — 누르면 뽑기 확인(4c)
+      const crop = UPROOTABLE.includes(state) && p.crop;
+      return new ButtonBuilder().setCustomId(id(crop ? 'cu' : 'c-', i)).setEmoji(cellEmoji(state, crops, p.crop))
+        .setStyle(ButtonStyle.Secondary).setDisabled(!crop);
     })));
   }
   const controls = [
@@ -560,6 +586,38 @@ function boulderPayload({
   };
 }
 
+/**
+ * 뽑기 확인 창(4c). 작물 칸을 누르면 연다 — 씨앗값은 안 돌아온다. 나무는 한 그루가 밭 전체다.
+ */
+function uprootPayload({
+  ch, plot, cell, owner, farm, crops,
+}) {
+  const p = farm.plots[plot];
+  const c = crops.find((x) => x.key === p?.crop);
+  const id = (act, arg = '-') => [PREFIX, act, ch, plot, cell, arg, owner].join(':');
+  const n = p.cells.filter((s) => !['soil', 'rock', 'boulder', 'crack', 'weed', 'canopy', 'locked'].includes(s)).length;
+  const tree = Boolean(c?.tree);
+  const lines = tree
+    ? [`${c.emoji} **${c.treeName}** 를 벨까요? 밭 전체가 빈 흙이 돼요.`, '_묘목값은 돌아오지 않아요. 다시 키우려면 첫 열매부터 기다려야 해요._']
+    : [`${c?.emoji ?? '🌱'} **${cropName(crops, p?.crop)}** 을(를) 뽑을까요? 이 밭엔 **${n}포기**가 있어요.`, '_거두지 않고 없애요 — 씨앗값은 돌아오지 않아요._'];
+  const buttons = tree
+    ? [new ButtonBuilder().setCustomId(id('cU', 'plot')).setLabel('나무 베기').setEmoji('🪓').setStyle(ButtonStyle.Danger)]
+    : [
+      new ButtonBuilder().setCustomId(id('cU', 'cell')).setLabel(`${cell + 1}번 칸만 뽑기`).setEmoji('🌱').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(id('cU', 'plot')).setLabel(`밭 전체 비우기 · ${n}포기`).setEmoji('🧹').setStyle(ButtonStyle.Danger),
+    ];
+  return {
+    embeds: [base({
+      title: `${tree ? '🪓 나무 베기' : '🌱 작물 뽑기'} — ${plotNo(plot)}번 밭`, description: lines.join('\n'), color: FARM_COLOR, footer: '뽑기는 기력이 들지 않아요',
+    })],
+    components: [new ActionRowBuilder().addComponents(
+      ...buttons,
+      new ButtonBuilder().setCustomId(id('cz')).setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
+    )],
+    allowedMentions: QUIET,
+  };
+}
+
 /** 개간 창을 연다(명령·농장 화면의 버튼 둘 다). 이미 응답을 잡아 둔 상태에서 부른다. */
 async function openClear(interaction, ch, { plot = null } = {}) {
   const me = interaction.user.id;
@@ -583,6 +641,11 @@ function swingNote(r, crops) {
 }
 
 function swingLine(r, crops) {
+  if (r.kind === 'uproot') {
+    return r.tree
+      ? `🪓 **${plantName(crops, r.crop)}** 를 베었어요 — 밭이 비었어요`
+      : `🌱 **${cropName(crops, r.crop)}** ${r.removed}포기를 뽑았어요${r.freed ? ' — 밭이 비었어요' : ''}`;
+  }
   if (r.kind === 'weed') return `🌼 잡초를 뽑았어요${lootNote(r.loot, crops)}`;
   if (r.kind === 'rock') return `🪨 돌을 치웠어요${lootNote(r.loot, crops)}`;
   if (r.kind === 'rocks') {
@@ -1180,18 +1243,18 @@ async function plantButton(interaction, act, [ch, plotS, cropS, maskS, arg, owne
   const at = seatedAt(owner);
   if (at) return interaction.editReply(payload(`⚠️ ${seatedMessage('그쪽', at)}`));
   const r = await plantFarm({
-    channelId: ch, userId: owner, plot, cells: cellsOf(mask), crop,
+    channelId: ch, userId: owner, plot, cells: crops.find((x) => x.key === crop)?.tree ? [TREE_CELL] : cellsOf(mask), crop,
   });
   if (!r.ok) return interaction.editReply(payload(`⚠️ ${why(r, crops)}`));
 
   forget(owner);
   return interaction.editReply({
     embeds: [base({
-      title: `🌱 ${cropName(crops, r.crop)} ${r.count}칸을 심었어요`,
+      title: r.tree ? `🌳 ${plantName(crops, r.crop)}를 심었어요` : `🌱 ${cropName(crops, r.crop)} ${r.count}칸을 심었어요`,
       description: [
         r.seeds
           ? `🎒 주머니 씨앗 **−${r.seeds}** · 남은 것 **${num(r.me?.pouch?.[r.crop] ?? 0)}**`
-          : `씨앗값 **−${num(r.cost)}골드** · 가진 골드 **${num(r.account?.gold)}**`,
+          : `${r.tree ? '묘목값' : '씨앗값'} **−${num(r.cost)}골드** · 가진 골드 **${num(r.account?.gold)}**`,
         '_물을 줘야 자라기 시작해요 — `/농장 물주기` (한 포기에 체력 1)_',
       ].join('\n'),
       color: FARM_COLOR,
@@ -1219,6 +1282,7 @@ async function clearButton(interaction, act, [ch, plotS, cellS, arg, owner]) {
   if (act === 'cn') return interaction.editReply(clearPayload({ ...base0, plot: nextOpen(farm, plot) }));
   if (act === 'cz') return interaction.editReply(clearPayload({ ...base0, plot }));
   if (act === 'cb') return interaction.editReply(boulderPayload({ ...base0, plot, cell }));
+  if (act === 'cu') return interaction.editReply(uprootPayload({ ...base0, plot, cell }));
 
   // 여기부터는 실제로 캔다 — 돌·잡초 하나(cr) · 돌 전부(ca) · 바위 휘두르기(cs)
   const r = await clearFarm({
@@ -1228,6 +1292,7 @@ async function clearButton(interaction, act, [ch, plotS, cellS, arg, owner]) {
     cell: act === 'ca' ? null : cell,
     pos: act === 'cs' ? Number(arg) : null,
     all: act === 'ca',
+    uproot: act === 'cU' ? arg : null,
   });
   const next = {
     ...base0, farm: r.farm ?? farm, stamina: r.stamina ?? me?.stamina, me: r.me ?? me,
@@ -1336,7 +1401,7 @@ async function component(interaction) {
 
 /** 검사용(scripts/check-farm.mjs). 화면은 상태가 없어 그대로 불러 볼 수 있다. */
 export {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 };
 

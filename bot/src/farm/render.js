@@ -18,6 +18,7 @@ export const FARM_COLOR = 0x7a5c3a;
 const CELL = {
   soil: '🟫', rock: '🪨', boulder: '⛰️', crack: '⛰️', weed: '🌼',
   seed: '🌱', grow: '🌿', dry: '🍂', dead: '💀', locked: '🔒',
+  canopy: '🍃', dormant: '🪵',          // 나무 그늘 · 쉬는 나무(4c)
 };
 
 /** 계절 이름(4a). 서버 `weather.SEASONS` 와 같다. */
@@ -63,11 +64,14 @@ export const stars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
 export const plotNo = (i) => i + 1;
 
 export const cropName = (crops, key) => crops?.find((c) => c.key === key)?.name ?? ITEM_BY_KEY[key]?.name ?? key;
+/** 밭에 선 모습의 이름 — 나무는 `사과나무`(4c), 나머지는 작물 이름. */
+export const plantName = (crops, key) => crops?.find((c) => c.key === key)?.treeName ?? cropName(crops, key);
 export const cropEmoji = (crops, key) => crops?.find((c) => c.key === key)?.emoji ?? '🥬';
 
 /** 칸 하나. */
 export function cellEmoji(state, crops, crop) {
   if (state === 'ripe' || state === 'over') return cropEmoji(crops, crop);
+  if (state === 'grow' && crops?.find((c) => c.key === crop)?.tree) return '🌳';
   return CELL[state] ?? '▫️';
 }
 
@@ -110,7 +114,11 @@ export function plotLines(farm, crops) {
     const count = (st) => p.cells.filter((s) => s === st).length;
     const head = `**${plotNo(i)}번 밭** ${stars(p.star)}${equipBadge(p) ? ` ${equipBadge(p)}` : ''}`;
     const bits = [];
-    if (p.crop) bits.push(`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}${modsBadge(p.mods) ? ` ${modsBadge(p.mods)}` : ''}${p.inSeason === false ? ' 🥀 제철 아님' : ''}`);
+    const c = crops?.find((x) => x.key === p.crop);
+    if (p.crop) {
+      const off = p.tree?.dormant ? ` 💤 쉬는 중 — ${seasonsText(c)}에 다시 열려요` : p.inSeason === false ? ' 🥀 제철 아님' : '';
+      bits.push(`${cropEmoji(crops, p.crop)} ${plantName(crops, p.crop)}${modsBadge(p.mods) ? ` ${modsBadge(p.mods)}` : ''}${off}`);
+    }
     if (p.ripe) bits.push(`🧺 수확 ${p.ripe}`);
     if (p.growing) bits.push(`자라는 중 ${p.growing}${p.left != null ? ` (물 ${p.left}번 더)` : ''}`);
     if (p.need) bits.push(`💧 오늘 ${p.need}`);
@@ -172,6 +180,6 @@ export function farmEmbed(farm, crops, { name } = {}) {
 }
 
 export default {
-  FARM_COLOR, plotNo, stars, cropName, cropEmoji, cellEmoji, grid, modsBadge, plotLines, levelLine, nextLine, waterLine, farmEmbed,
+  FARM_COLOR, plotNo, stars, cropName, plantName, cropEmoji, cellEmoji, grid, modsBadge, plotLines, levelLine, nextLine, waterLine, farmEmbed,
   SEASON_NAME, seasonsText, skyLine, riskLine, sprinklerLine, equipBadge,
 };

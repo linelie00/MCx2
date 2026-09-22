@@ -25,7 +25,7 @@ import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
 import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge, skyLine, seasonsText, waterLine, riskLine, sprinklerLine, farmEmbed } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 } from '../src/commands/farm.js';
 import { flatShare } from '../src/casino/crafts.js';
@@ -54,7 +54,7 @@ eq('파는 값이 명부와 같다', CROPS.filter((c) => ITEM_BY_KEY[c.key]?.pri
 eq('이름이 명부와 같다', CROPS.filter((c) => ITEM_BY_KEY[c.key]?.name !== c.name).map((c) => c.key), []);
 eq('팔 수 있다', CROPS.filter((c) => !ITEM_BY_KEY[c.key]?.sell).map((c) => c.key), []);
 const crops = CROPS.map(publicCrop);
-eq('씨앗값 < 파는 값', crops.filter((c) => !c.seedOnly && !(c.seed >= 1 && c.seed < c.price)).map((c) => c.key), []);
+eq('씨앗값 < 파는 값', crops.filter((c) => !c.seedOnly && !c.tree && !(c.seed >= 1 && c.seed < c.price)).map((c) => c.key), []);
 eq('희귀 작물은 씨앗값 0', crops.filter((c) => c.seedOnly && c.seed !== 0).map((c) => c.key), []);
 eq('이모지가 있다', crops.filter((c) => !c.emoji).map((c) => c.key), []);
 eq('심을 수 있는 작물은 최근에 풀린 것부터', unlocked(crops, 10)[0].lv, 10);
@@ -131,7 +131,7 @@ const st = { left: 5, max: 5 };
 const cl = limits('개간 창', clearPayload({ ch: CH, plot: 4, owner: OWNER, farm: v, stamina: st, crops }));
 eq('돌 · 바위 · 금 간 바위 버튼', cl[0].components.map((c) => c.custom_id.split(':')[1]), ['cr', 'cb', 'cb']);
 eq('잡초는 누르면 뽑는다', cl[1].components[0].custom_id.split(':')[1], 'cr');
-eq('작물 칸은 막혀 있다', cl[1].components[1].disabled, true);
+eq('작물 칸은 누르면 뽑기 확인(4c)', [cl[1].components[1].custom_id.split(':')[1], cl[1].components[1].disabled], ['cu', false]);
 eq('돌 모두 버튼에 기력', cl.at(-1).components[0].label, '돌 모두 치우기 · 기력 1');
 const tired = clearPayload({ ch: CH, plot: 4, owner: OWNER, farm: v, stamina: { left: 0, max: 5 }, crops });
 eq('기력이 없으면 돌·바위가 막힌다 (잡초는 된다)', tired.components[0].toJSON().components.map((c) => c.disabled).concat(tired.components[1].toJSON().components[0].disabled ?? false), [true, true, true, false]);
@@ -304,11 +304,58 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   weather.pin(null);
 }
 
+// 4c — 과수 · 뽑기
+{
+  weather.pin({ weather: 'clear', inSeason: true });
+  const f = rules.newFarm({ channelId: CH, guildId: '1', owner: OWNER, today: D, now: `${D}T00:00:00.000Z` });
+  f.xp = land.LEVEL_XP[6];
+  rules.upgrade(f);
+  f.plots[4].cells = f.plots[4].cells.map(() => ({ t: 'soil' }));
+  const v0 = rules.view(f, D);
+  const tp = plantPayload({ ch: CH, plot: 4, crop: 'redApple', mask: 0, owner: OWNER, farm: v0, crops });
+  const tj = tp.embeds[0].toJSON().description;
+  const pg = tp.components.at(-1).toJSON().components.find((c) => c.custom_id.startsWith('farm:pg:'));
+  eq('나무 심기 창 — 사과나무 · 묘목 10골드', [tj.includes('**사과나무** · 묘목 **10골드**'), pg.label, pg.disabled], [true, '나무 심기 · 10골드', false]);
+  eq('나무 심기 창 — 칸 토글은 잠김', tp.components.slice(1, 4).every((r) => r.toJSON().components.every((c) => c.disabled)), true);
+  const stony = rules.view({ ...structuredClone(f), plots: f.plots.map((pp, i) => (i === 4 ? { ...pp, cells: pp.cells.map((c, j) => (j === 0 ? { t: 'rock' } : c)) } : pp)) }, D);
+  const sp = plantPayload({ ch: CH, plot: 4, crop: 'redApple', mask: 0, owner: OWNER, farm: stony, crops });
+  eq('돌이 있으면 나무를 못 심는다', [sp.embeds[0].toJSON().description.includes('아홉 칸이 다 빈 흙'), sp.components.at(-1).toJSON().components.find((c) => c.custom_id.startsWith('farm:pg:')).disabled], [true, true]);
+
+  rules.plant(f, D, { plot: 4, cells: [4], crop: 'redApple' });
+  const v1 = rules.view(f, D);
+  eq('격자 — 나무와 그늘', grid(v1, crops).split('\n')[5].split(' │ ')[1], '🍃🌱🍃');
+  eq('밭 줄 — 사과나무', plotLines(v1, crops).includes('🍎 사과나무'), true);
+  weather.pin({ weather: 'clear', inSeason: false });
+  f.plots[4].cells[4] = { ...f.plots[4].cells[4], regrows: 1, g: 7 };
+  const v2 = rules.view(f, D);
+  eq('밭 줄 — 쉬는 나무', plotLines(v2, crops).includes('💤 쉬는 중 — 가을·겨울에 다시 열려요'), true);
+  eq('쉬는 나무는 🪵', cellEmoji(v2.plots[4].cells[4], crops, 'redApple'), '🪵');
+  weather.pin({ weather: 'clear', inSeason: true });
+  f.plots[4].cells[4].g = 8;
+  eq('자라는 나무는 🌳', cellEmoji(rules.view(f, D).plots[4].cells[4], crops, 'redApple'), '🌳');
+
+  const cl = clearPayload({ ch: CH, plot: 4, owner: OWNER, farm: rules.view(f, D), stamina: { left: 5, max: 5 }, crops }).components.map((r) => r.toJSON());
+  eq('개간 창 — 그늘 칸도 누르면 베기 확인', cl[0].components[0].custom_id.split(':')[1], 'cu');
+  const up = uprootPayload({ ch: CH, plot: 4, cell: 0, owner: OWNER, farm: rules.view(f, D), crops });
+  eq('베기 창 — 나무는 한 버튼(밭 전체)', up.components[0].toJSON().components.map((c) => [c.custom_id.split(':')[1], c.custom_id.split(':')[5]]), [['cU', 'plot'], ['cz', '-']]);
+  const g = rules.newFarm({ channelId: CH, guildId: '1', owner: OWNER, today: D, now: `${D}T00:00:00.000Z` });
+  g.plots[4].cells = g.plots[4].cells.map(() => ({ t: 'soil' }));
+  rules.plant(g, D, { plot: 4, cells: [0, 1, 2], crop: 'carrot' });
+  const up2 = uprootPayload({ ch: CH, plot: 4, cell: 1, owner: OWNER, farm: rules.view(g, D), crops });
+  const ub = up2.components[0].toJSON().components;
+  eq('뽑기 창 — 한 칸 · 밭 전체', ub.map((c) => c.label), ['2번 칸만 뽑기', '밭 전체 비우기 · 3포기', '돌아가기']);
+  eq('뽑기 창 customId 100자 안 · 안 겹침', [ub.every((c) => c.custom_id.length <= 100), new Set(ub.map((c) => c.custom_id)).size], [true, 3]);
+  eq('뽑기 문구', [swingNote({ kind: 'uproot', tree: true, crop: 'redApple', removed: 1, freed: true }, crops), swingNote({ kind: 'uproot', crop: 'carrot', removed: 2, freed: false }, crops)],
+    ['🪓 **사과나무** 를 베었어요 — 밭이 비었어요', '🌱 **당근** 2포기를 뽑았어요']);
+  eq('봇이 옮겨 적은 나무 칸 · 열매 수', [rules.TREE_CELL, `${require('../../server/src/farm/crops.js').TREE_YIELD[0][0]}~${require('../../server/src/farm/crops.js').TREE_YIELD[4][1]}개`], [4, '3~9개']);
+  weather.pin(null);
+}
+
 // ---------------------------------------------------------------- 5. 사유
 
 const REASONS = ['none', 'notOwner', 'already', 'noPlants', 'tired', 'locked', 'level', 'otherCrop', 'occupied', 'gold',
   'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown',
-  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain', 'owned', 'equipLevel', 'noPlot'];
+  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain', 'owned', 'equipLevel', 'noPlot', 'needClear', 'notPlant'];
 const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1, item: 'compost', have: 0, perDay: 3 };
 eq('사유마다 문장이 있다', REASONS.filter((r) => why({ ...sample, reason: r }, crops).startsWith('하지 못했어요')), []);
 eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 }, crops) !== why({ reason: 'tired', stamina: st }, crops), true);

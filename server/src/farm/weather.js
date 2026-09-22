@@ -51,6 +51,9 @@ function seasonOf(key) {
   return { ...s, day: mod(off, SEASON_DAYS) + 1 };
 }
 
+/** 그날이 몇째 주인가 — 가을 1일째(월)부터 7일씩. 스프링클러(4b)가 "한 주에 한 번" 을 센다. */
+const weekOf = (key) => Math.floor((dayNum(key) - ANCHOR) / 7);
+
 /** 사계절 작물인가 — `seasons` 에 넷 다 있으면. */
 const allSeasons = (crop) => SEASONS.every((s) => crop?.seasons?.includes(s.key));
 /** 그 작물이 그날 제철인가. `seasons` 가 없으면(옛 표) 제철로 본다. */
@@ -133,11 +136,11 @@ function growthOf(crop, key) {
   return g;
 }
 
-/** 수확 품질의 날씨·계절 몫. */
-function qualityOf(crop, key) {
+/** 수확 품질의 날씨·계절 몫. 배수로(`drain`, 4b)가 있으면 폭우 날 뿌리 −10 을 뺀다. */
+function qualityOf(crop, key, { drain = false } = {}) {
   const w = weatherOf(key);
   let q = inSeason(crop, key) ? IN_SEASON_QUALITY : OFF_SEASON_QUALITY;
-  if (w.key === 'downpour' && crop?.family === 'root') q += DOWNPOUR_ROOT_QUALITY;
+  if (w.key === 'downpour' && crop?.family === 'root' && !drain) q += DOWNPOUR_ROOT_QUALITY;
   if (w.key === 'rainbow') q += RAINBOW_QUALITY;
   return q;
 }
@@ -154,5 +157,5 @@ function forecast(key) {
 module.exports = {
   SEASONS, SEASON_BY_KEY, SEASON_DAYS, WEATHERS, TABLE,
   OFF_SEASON_GROWTH, IN_SEASON_QUALITY, OFF_SEASON_QUALITY, STORM_FALL, DOWNPOUR_ROOT_QUALITY, RAINBOW_QUALITY,
-  seasonOf, allSeasons, inSeason, weatherOf, hpCost, growthOf, qualityOf, forecast, pin,
+  seasonOf, weekOf, allSeasons, inSeason, weatherOf, hpCost, growthOf, qualityOf, forecast, pin,
 };

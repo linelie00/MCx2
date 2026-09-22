@@ -16,6 +16,9 @@
  * 몇 번 다시 셈해도 같다. 날씨(`weather.js`, 4a)도 날짜 해시다 — 비 · 서리 · 폭풍이 같은 칸에
  * 같게 걸린다. **오늘 비**도 조회할 때 셈한다(`wet=오늘` 로 적으므로 두 번 셈해도 같다).
  *
+ * **설비**(4b, `equip.js`)는 농장 문서에 적는다 — `farm.equip` 과 밭마다 `cover`(덮개) · `stakes`(지지대).
+ * 스프링클러도 하루치 셈 안에서 돈다. 정해진 규칙이라 몇 번 셈해도 같다.
+ *
  * **물은 칸마다 준다.** 물 한 포기에 주는 사람의 체력이 1 든다(컨트롤러가 셈한다). 체력이
  * 모자라면 줄 수 있는 만큼만 주고, 나머지는 다른 사람이 이어서 줄 수 있다.
  *
@@ -40,6 +43,7 @@ const land = require('./land');
 const affinity = require('./affinity');
 const quality = require('./quality');
 const weather = require('./weather');
+const { EQUIP_BY_KEY, emptyEquip } = require('./equip');
 
 /** 밭 수, 한 밭의 칸 수. 둘 다 3×3 이고 키패드 배치다(1 2 3 / 4 5 6 / 7 8 9). */
 const PLOTS = 9;
@@ -99,6 +103,7 @@ function newFarm({ channelId, guildId, owner, today, now, rand = Math.random }) 
     water: { day: null, by: [] },   // 오늘 물을 준 사람들
     waterXpDay: null,       // 물주기 경험치(하루 한 번)를 받은 날
     fert: { day: null, plots: {} },  // 오늘 밭마다 넣은 거름 `{ 밭: { fertilizer, compost } }`
+    equip: emptyEquip(),    // 설비(4b) — 밭마다 사는 덮개·지지대는 `plots[].cover · stakes`
     plots,
   };
 }
@@ -120,6 +125,7 @@ function upgrade(farm) {
   if (!farm.water || typeof farm.water !== 'object') farm.water = { day: null, by: [] };
   if (!Array.isArray(farm.water.by)) farm.water.by = farm.water.by ? [farm.water.by] : [];
   if (!farm.fert || typeof farm.fert !== 'object') farm.fert = { day: null, plots: {} };
+  if (!farm.equip || typeof farm.equip !== 'object') farm.equip = emptyEquip();   // 4b
   for (const p of farm.plots) {
     if (!Number.isFinite(p.soilXp)) p.soilXp = 0;
     if (!Array.isArray(p.history)) p.history = [];     // 3a — 다 거두고 비운 작물 계열
@@ -191,16 +197,36 @@ function wetCell(farm, pi, cell, day) {
   return { revived, ripened };
 }
 
-/** 비(폭우)가 그날 물을 준다 — 아직 그날 물을 안 받은 자라는 칸 전부. 몇 번 불러도 같다. */
-function rainOn(farm, day) {
-  if (!weather.weatherOf(day).water) return;
+/** 그날 아직 물을 안 받은 자라는 칸 전부에 물을 준다. 준 칸 수. 몇 번 불러도 같다. */
+function wetAll(farm, day) {
+  let n = 0;
   farm.plots.forEach((p, pi) => {
     if (!p.open || !CROP_BY_KEY[p.crop]) return;
     for (const cell of p.cells) {
-      if (cell.t === 'plant' && !cell.ripeDay && cell.wet !== day) wetCell(farm, pi, cell, day);
+      if (cell.t === 'plant' && !cell.ripeDay && cell.wet !== day) { wetCell(farm, pi, cell, day); n += 1; }
     }
   });
+  return n;
 }
+
+/** 비(폭우)가 그날 물을 준다. */
+function rainOn(farm, day) {
+  if (weather.weatherOf(day).water) wetAll(farm, day);
+}
+
+/**
+ * 스프링클러(4b) — **한 주에 한 번**, 그 주에 처음으로 물을 못 받은 칸이 남은 날에 그 칸들에
+ * 물을 준다. 하루가 끝난 날(`tick`)에만 돈다 — 오늘은 아직 사람이 줄 수 있다. 산 날(`since`)
+ * 부터만. 그날 날씨대로 자라고, 물주기 경험치는 없다(사람이 준 물이 아니다).
+ */
+function sprinkle(farm, day) {
+  const sp = farm.equip?.sprinkler;
+  if (!sp || day < sp.since || sp.week === weather.weekOf(day)) return;
+  if (wetAll(farm, day)) { sp.week = weather.weekOf(day); sp.last = day; }
+}
+
+/** 오늘 물 한 포기에 드는 체력 — 폭염이면 2, 빗물통(4b)이 있으면 1. */
+const hpCostOf = (farm, day) => (farm.equip?.rainBarrel ? 1 : weather.hpCost(day));
 
 const loseSoil = (plot, n) => { plot.soilXp = Math.max(0, (plot.soilXp ?? 0) - n); };
 
@@ -235,6 +261,7 @@ function tick(farm, today) {
     const key = keyOf(d);
     const sky = weather.weatherOf(key);
     rainOn(farm, key);                               // 비 — 체력 없이 물을 준 날
+    sprinkle(farm, key);                             // 스프링클러 — 그 주 처음 못 받은 날
     farm.plots.forEach((plot, pi) => {
       if (!plot.open) return;
       const crop = CROP_BY_KEY[plot.crop];
@@ -436,7 +463,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
       const n = land.between(rand, lo, hi);
       const overripe = dayNum(today) - dayNum(cell.ripeDay) >= OVERRIPE_AFTER;
       const q = quality.rollQuality({
-        crop, soilStar: star, cell, mods, overripe, bonus, season: weather.qualityOf(crop, today), rand,
+        crop, soilStar: star, cell, mods, overripe, bonus, season: weather.qualityOf(crop, today, { drain: farm.equip?.drain }), rand,
       });
       add(starKey(crop.key, q.star), n);
       (grades[crop.key] ??= [0, 0, 0, 0])[q.star] += 1;
@@ -620,6 +647,54 @@ function fertilize(farm, today, { plot, item, count = 1 }) {
   };
 }
 
+// ---------------------------------------------------------------- 설비 (4b)
+
+/**
+ * 설비를 산다 — `{ key, plots? }`. 값(`cost`)은 컨트롤러가 계정에서 뺀다 — 모자라면 이 사본을 버린다.
+ *   농장 전체  이미 있으면 `owned`
+ *   밭마다     `plots` 가운데 **열려 있고 아직 없는 밭**에만. 하나도 없으면 `noPlot` · `owned`
+ * 레벨이 모자라면 `equipLevel`.
+ */
+function buyEquip(farm, today, { key, plots = null }) {
+  const e = EQUIP_BY_KEY[key];
+  if (!e) return bad('equip');
+  if (levelOf(farm) < e.lv) return { ok: false, reason: 'equipLevel', key, need: e.lv };
+  if (e.per === 'farm') {
+    if (farm.equip[key]) return { ok: false, reason: 'owned', key };
+    farm.equip[key] = key === 'sprinkler' ? { since: today, week: null, last: null } : true;
+    return { ok: true, key, plots: [], cost: e.gold };
+  }
+  if (!Array.isArray(plots) || !plots.length || plots.some(badPlot) || new Set(plots).size !== plots.length) return bad('plots');
+  const open = plots.filter((pi) => farm.plots[pi].open);
+  if (!open.length) return { ok: false, reason: 'noPlot', key };
+  const fresh = open.filter((pi) => !farm.plots[pi][key]);
+  if (!fresh.length) return { ok: false, reason: 'owned', key };
+  for (const pi of fresh) farm.plots[pi][key] = true;
+  return { ok: true, key, plots: fresh, cost: e.gold * fresh.length };
+}
+
+/** 설비 개수 — 농장 전체 하나씩 + 밭마다 산 것. 폐농 확인 창이 적는다. */
+const equipCount = (farm) => ['rainBarrel', 'drain', 'sprinkler'].filter((k) => farm.equip?.[k]).length
+  + farm.plots.reduce((n, p) => n + (p.cover ? 1 : 0) + (p.stakes ? 1 : 0), 0);
+
+/**
+ * 내일 날씨에 설비 없이 다칠 밭 — 서리면 덮개 없이 제철 아닌 작물이 자라는 밭, 폭풍이면 지지대
+ * 없이 키 큰 작물이 자라는 밭. 없으면 `null`. 농장 화면의 경고 줄이 읽는다.
+ */
+function riskOf(farm, today) {
+  const day = addDays(today, 1);
+  const sky = weather.weatherOf(day).key;
+  if (sky !== 'frost' && sky !== 'storm') return null;
+  const plots = [];
+  farm.plots.forEach((p, pi) => {
+    const crop = CROP_BY_KEY[p.crop];
+    if (!p.open || !crop || !p.cells.some((c) => c.t === 'plant' && !c.ripeDay)) return;
+    if (sky === 'frost' && !p.cover && !weather.inSeason(crop, day)) plots.push(pi);
+    if (sky === 'storm' && !p.stakes && crop.tall) plots.push(pi);
+  });
+  return plots.length ? { weather: sky, plots } : null;
+}
+
 /**
  * 미스릴 곡괭이의 결 후보 `{ 밭: { 칸: [a, b] } }`. **주인 자신의 조회**에만 싣는다 —
  * 공개 화면에 두면 남도 결을 반쯤 안다.
@@ -676,6 +751,16 @@ function view(farm, today) {
     waterBy: farm.water?.day === today ? farm.water.by : [],
     need: thirstyCells(farm, today).length,
     sky: weather.forecast(today),
+    hpCost: hpCostOf(farm, today),
+    equip: {
+      rainBarrel: !!farm.equip?.rainBarrel,
+      drain: !!farm.equip?.drain,
+      sprinkler: farm.equip?.sprinkler
+        ? { ready: farm.equip.sprinkler.week !== weather.weekOf(today), last: farm.equip.sprinkler.last ?? null }
+        : null,
+    },
+    equipCount: equipCount(farm),
+    risk: riskOf(farm, today),
     plots: farm.plots.map((p) => {
       const crop = CROP_BY_KEY[p.crop] ?? null;
       const cells = p.open ? p.cells.map((cell) => cellState(cell, crop, today)) : Array(CELLS).fill('locked');
@@ -705,6 +790,8 @@ function view(farm, today) {
         swings,
         fert: p.open ? fertToday(farm, today, pi) : {},
         history: p.history ?? [],
+        cover: !!p.cover,
+        stakes: !!p.stakes,
         inSeason: crop ? weather.inSeason(crop, today) : null,
         mods: mods && { growth: mods.growth, rate: round(mods.rate), quality: mods.quality, soil: mods.soil, rotation: mods.rotation, notes: mods.notes },
       };
@@ -716,4 +803,5 @@ module.exports = {
   PLOTS, CELLS, START_PLOT, WITHER, DEATH, OVERRIPE_AFTER, ROT_AFTER, GRACE_MS, COOLDOWN_DAYS,
   dayNum, keyOf, addDays,
   newFarm, upgrade, levelOf, gainXp, tick, water, plant, harvest, clear, fertilize, candidates, view,
+  buyEquip, equipCount, hpCostOf,
 };

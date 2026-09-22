@@ -655,6 +655,110 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   weather.pin(NEUTRAL);
 }
 
+// --- 4b: 설비
+{
+  const { EQUIPS } = require('../src/farm/equip');
+  eq('설비 다섯', EQUIPS.map((e) => e.key), ['rainBarrel', 'cover', 'drain', 'stakes', 'sprinkler']);
+  const on = (map, inSeason = true) => weather.pin({ weather: (d) => map[d] ?? 'clear', inSeason });
+
+  const e1 = fresh();
+  eq('새 농장엔 설비가 없다', [e1.equip, rules.equipCount(e1)], [{ rainBarrel: false, drain: false, sprinkler: null }, 0]);
+  eq('레벨이 모자라면 못 산다', rules.buyEquip(e1, D0, { key: 'rainBarrel' }), { ok: false, reason: 'equipLevel', key: 'rainBarrel', need: 4 });
+  eq('모르는 설비는 bad', rules.buyEquip(e1, D0, { key: 'moat' }).bad, true);
+  e1.xp = land.LEVEL_XP[9];
+  rules.upgrade(e1);                                  // Lv10 — 밭이 다 열린다
+  eq('빗물통 300', rules.buyEquip(e1, D0, { key: 'rainBarrel' }), { ok: true, key: 'rainBarrel', plots: [], cost: 300 });
+  eq('이미 있으면 owned', rules.buyEquip(e1, D0, { key: 'rainBarrel' }).reason, 'owned');
+  eq('덮개 — 밭 둘 · 밭당 80', rules.buyEquip(e1, D0, { key: 'cover', plots: [4, 1] }), { ok: true, key: 'cover', plots: [4, 1], cost: 160 });
+  eq('덮개 — 이미 있는 밭은 빼고', rules.buyEquip(e1, D0, { key: 'cover', plots: [4, 3] }).plots, [3]);
+  eq('덮개 — 다 있으면 owned', rules.buyEquip(e1, D0, { key: 'cover', plots: [4] }).reason, 'owned');
+  eq('밭 번호가 이상하면 bad', [rules.buyEquip(e1, D0, { key: 'stakes', plots: [9] }).bad, rules.buyEquip(e1, D0, { key: 'stakes', plots: [2, 2] }).bad, rules.buyEquip(e1, D0, { key: 'stakes' }).bad], [true, true, true]);
+  const e2 = fresh(); e2.xp = land.LEVEL_XP[5];
+  eq('닫힌 밭엔 못 산다', rules.buyEquip(e2, D0, { key: 'stakes', plots: [8] }).reason, 'noPlot');
+  eq('설비 수', rules.equipCount(e1), 4);
+  const v1 = rules.view(e1, D0);
+  eq('보기 — 설비 · 덮개', [v1.equip.rainBarrel, v1.plots[4].cover, v1.plots[4].stakes, v1.equipCount], [true, true, false, 4]);
+  eq('옛 농장엔 빈 설비를 채운다', rules.upgrade({ ...structuredClone(fresh()), equip: undefined }).equip, { rainBarrel: false, drain: false, sprinkler: null });
+
+  // 빗물통 — 폭염에도 1
+  on({ [D0]: 'heat' });
+  eq('폭염 체력 — 없으면 2 · 빗물통이면 1', [rules.hpCostOf(fresh(), D0), rules.hpCostOf(e1, D0)], [2, 1]);
+
+  // 덮개 — 서리
+  on({ [day(1)]: 'frost' }, false);
+  const f1 = fresh();
+  f1.plots[P].cover = true;
+  rules.plant(f1, D0, { plot: P, cells: [0], crop: 'carrot' });
+  W(f1, 0); at(f1, 1); W(f1, 1); at(f1, 2);
+  eq('덮개가 서리를 막는다', cell(f1).thirst, 0);
+
+  // 경고 — 내일 서리
+  on({ [day(1)]: 'frost' }, false);
+  const r1 = fresh();
+  rules.plant(r1, D0, { plot: P, cells: [0], crop: 'carrot' });
+  eq('내일 서리 — 덮개 없는 밭', rules.view(r1, D0).risk, { weather: 'frost', plots: [P] });
+  r1.plots[P].cover = true;
+  eq('덮개가 있으면 경고 없음', rules.view(r1, D0).risk, null);
+  on({ [day(1)]: 'frost' }, true);
+  r1.plots[P].cover = false;
+  eq('제철이면 서리 경고 없음', rules.view(r1, D0).risk, null);
+
+  // 지지대 — 폭풍
+  on({ [day(1)]: 'storm' });
+  const s1 = fresh();
+  s1.xp = land.LEVEL_XP[2];
+  s1.plots[P].stakes = true;
+  rules.plant(s1, D0, { plot: P, cells: [0, 1, 2, 3, 4, 5, 6, 7, 8], crop: 'corn' });
+  eq('내일 폭풍 — 지지대 있으면 경고 없음', rules.view(s1, D0).risk, null);
+  W(s1, 0); at(s1, 1); W(s1, 1); at(s1, 2);
+  eq('지지대가 폭풍을 막는다', s1.plots[P].cells.filter((c) => c.scar).length, 0);
+  s1.plots[P].stakes = false;
+  on({ [day(3)]: 'storm' });
+  eq('내일 폭풍 — 지지대 없는 옥수수 밭', rules.view(s1, day(2)).risk, { weather: 'storm', plots: [P] });
+
+  // 배수로 — 폭우 뿌리
+  on({ [D0]: 'downpour' });
+  const carrot = CROPS.find((c) => c.key === 'carrot');
+  eq('배수로가 폭우 뿌리 −10 을 막는다', [weather.qualityOf(carrot, D0), weather.qualityOf(carrot, D0, { drain: true })], [0, 10]);
+
+  // 스프링클러 — 한 주에 한 번
+  weather.pin(NEUTRAL);
+  eq('주는 월요일부터', [weather.weekOf('2026-09-21'), weather.weekOf('2026-09-27'), weather.weekOf('2026-09-28'), weather.weekOf('2026-09-20')], [0, 0, 1, -1]);
+  const MON = '2026-09-28';
+  const dd = (n) => rules.addDays(MON, n);
+  const k1 = fresh();
+  k1.xp = land.LEVEL_XP[8];
+  rules.upgrade(k1);
+  for (let i = 1; i < 9; i += 1) k1.plots[P].cells[i] = { t: 'rock' };
+  k1.lastTickDay = rules.addDays(MON, -1);
+  rules.plant(k1, MON, { plot: P, cells: [0], crop: 'saffron' });
+  eq('스프링클러 1500', rules.buyEquip(k1, MON, { key: 'sprinkler' }).cost, 1500);
+  const c0 = () => k1.plots[P].cells[0];
+  rules.tick(k1, dd(1));                               // 월요일에 물을 안 줬다 → 스프링클러
+  eq('못 준 날을 스프링클러가 — 안 목마르고 자란다', [c0().thirst, c0().g, c0().wet, k1.equip.sprinkler.last], [0, 1, MON, MON]);
+  eq('물주기 경험치는 없다', k1.waterXpDay, null);
+  eq('그 주엔 다 썼다', rules.view(k1, dd(1)).equip.sprinkler, { ready: false, last: MON });
+  rules.tick(k1, dd(2));                               // 화요일도 안 줬다 → 목마르다
+  eq('한 주에 한 번뿐', c0().thirst, 1);
+  for (let n = 2; n <= 6; n += 1) { rules.tick(k1, dd(n)); rules.water(k1, dd(n), 'u1'); }
+  rules.tick(k1, dd(8));                               // 다음 주 월요일(dd 7)에 안 줬다 → 다시
+  eq('다음 주에 다시 쓴다', [k1.equip.sprinkler.last, rules.view(k1, dd(8)).equip.sprinkler.ready], [dd(7), false]);
+  eq('몰아서 셈해도 같다', (() => {
+    const a = structuredClone(k1); const b = structuredClone(k1);
+    rules.tick(a, dd(20));
+    for (let n = 9; n <= 20; n += 1) rules.tick(b, dd(n));
+    return JSON.stringify(a) === JSON.stringify(b);
+  })(), true);
+  const k2 = fresh();
+  k2.xp = land.LEVEL_XP[8];
+  k2.lastTickDay = rules.addDays(MON, -1);
+  rules.plant(k2, MON, { plot: P, cells: [0], crop: 'saffron' });
+  rules.buyEquip(k2, dd(1), { key: 'sprinkler' });     // 화요일에 샀다 — 월요일 몫은 소급 안 한다
+  rules.tick(k2, dd(1));
+  eq('산 날 앞은 소급하지 않는다', [k2.plots[P].cells[0].thirst, k2.equip.sprinkler.last], [1, null]);
+  weather.pin(NEUTRAL);
+}
+
 // --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
 {
   // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
@@ -898,6 +1002,31 @@ const server = app.listen(0, async () => {
     eq('폭염 — 한 포기에 체력 2', [hw.cost, hw.watered, hw.hp], [2, 2, 2]);
     weather.pin({ weather: 'rain', inSeason: true });
     eq('비 오는 날 — 물주기는 rain', (await post('/farms/water', { channelId: CH2, userId: W2 })).body.reason, 'rain');
+    weather.pin(NEUTRAL);
+
+    // --- 4b: 설비 (CH2 는 Lv10)
+    const eqs = (await hit('/farms/equips')).body.equips;
+    eq('설비 표', eqs.map((e) => [e.key, e.gold]), [['rainBarrel', 300], ['cover', 80], ['drain', 300], ['stakes', 80], ['sprinkler', 1500]]);
+    eq('주인 아니면 못 산다', (await post('/farms/equip', { channelId: CH2, userId: U, key: 'drain' })).body.reason, 'notOwner');
+    eq('모르는 설비 400', (await post('/farms/equip', { channelId: CH2, userId: W2, key: 'moat' })).status, 400);
+    await post('/accounts/deltas', { deltas: { [W2]: 1000 } });
+    const ge = (await acct(W2)).gold;
+    const b1 = (await post('/farms/equip', { channelId: CH2, userId: W2, key: 'rainBarrel' })).body;
+    eq('빗물통 — 300골드', [b1.ok, b1.account.gold, b1.farm.equip.rainBarrel], [true, ge - 300, true]);
+    const b2 = (await post('/farms/equip', { channelId: CH2, userId: W2, key: 'stakes', plots: [4, 1, 0] })).body;
+    eq('지지대 셋 — 240골드', [b2.plots, b2.cost, b2.account.gold, b2.farm.plots[1].stakes], [[4, 1, 0], 240, ge - 540, true]);
+    eq('저장됐다', [readFile().farms[CH2].equip.rainBarrel, readFile().farms[CH2].plots[4].stakes], [true, true]);
+    await post('/accounts/deltas', { deltas: { [W2]: -((await acct(W2)).gold - 100) } });   // 골드 100
+    eq('골드가 모자라면 안 산다', (await post('/farms/equip', { channelId: CH2, userId: W2, key: 'sprinkler' })).body, { ok: false, reason: 'gold', need: 1500, gold: 100, today: dayKey() });
+    eq('모자라면 농장도 그대로', readFile().farms[CH2].equip.sprinkler, null);
+    weather.pin({ weather: 'heat', inSeason: true });
+    const d21 = readFile();
+    d21.farms[CH2].plots[4].cells = d21.farms[CH2].plots[4].cells.map(() => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: dayKey(), wet: null }));
+    writeFile(d21);
+    await post('/accounts/deltas', { hp: { [W2]: 100 } });
+    await post('/accounts/deltas', { hp: { [W2]: -94 } });      // 체력 6 → 빗물통이면 5포기
+    const hw2 = (await post('/farms/water', { channelId: CH2, userId: W2 })).body;
+    eq('빗물통 — 폭염에도 체력 1', [hw2.cost, hw2.watered, hw2.hp], [1, 5, 1]);
     weather.pin(NEUTRAL);
 
     // --- 1단계에 연 농장이 파일에 있을 때

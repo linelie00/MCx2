@@ -34,6 +34,8 @@
  * **비명 뿌리**(3c)를 거두면 한 번마다 귀마개 하나를 쓰고, 없으면 체력 −5(1 은 남긴다).
  *
  * **도감**(`book`, 3b)도 계정 기준 · 같은 파일이다. 수확이 농장을 쓸 때 같이 적는다.
+ *
+ * **설비**(4b)는 농장 문서에 적는다. 사는 것은 곡괭이와 같은 순서 — 계정(골드) 먼저, 농장 나중.
  */
 const farmStore = require('../services/farmStore');
 const accountStore = require('../services/accountStore');
@@ -44,6 +46,7 @@ const rules = require('../farm/rules');
 const land = require('../farm/land');
 const affinity = require('../farm/affinity');
 const weather = require('../farm/weather');
+const { EQUIPS } = require('../farm/equip');
 
 /** 디스코드 id(유저·채널·길드). NPC 는 농장을 안 가진다. */
 const SNOWFLAKE = /^\d{5,25}$/;
@@ -63,6 +66,8 @@ const BAD = {
   crop: '모르는 작물입니다',
   item: '거름은 fertilizer 나 compost 여야 합니다',
   count: '개수는 1 이상의 정수여야 합니다',
+  equip: '모르는 설비입니다',
+  plots: '밭은 0~8 의 겹치지 않는 번호 배열이어야 합니다',
 };
 
 /** 물을 줘도 남겨 두는 체력. 0 이면 쓰러진다. */
@@ -311,7 +316,7 @@ function farmFor(data, channelId, today, res) {
 /**
  * POST /api/farms/water — `{ channelId, userId, plot? }`. **누구나** 줄 수 있다.
  *
- * 한 포기에 체력 1 — **폭염이면 2**(4a). 체력은 1 을 남기고 줄 수 있는 만큼만. 모자라면 급한 칸
+ * 한 포기에 체력 1 — **폭염이면 2**(4a), 빗물통이 있으면 1(4b). 체력은 1 을 남기고 줄 수 있는 만큼만. 모자라면 급한 칸
  * (시든 칸 → 목마른 칸)부터 주고 나머지는 남긴다 — 다른 사람이 이어서 줄 수 있다.
  * 비·폭우인 날은 비가 이미 줬다(`reason: 'rain'`).
  * 계정에는 체력과 전적(`farmWater`, 남의 농장이면 `farmHelp`)이 같이 나간다.
@@ -331,7 +336,7 @@ exports.water = (req, res) => {
   const farm = farmFor(data, channelId, today, res);
   if (!farm) return undefined;
   const hp = load(acctData, userId, today).hp;
-  const cost = weather.hpCost(today);
+  const cost = rules.hpCostOf(farm, today);   // 폭염 2 · 빗물통이면 1 (4b)
   const r = rules.water(farm, today, userId, { budget: Math.floor(Math.max(0, hp - KEEP_HP) / cost), plot });
   if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
   if (!r.ok) return res.json({ ...r, hp, cost, farm: rules.view(farm, today), today });
@@ -681,4 +686,46 @@ exports.tools = (req, res) => {
     tool: toolOf(data, userId),
     level: farm ? rules.levelOf(rules.upgrade(clone(farm))) : null,
   });
+};
+
+// ---------------------------------------------------------------- 설비 (4b)
+
+/** GET /api/farms/equips — 설비 표. */
+exports.equips = (req, res) => res.json({ equips: EQUIPS });
+
+/**
+ * POST /api/farms/equip — `{ channelId, userId, key, plots? }`. 주인만.
+ *
+ * 덮개·지지대는 `plots` 가운데 열려 있고 아직 없는 밭에만 산다(값 × 밭 수). 골드는 **가진 만큼만**
+ * — 빚으로 사지 않는다. 계정 먼저, 농장 나중: 사이에 죽으면 골드만 잃는다.
+ */
+exports.equip = (req, res) => {
+  const got = ids(req.body, ['channelId', 'userId']);
+  if (typeof got === 'string') return res.status(400).json({ error: got });
+  const { channelId, userId } = got;
+  const { key, plots } = req.body;
+
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const acctData = readAccounts(res);
+  if (!acctData) return undefined;
+  const today = dayKey();
+
+  const farm = farmFor(data, channelId, today, res);
+  if (!farm) return undefined;
+  if (farm.owner !== userId) return res.json({ ok: false, reason: 'notOwner', owner: farm.owner, today });
+  const r = rules.buyEquip(farm, today, { key, plots: plots ?? null });
+  if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
+  if (!r.ok) return res.json({ ...r, farm: rules.view(farm, today), today });
+
+  const have = load(acctData, userId, today).gold;
+  if (have < r.cost) return res.json({ ok: false, reason: 'gold', need: r.cost, gold: have, today });
+  const acct = touch(acctData, userId, today, (a) => {
+    a.gold -= r.cost;
+    bump(a, 'farmEquip');
+  });
+  if (!save(accountStore, acctData, res, '계정')) return undefined;
+  data.farms[channelId] = farm;
+  if (!save(farmStore, data, res, '농장')) return undefined;
+  return res.json({ ...r, account: publicView(acct), farm: rules.view(farm, today), today });
 };

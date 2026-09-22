@@ -32,6 +32,30 @@ export function skyLine(sky) {
   return `${t.weather.emoji} ${t.weather.name} · ${t.season.emoji} ${t.season.name} ${t.season.day}일째 · 내일 ${n.weather.emoji} ${n.weather.name}`;
 }
 
+/**
+ * 내일 날씨 경고(4b). 서버가 준 `risk` — 설비 없이 내일 다칠 밭 — 만 읽는다.
+ * `⚠️ 내일 🧊 서리 — 덮개 없는 5번 밭의 제철 아닌 작물이 상해요 · /농장 설비`
+ */
+export function riskLine(farm) {
+  const r = farm.risk;
+  if (!r?.plots?.length) return null;
+  const where = `${r.plots.map((i) => i + 1).join('·')}번 밭`;
+  if (r.weather === 'frost') return `⚠️ 내일 🧊 서리 — 덮개 없는 ${where}의 제철 아닌 작물이 상해요 · \`/농장 설비\``;
+  return `⚠️ 내일 🌪️ 폭풍 — 지지대 없는 ${where}의 키 큰 작물이 쓰러질 수 있어요 · \`/농장 설비\``;
+}
+
+/** 하루 전 날짜 `YYYY-MM-DD`. */
+const yesterday = (key) => new Date(Date.parse(`${key}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+
+/** 어제 스프링클러가 돌았으면 한 줄(4b). */
+export function sprinklerLine(farm) {
+  const last = farm.equip?.sprinkler?.last;
+  return last && farm.today && last === yesterday(farm.today) ? '⛲ _어제 못 준 물을 스프링클러가 줬어요 — 이번 주는 다 썼어요_' : null;
+}
+
+/** 밭에 놓인 설비 표시(4b) — `⛺`(덮개) · `🎋`(지지대). */
+export const equipBadge = (p) => `${p.cover ? '⛺' : ''}${p.stakes ? '🎋' : ''}`;
+
 /** 토질 ★ 다섯 칸. */
 export const stars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
 
@@ -84,7 +108,7 @@ export function plotLines(farm, crops) {
   return farm.plots.map((p, i) => {
     if (!p.open) return null;
     const count = (st) => p.cells.filter((s) => s === st).length;
-    const head = `**${plotNo(i)}번 밭** ${stars(p.star)}`;
+    const head = `**${plotNo(i)}번 밭** ${stars(p.star)}${equipBadge(p) ? ` ${equipBadge(p)}` : ''}`;
     const bits = [];
     if (p.crop) bits.push(`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}${modsBadge(p.mods) ? ` ${modsBadge(p.mods)}` : ''}${p.inSeason === false ? ' 🥀 제철 아님' : ''}`);
     if (p.ripe) bits.push(`🧺 수확 ${p.ripe}`);
@@ -132,6 +156,8 @@ export function farmEmbed(farm, crops, { name } = {}) {
     description: [
       `<#${farm.channelId}> · 주인 <@${farm.owner}>`,
       skyLine(farm.sky),
+      riskLine(farm),
+      sprinklerLine(farm),
       levelLine(farm),
       waterLine(farm),
       '',
@@ -147,5 +173,5 @@ export function farmEmbed(farm, crops, { name } = {}) {
 
 export default {
   FARM_COLOR, plotNo, stars, cropName, cropEmoji, cellEmoji, grid, modsBadge, plotLines, levelLine, nextLine, waterLine, farmEmbed,
-  SEASON_NAME, seasonsText, skyLine,
+  SEASON_NAME, seasonsText, skyLine, riskLine, sprinklerLine, equipBadge,
 };

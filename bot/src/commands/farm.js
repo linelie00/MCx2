@@ -17,6 +17,7 @@
  *   - **바위 창** — 에페메랄. 결 자리 `[1]`~`[5]` + 힌트. 결 자리는 서버만 안다(미스릴 곡괭이면
  *     후보 두 자리를 주인에게만 준다).
  *   - **거름 창 · 곡괭이 창** — 에페메랄(2b). 비료·퇴비를 밭에 넣고, 곡괭이를 올린다.
+ *   - **설비 창** — 에페메랄(4b). 빗물통·배수로·스프링클러는 버튼, 덮개·지지대는 밭 셀렉트.
  *   상태가 없는 핸들러라 창의 상태(밭·칸·작물·고른 칸)와 **주인 id(맨 뒤)** 를 customId 에 싣는다.
  *
  * **판에 앉아 있으면 못 심고 물도 못 준다.** 씨앗값은 골드를, 물은 체력을 쓰는데 판이 도는 동안
@@ -31,7 +32,7 @@ import {
 } from 'discord.js';
 import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather, getEquips, buyEquip,
 } from '../api.js';
 import { base, fail, trunc } from '../embeds.js';
 import { forget } from '../casino/alive.js';
@@ -39,7 +40,7 @@ import { forgetBag } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
 import {
-  FARM_COLOR, farmEmbed, cropName, cellEmoji, plotNo, stars, modsBadge, seasonsText, SEASON_NAME, skyLine,
+  FARM_COLOR, farmEmbed, cropName, cropEmoji, cellEmoji, plotNo, stars, modsBadge, seasonsText, SEASON_NAME, skyLine,
 } from '../farm/render.js';
 
 export const PREFIX = 'farm';
@@ -100,6 +101,9 @@ function why(r, crops) {
     case 'noFarm': return '곡괭이는 농장이 있어야 올릴 수 있어요. `/농장 등록`';
     case 'maxTool': return '이미 가장 좋은 곡괭이예요.';
     case 'toolLevel': return `그 곡괭이는 농장 **Lv.${r.need}** 부터 만들 수 있어요.`;
+    case 'owned': return `이미 놓은 설비예요${r.name ? ` — ${r.name}` : ''}.`;
+    case 'equipLevel': return `${r.name ?? '그 설비'} 은(는) 농장 **Lv.${r.need}** 부터 놓을 수 있어요.`;
+    case 'noPlot': return '열린 밭에만 놓을 수 있어요.';
     case 'notStone': return '거기엔 캘 게 없어요.';
     case 'taken': return `이미 <@${r.owner}> 님의 땅이에요. 물은 누구나 줄 수 있어요 — \`/농장 물주기\``;
     case 'mine': return '이미 내 농장이에요. `/농장 보기`';
@@ -181,7 +185,8 @@ function harvestLine(items, crops) {
 
 function waterNote(who, r) {
   const cost = r.cost ?? 1;
-  const bits = [`<@${who}> 님이 **${r.watered}포기**에 물을 줬어요 · 체력 −${r.watered * cost}${cost > 1 ? ' 🥵 폭염' : ''} (남은 체력 ${num(r.hp)})`];
+  const barrel = cost === 1 && r.farm?.sky?.today?.weather?.key === 'heat' ? ' 🛢️ 빗물통' : '';
+  const bits = [`<@${who}> 님이 **${r.watered}포기**에 물을 줬어요 · 체력 −${r.watered * cost}${cost > 1 ? ' 🥵 폭염' : barrel} (남은 체력 ${num(r.hp)})`];
   if (r.revived) bits.push(`🍂 ${r.revived}포기가 살아났어요`);
   if (r.ripened) bits.push(`🧺 ${r.ripened}포기가 다 자랐어요`);
   if (r.left) bits.push(`_체력이 모자라 **${r.left}포기**는 못 줬어요 — 다른 분이 이어서 줄 수 있어요_`);
@@ -696,6 +701,96 @@ async function openTools(interaction) {
   return interaction.editReply(toolsPayload({ owner: me, tools, account: accounts[me] }));
 }
 
+// ---------------------------------------------------------------- 설비 (4b)
+
+/**
+ * 설비 창 — 내 농장의 설비. 농장 전체 설비는 버튼, 덮개·지지대는 밭을 여럿 고르는 셀렉트.
+ * 고르는 순간 산다. 값·해금 레벨·효과는 서버 표(`/farms/equips`)를 그대로 적는다.
+ */
+function equipPayload({ owner, farm, equips, gold, crops, note }) {
+  const open = farm.plots.map((p, i) => (p.open ? i : -1)).filter((i) => i >= 0);
+  const has = (e) => (e.per === 'farm' ? Boolean(farm.equip?.[e.key]) : false);
+  const lines = [`<#${farm.channelId}> · **Lv.${farm.level}** · 가진 골드 **${num(gold)}**`, ''];
+  for (const e of equips) {
+    const lock = farm.level < e.lv ? ` · 🔒 Lv.${e.lv}` : '';
+    if (e.per === 'farm') {
+      let state = has(e) ? '✅ 있음' : `${num(e.gold)}골드`;
+      if (e.key === 'sprinkler' && farm.equip?.sprinkler) {
+        state += farm.equip.sprinkler.ready ? ' · 이번 주 아직 안 씀' : ' · 이번 주는 썼어요';
+      }
+      lines.push(`${e.emoji} **${e.name}** — ${e.note}`, `　└ ${state}${has(e) ? '' : lock}`);
+    } else {
+      const got = open.filter((i) => farm.plots[i][e.key]);
+      lines.push(`${e.emoji} **${e.name}** — ${e.note}`,
+        `　└ 밭당 ${num(e.gold)}골드 · 놓은 밭 ${got.length} / ${open.length}${got.length ? ` (${got.map(plotNo).join('·')}번)` : ''}${lock}`);
+    }
+  }
+  if (note) lines.push('', note);
+
+  const rows = [];
+  const buttons = equips.filter((e) => e.per === 'farm' && !has(e)).map((e) => new ButtonBuilder()
+    .setCustomId(`${PREFIX}:eb:${e.key}:${owner}`)
+    .setLabel(`${e.name} · ${num(e.gold)}골드`)
+    .setEmoji(e.emoji)
+    .setStyle(ButtonStyle.Success)
+    .setDisabled(farm.level < e.lv || gold < e.gold));
+  if (buttons.length) rows.push(new ActionRowBuilder().addComponents(buttons));
+  for (const e of equips.filter((x) => x.per === 'plot' && farm.level >= x.lv)) {
+    const free = open.filter((i) => !farm.plots[i][e.key]);
+    if (!free.length) continue;
+    const afford = Math.floor(gold / e.gold);
+    rows.push(new ActionRowBuilder().addComponents(new StringSelectMenuBuilder()
+      .setCustomId(`${PREFIX}:ep:${e.key}:${owner}`)
+      .setPlaceholder(afford ? `${e.emoji} ${e.name} 놓을 밭 고르기 — 밭당 ${num(e.gold)}골드` : `${e.emoji} ${e.name} — 골드가 모자라요`)
+      .setDisabled(!afford)
+      .setMinValues(1)
+      .setMaxValues(Math.max(1, Math.min(free.length, afford)))
+      .addOptions(free.map((i) => ({
+        label: `${plotNo(i)}번 밭`,
+        value: String(i),
+        description: trunc(farm.plots[i].crop ? `${cropEmoji(crops, farm.plots[i].crop)} ${cropName(crops, farm.plots[i].crop)}` : '비어 있음', 100),
+      })))));
+  }
+  return {
+    embeds: [base({ title: '🛠️ 설비', description: lines.join('\n'), color: FARM_COLOR, footer: '설비는 농장에 딸려요 — 폐농하면 같이 사라져요' })],
+    components: rows,
+    allowedMentions: QUIET,
+  };
+}
+
+async function openEquip(interaction, { owner = interaction.user.id, note } = {}) {
+  const [{ farm }, { equips }, { accounts }, crops] = await Promise.all([getFarmOf(owner), getEquips(), getAccounts([owner]), getFarmCrops()]);
+  if (!farm) return interaction.editReply({ embeds: [fail('설비는 내 농장에 놓아요. 먼저 `/농장 등록` 을 해 주세요.')], components: [] });
+  return interaction.editReply(equipPayload({ owner, farm, equips, gold: accounts[owner]?.gold ?? 0, crops, note }));
+}
+
+async function equipCmd(interaction) {
+  await interaction.deferReply({ flags: EPH });
+  return openEquip(interaction);
+}
+
+/** 설비 사기 — 버튼(`eb`, 농장 전체) · 셀렉트(`ep`, 밭마다). 주인만(customId 맨 뒤). */
+async function equipButton(interaction, act, [key, owner]) {
+  if (interaction.user.id !== owner) {
+    return interaction.reply({ embeds: [fail('자기 설비 창에서만 누를 수 있어요.')], flags: EPH });
+  }
+  await interaction.deferUpdate();
+  const [{ farm }, { equips }] = await Promise.all([getFarmOf(owner), getEquips()]);
+  if (!farm) return interaction.editReply({ embeds: [fail('농장이 없어요.')], components: [] });
+  const e = equips.find((x) => x.key === key);
+  const plots = act === 'ep' ? (interaction.values ?? []).map(Number) : null;
+  const r = await buyEquip({ channelId: farm.channelId, userId: owner, key, plots });
+  let note;
+  if (r.ok) {
+    note = `🎉 **${e.emoji} ${e.name}** 을(를) ${r.plots.length ? `${r.plots.map(plotNo).join('·')}번 밭에 ` : ''}놓았어요! (−${num(r.cost)}골드)`;
+  } else if (r.reason === 'gold') {
+    note = `⚠️ 골드가 모자라요. ${e?.name ?? '설비'} 값 **${num(r.need)}골드** · 가진 골드 **${num(r.gold)}**`;
+  } else {
+    note = `⚠️ ${why({ ...r, name: e?.name })}`;
+  }
+  return openEquip(interaction, { owner, note });
+}
+
 // ---------------------------------------------------------------- 날씨 (4a)
 
 /** 날씨 효과 한 줄(설명). */
@@ -784,6 +879,7 @@ const data = new SlashCommandBuilder()
     .addStringOption((o) => o.setName('작물').setDescription('퇴비로 만들 작물').setAutocomplete(true).setRequired(true))
     .addIntegerOption((o) => o.setName('개수').setDescription('만들 퇴비 수 (기본 1)').setMinValue(1).setMaxValue(100)))
   .addSubcommand((s) => s.setName('곡괭이').setDescription('곡괭이를 봅니다 · 더 좋은 것으로 바꿉니다'))
+  .addSubcommand((s) => s.setName('설비').setDescription('빗물통 · 덮개 · 배수로 · 지지대 · 스프링클러를 봅니다 · 놓습니다'))
   .addSubcommand((s) => s.setName('도감').setDescription('키워 본 작물 · 최고 품질 · 대왕 작물을 봅니다'))
   .addSubcommand((s) => s.setName('날씨').setDescription('오늘 · 내일 날씨와 계절, 지금 제철인 작물'))
   .addSubcommand((s) => s.setName('폐농').setDescription('내 농장을 없앱니다 — 등록 24시간 안이면 무르기'));
@@ -940,7 +1036,7 @@ async function abandonCmd(interaction) {
     embeds: [base({
       title: '⚠️ 정말 폐농할까요?',
       description: [
-        `<#${farm.channelId}> 의 농장(**Lv.${farm.level}**)이 **통째로 사라져요.** 심긴 작물 **${planted}포기**도 함께요.`,
+        `<#${farm.channelId}> 의 농장(**Lv.${farm.level}**)이 **통째로 사라져요.** 심긴 작물 **${planted}포기**${farm.equipCount ? ` · 설비 **${farm.equipCount}개**` : ''}도 함께요.`,
         free
           ? '_등록한 지 24시간이 안 돼서 **무르기**예요 — 바로 다시 열 수 있어요._'
           : '_무르기 기한(24시간)이 지났어요. 폐농하면 **7일 동안** 다시 못 열어요._',
@@ -969,6 +1065,7 @@ const RUN = {
   거름: fertCmd,
   퇴비: compostCmd,
   곡괭이: toolsCmd,
+  설비: equipCmd,
   도감: bookCmd,
   날씨: weatherCmd,
   폐농: abandonCmd,
@@ -1227,6 +1324,7 @@ async function component(interaction) {
     if (['w', 'h', 'p', 'c', 'v'].includes(act)) return await viewButton(interaction, act, rest[0]);
     if (act === 'ab' || act === 'abx') return await abandonButton(interaction, act, rest);
     if (act === 'k') return await toolButton(interaction, rest);
+    if (act === 'eb' || act === 'ep') return await equipButton(interaction, act, rest);
     if (act.startsWith('f')) return await fertButton(interaction, act, rest);
     if (act.startsWith('c')) return await clearButton(interaction, act, rest);
     return await plantButton(interaction, act, rest);
@@ -1238,7 +1336,7 @@ async function component(interaction) {
 
 /** 검사용(scripts/check-farm.mjs). 화면은 상태가 없어 그대로 불러 볼 수 있다. */
 export {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 };
 

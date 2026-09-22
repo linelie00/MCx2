@@ -23,9 +23,9 @@ process.env.GEMINI_API_KEY ||= '';
 
 import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
-import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge, skyLine, seasonsText, waterLine } from '../src/farm/render.js';
+import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge, skyLine, seasonsText, waterLine, riskLine, sprinklerLine, farmEmbed } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, waterNote, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 } from '../src/commands/farm.js';
 import { flatShare } from '../src/casino/crafts.js';
@@ -38,6 +38,7 @@ const land = require('../../server/src/farm/land.js');
 const rules = require('../../server/src/farm/rules.js');
 const weather = require('../../server/src/farm/weather.js');
 const affinity = require('../../server/src/farm/affinity.js');
+const { EQUIPS } = require('../../server/src/farm/equip.js');
 
 let ok = 0; let bad = 0;
 const eq = (name, got, want) => {
@@ -264,11 +265,50 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('비 오는 날 사유', why({ reason: 'rain' }, crops).startsWith('오늘은 비가 와서'), true);
 }
 
+// 4b — 설비
+{
+  weather.pin({ weather: (d) => (d === '2026-10-06' ? 'frost' : 'clear'), inSeason: false });
+  const f = rules.newFarm({ channelId: CH, guildId: '1', owner: OWNER, today: '2026-10-05', now: '2026-10-05T00:00:00.000Z' });
+  f.xp = land.LEVEL_XP[9];
+  rules.upgrade(f);
+  f.plots[4].cells = f.plots[4].cells.map(() => ({ t: 'soil' }));
+  rules.plant(f, '2026-10-05', { plot: 4, cells: [0, 1], crop: 'carrot' });
+  rules.buyEquip(f, '2026-10-05', { key: 'rainBarrel' });
+  rules.buyEquip(f, '2026-10-05', { key: 'stakes', plots: [4, 1] });
+  const v = rules.view(f, '2026-10-05');
+  eq('경고 줄 — 내일 서리', riskLine(v), '⚠️ 내일 🧊 서리 — 덮개 없는 5번 밭의 제철 아닌 작물이 상해요 · `/농장 설비`');
+  eq('밭 줄에 🎋', plotLines(v, crops).split('\n').find((l) => l.startsWith('**5번 밭**')).includes('★☆☆☆☆ 🎋'), true);
+  eq('농장 화면에 경고', farmEmbed(v, crops).toJSON().description.includes('⚠️ 내일 🧊 서리'), true);
+  eq('스프링클러 줄 — 어제 돌았을 때만', [sprinklerLine({ ...v, equip: { sprinkler: { last: '2026-10-04' } } }), sprinklerLine({ ...v, equip: { sprinkler: { last: '2026-10-01' } } })].map(Boolean), [true, false]);
+
+  const ep = equipPayload({ owner: OWNER, farm: v, equips: EQUIPS, gold: 250, crops });
+  const ej = ep.embeds[0].toJSON();
+  const comps = ep.components.map((r) => r.toJSON());
+  eq('설비 창 — 다섯 줄', EQUIPS.every((e) => ej.description.includes(`**${e.name}**`)), true);
+  eq('설비 창 — 빗물통은 있음', ej.description.includes('✅ 있음'), true);
+  eq('설비 창 — 버튼은 없는 것만(배수로·스프링클러), 골드 모자라면 잠김', comps[0].components.map((c) => [c.custom_id.split(':')[2], c.disabled]), [['drain', true], ['sprinkler', true]]);
+  const sel = comps.slice(1).map((r) => r.components[0]);
+  eq('설비 창 — 덮개·지지대 셀렉트', sel.map((c) => c.custom_id.split(':')[2]), ['cover', 'stakes']);
+  eq('지지대 셀렉트엔 안 놓은 밭만', sel[1].options.map((o) => o.value).includes('4'), false);
+  eq('살 수 있는 만큼만 고른다(250골드 → 3)', sel[0].max_values, 3);
+  eq('셀렉트 설명에 작물', sel[0].options.find((o) => o.value === '4').description, '🥕 당근');
+  eq('설비 창 — 5줄 · customId 100자 안', [comps.length <= 5, comps.every((r) => r.components.every((c) => c.custom_id.length <= 100))], [true, true]);
+  eq('설비 창 — customId 가 겹치지 않는다', new Set(comps.flatMap((r) => r.components.map((c) => c.custom_id))).size, comps.reduce((n, r) => n + r.components.length, 0));
+  const low = rules.view({ ...structuredClone(f), xp: 0 }, '2026-10-05');
+  eq('Lv 모자라면 셀렉트 없음', equipPayload({ owner: OWNER, farm: low, equips: EQUIPS, gold: 9999, crops }).components.length, 1);
+
+  weather.pin({ weather: 'heat', inSeason: true });
+  const hv = rules.view(f, '2026-10-05');
+  eq('물 문구 — 빗물통', waterNote(OWNER, { watered: 3, cost: 1, hp: 10, farm: hv }).includes('체력 −3 🛢️ 빗물통'), true);
+  eq('물 문구 — 폭염', waterNote(OWNER, { watered: 3, cost: 2, hp: 10, farm: hv }).includes('체력 −6 🥵 폭염'), true);
+  weather.pin(null);
+}
+
 // ---------------------------------------------------------------- 5. 사유
 
 const REASONS = ['none', 'notOwner', 'already', 'noPlants', 'tired', 'locked', 'level', 'otherCrop', 'occupied', 'gold',
   'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown',
-  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain'];
+  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain', 'owned', 'equipLevel', 'noPlot'];
 const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1, item: 'compost', have: 0, perDay: 3 };
 eq('사유마다 문장이 있다', REASONS.filter((r) => why({ ...sample, reason: r }, crops).startsWith('하지 못했어요')), []);
 eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 }, crops) !== why({ reason: 'tired', stamina: st }, crops), true);

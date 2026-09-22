@@ -282,6 +282,8 @@ export const fertilizeFarm = ({ channelId, userId, plot, item, count = 1 }) => f
 export const compostCrops = ({ userId, crop, count = 1 }) => farmPost('compost', { userId, crop, count });
 /** 곡괭이를 한 단계 올린다. */
 export const upgradePickaxe = (userId) => farmPost('pickaxe', { userId });
+/** 설비를 산다(4b). 덮개·지지대는 `plots`(0~8) 에. 주인만. */
+export const buyEquip = ({ channelId, userId, key, plots = null }) => farmPost('equip', { channelId, userId, key, plots });
 /**
  * 궁합 미리보기(3a). `crop` 을 주면 그 작물의 보정 전부(`mods`), 안 주면 모든 작물의 요약(`all`).
  * 셈은 서버가 한다 — 봇은 궁합표를 갖지 않는다.
@@ -294,6 +296,8 @@ export const getPreview = (channelId, plot, crop = null) => request(
 export const getWeather = (days = 0) => request(`/api/farms/weather${days ? `?days=${days}` : ''}`, { bot: true });
 /** 도감(3b) — `{ book: { 작물: { n, best, giant } }, total }`. */
 export const getBook = (userId) => request(`/api/farms/book/${encodeURIComponent(userId)}`, { bot: true });
+/** 설비 표(4b) — `{ equips: [{ key, name, emoji, lv, gold, per, note }] }`. */
+export const getEquips = () => request('/api/farms/equips', { bot: true });
 /** 곡괭이 표 · 그 사람의 곡괭이 · 농장 레벨. */
 export const getTools = (userId) => request(`/api/farms/tools/${encodeURIComponent(userId)}`, { bot: true });
 
@@ -344,5 +348,5 @@ export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook, getWeather,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook, getWeather, getEquips, buyEquip,
 };

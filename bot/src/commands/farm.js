@@ -34,7 +34,7 @@ import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
   fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather, getEquips, buyEquip, getBoard, deliverOrder,
 } from '../api.js';
-import { base, fail, trunc } from '../embeds.js';
+import { base, fail, trunc, gauge } from '../embeds.js';
 import { forget } from '../casino/alive.js';
 import { forgetBag } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
@@ -871,40 +871,38 @@ const haveOf = (crop, minStar, items) => [1, 2, 3].filter((s) => s >= minStar).r
 /** 주문을 다 채울 수 있나 — 작물마다. */
 const canFill = (o, items) => o.parts.every((p) => haveOf(p.crop, o.minStar, items) >= p.qty);
 
-/** 납품할 수 있는 주문의 색 — 눈에 띄게 초록. 아니면 흙빛. */
-const ORDER_READY = 0x6b8f3a;
+/** 주문끼리 가르는 줄 — 필드 하나를 통째로 쓴다. 임베드엔 가로줄 문법이 없어 글자로 긋는다. */
+const ORDER_RULE = { name: '─────────────────────────', value: '​', inline: false };
 
 /**
- * 주문 하나 = **임베드 하나.** 한 덩어리 글도, 필드만 이어 놓은 것도 주문끼리 구분이 안 됐다.
- * 임베드는 왼쪽 색 띠와 간격이 있어 카드처럼 나뉜다(한 메시지에 열 개까지).
+ * 주문 하나 = 필드 넷 — 머리(번호 · 의뢰인 · 한마디)와 **★ 이상 · 기한 · 보상 세 칸**(inline).
+ * `rule` 이면 앞에 구분선 필드를 하나 더 둔다. 직함은 안 적는다.
  * 예약 주문(`reserve`)은 **그 계절이 오기 전까지만** "오면 심으세요" 를 붙인다.
  */
-function orderEmbed(o, n, {
+function orderFields(o, n, {
   crops, items, today, season,
-}) {
+}, rule) {
   const { who, line } = voiceOf(o, (k) => itemName(crops, k));
   const left = daysLeft(o.due, today);
   const ready = canFill(o, items);
+  const head = [`-# 「${line}」`];
+  if (o.reserve && o.reserve !== season) head.push(`-# 🗓️ ${SEASON_NAME[o.reserve]} 작물 — ${SEASON_NAME[o.reserve]}이 오면 심으세요`);
   const need = o.parts.map((p) => {
     const have = haveOf(p.crop, o.minStar, items);
     return `${have >= p.qty ? '✅' : '▫️'} ${cropEmoji(crops, p.crop)} ${itemName(crops, p.crop)} **${num(Math.min(have, p.qty))} / ${p.qty}**`;
   });
-  const desc = [`_「${line}」_`];
-  if (o.reserve && o.reserve !== season) desc.push(`🗓️ _${SEASON_NAME[o.reserve]} 작물 — ${SEASON_NAME[o.reserve]}이 오면 심으세요_`);
-  return base({
-    title: `${o.kind === 'board' ? '📜' : '✉️'} ${n}. ${who.emoji} ${who.name}${who.title ? ` · ${who.title}` : ''}`,
-    description: desc.join('\n'),
-    color: ready ? ORDER_READY : FARM_COLOR,
-  }).addFields(
+  return [
+    ...(rule ? [ORDER_RULE] : []),
+    { name: `${ready ? '✅' : '📌'} ${n}. ${who.emoji} ${who.name}`, value: head.join('\n'), inline: false },
     { name: `${STARS[o.minStar]} 이상${o.parts.length > 1 ? ' (전부)' : ''}`, value: need.join('\n'), inline: true },
     { name: '기한', value: left ? `⏳ ${left}일 남음` : '⏳ **오늘까지**', inline: true },
     { name: '보상', value: `🪙 ${num(o.gold)}\n✨ +${o.xp}`, inline: true },
-  );
+  ];
 }
 
 /**
- * 주문 창 — 첫 임베드는 안내, 그다음은 주문마다 하나씩(📜 게시판 세 칸 → ✉️ 내 의뢰).
- * 채울 수 있는 주문만 납품 버튼이 켜지고, 그 주문은 초록으로 보인다.
+ * 주문 창 — 임베드 **하나**에 📜 게시판 · ✉️ 내 의뢰. 주문마다 머리 한 줄 + 세 칸이고, 주문 사이는 줄로 가른다.
+ * (한 덩어리 글도, 임베드를 주문마다 쪼갠 것도 읽기 나빴다.)
  * customId `farm:od:<주문>:<주인>` · 새로고침 `farm:or:-:<주인>`.
  */
 function ordersPayload({
@@ -914,18 +912,12 @@ function ordersPayload({
   const ctx = {
     crops, items, today, season,
   };
-  const head = base({
-    title: '📜 주문',
-    description: [
-      `**📜 마을 게시판** ${board.length ? `— ${board.length}건` : '— 비어 있어요'}`,
-      '-# 급마다 한 칸 · 빈 칸은 월·목에 채워져요 · 먼저 채운 농장이 가져가요',
-      `**✉️ 내 의뢰** ${mine.length ? `— ${mine.length}건` : '— 아직 없어요'}`,
-      '-# 우리 농장에만 온 큰 의뢰 · 월요일마다 한 건',
-      note ? `\n${note}` : null,
-    ].filter((l) => l != null).join('\n'),
-    color: FARM_COLOR,
-    footer: '★ 이상 작물만 받아요 · 낮은 ★ 부터 내요 · 초록 칸이 지금 낼 수 있는 주문이에요',
-  });
+  const fields = [
+    { name: `📜 마을 게시판 · ${board.length}건`, value: board.length ? '-# 급마다 한 칸 · 빈 칸은 월·목에 채워져요 · 먼저 채운 농장이 가져가요' : '-# _지금은 붙은 주문이 없어요._', inline: false },
+    ...board.flatMap((o, i) => orderFields(o, i + 1, ctx, i > 0)),
+    { name: `✉️ 내 의뢰 · ${mine.length}건`, value: mine.length ? '-# 우리 농장에만 온 큰 의뢰 · 월요일마다 한 건' : '-# _와 있는 의뢰가 없어요._', inline: false },
+    ...mine.flatMap((o, i) => orderFields(o, board.length + i + 1, ctx, i > 0)),
+  ];
 
   const buttons = all.map((o, i) => new ButtonBuilder()
     .setCustomId(`${PREFIX}:od:${orderToken(o.id)}:${owner}`)
@@ -938,9 +930,13 @@ function ordersPayload({
   rows.push(new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(`${PREFIX}:or:-:${owner}`).setLabel('새로고침').setEmoji('🔄').setStyle(ButtonStyle.Secondary),
   ));
-  // 한 메시지에 임베드 열 개까지 — 안내 하나 + 주문 아홉
   return {
-    embeds: [head, ...all.slice(0, 9).map((o, i) => orderEmbed(o, i + 1, ctx))],
+    embeds: [base({
+      title: '📜 주문',
+      description: note ?? undefined,
+      color: FARM_COLOR,
+      footer: '★ 이상 작물만 받아요 · 낮은 ★ 부터 내요 · ✅ 는 지금 낼 수 있는 주문',
+    }).addFields(fields.slice(0, 25))],
     components: rows,
     allowedMentions: QUIET,
   };

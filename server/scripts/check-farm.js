@@ -1120,6 +1120,8 @@ const server = app.listen(0, async () => {
     eq('레몬나무 — 묘목 8골드', [tp1.ok, tp1.cost, tp1.account.gold, tp1.farm.plots[2].cells[0]], [true, 8, gt - 8, 'canopy']);
     const up1 = (await post('/farms/clear', { channelId: CH2, userId: W2, plot: 2, cell: 4, uproot: 'cell' })).body;
     eq('뽑기 API — 나무 한 그루 · 밭이 풀린다', [up1.ok, up1.kind, up1.freed, up1.farm.plots[2].crop], [true, 'uproot', true, null]);
+    const st2 = (await acct(W2)).stats;
+    eq('농장 칭호 전적 — 레벨 · 도감 · 베기', [st2.farmLevel, st2.farmBookKinds >= 1, st2.farmChop, st2.farmScream >= 1], [10, true, 1, true]);
     eq('뽑기 API — 이상한 방식 400', (await post('/farms/clear', { channelId: CH2, userId: W2, plot: 2, cell: 4, uproot: 'all' })).status, 400);
     eq('뽑기 API — 주인만', (await post('/farms/clear', { channelId: CH2, userId: U, plot: 2, cell: 4, uproot: 'cell' })).body.reason, 'notOwner');
 

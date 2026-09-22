@@ -179,6 +179,24 @@ function touch(acctData, id, today, fn) {
 }
 
 const bump = (acct, key, n = 1) => { acct.stats[key] = (acct.stats[key] ?? 0) + n; };
+/** 최댓값 전적 — 올라가기만 한다(칭호가 읽는다). */
+const maxStat = (acct, key, v) => { if (v > (acct.stats[key] ?? 0)) acct.stats[key] = v; };
+
+/**
+ * 농장 칭호(봇 `casino/titles.js` 의 「농장」)가 읽는 최댓값 전적을 적는다. **주인의 쓰기**에서 부른다.
+ *   farmLevel       내 농장의 최고 레벨
+ *   farmBookKinds   도감에 오른 작물 가짓수 · farmStar3Kinds ★★★ 를 거둬 본 가짓수 · farmGiant 대왕 작물 수
+ * 도감에서 다시 셈하므로 이 전적이 생기기 전에 거둔 것도 다음 수확 때 들어온다.
+ */
+function farmMarks(acct, farm, book) {
+  if (farm) maxStat(acct, 'farmLevel', rules.levelOf(farm));
+  if (book) {
+    const rows = Object.values(book);
+    maxStat(acct, 'farmBookKinds', rows.filter((b) => b.n > 0).length);
+    maxStat(acct, 'farmStar3Kinds', rows.filter((b) => b.best >= 3).length);
+    maxStat(acct, 'farmGiant', rows.reduce((a, b) => a + (b.giant ?? 0), 0));
+  }
+}
 
 // ---------------------------------------------------------------- 조회
 
@@ -348,6 +366,7 @@ exports.water = (req, res) => {
     a.hp -= r.watered * cost;
     bump(a, 'farmWater');
     if (helper) bump(a, 'farmHelp');
+    else farmMarks(a, farm, null);
   });
   if (!save(accountStore, acctData, res, '계정')) return undefined;
   data.farms[channelId] = farm;
@@ -438,7 +457,9 @@ exports.harvest = (req, res) => {
       if (plugs) { a.items.earPlug -= plugs; if (!a.items.earPlug) delete a.items.earPlug; }
       hpLost = Math.min((r.screams - plugs) * SCREAM_HP, Math.max(0, a.hp - KEEP_HP));
       a.hp -= hpLost;
+      if (r.screams > plugs) bump(a, 'farmScream', r.screams - plugs);   // 귀마개 없이 비명을 들었다
     }
+    farmMarks(a, farm, data.book[userId]);
   });
   if (!save(accountStore, acctData, res, '계정')) return undefined;
 
@@ -499,6 +520,8 @@ exports.clear = (req, res) => {
     for (const [key, n] of Object.entries(r.loot)) a.items[key] = (a.items[key] ?? 0) + n;
     if (cleared || r.broke) bump(a, 'farmClear', cleared + (r.broke ? 1 : 0));
     if (r.perfect) bump(a, 'farmPerfect');
+    if (r.kind === 'uproot') bump(a, r.tree ? 'farmChop' : 'farmUproot');
+    farmMarks(a, farm, null);
   });
   if (!save(accountStore, acctData, res, '계정')) return undefined;
 
@@ -729,7 +752,7 @@ exports.equip = (req, res) => {
   if (have < r.cost) return res.json({ ok: false, reason: 'gold', need: r.cost, gold: have, today });
   const acct = touch(acctData, userId, today, (a) => {
     a.gold -= r.cost;
-    bump(a, 'farmEquip');
+    bump(a, 'farmEquip', r.plots.length || 1);   // 덮개·지지대는 밭 수만큼
   });
   if (!save(accountStore, acctData, res, '계정')) return undefined;
   data.farms[channelId] = farm;

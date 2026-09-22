@@ -24,7 +24,7 @@ const CROPS = [
   { key: 'cucumber', name: '오이',   price: 2, days: 2, regrow: 2, emoji: '🥒' },
   { key: 'radish',   name: '무',     price: 3, days: 3,            emoji: '⚪' },
   { key: 'lettuce',  name: '상추',   price: 2, days: 2, regrow: 2, emoji: '🥗' },
-  { key: 'wheat',    name: '밀',     price: 2, days: 3,            emoji: '🌾' },
+  { key: 'wheat',    name: '밀 이삭', price: 2, days: 3,           emoji: '🌾' },
   { key: 'soybean',  name: '콩',     price: 3, days: 3,            emoji: '🫘' },
 ];
 

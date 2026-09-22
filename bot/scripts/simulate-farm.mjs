@@ -16,13 +16,17 @@
  *   +비료       이웃+먹으며에 더해, 골드가 넉넉하면(200 넘게) 밭마다 하루 비료 하나를 사서 넣는다
  *   +퇴비       이웃+먹으며에 더해, 팔 작물을 퇴비로 바꿔(다섯에 하나) 밭마다 하루 셋까지 넣는다
  *
- * 작물은 **하루당 보장 이익이 가장 큰 것**을 심는다. 바위는 가운데부터 치고 힌트로 좁힌다.
+ * 작물은 **궁합 미리보기를 보고** 고른다 — 하루당 보장 이익 × 그 밭의 성장 배율(궁합·연작)이 가장
+ * 큰 것, 토질 경험이 0 이 되는 연작은 조금 덜 친다(3a). 연작이 걸린 밭은 더 심지 않고 비워서
+ * 작물을 바꾼다. `생각없이` 는 늘 같은 작물을 이어 심는다 —
+ * 연작 벌칙이 얼마나 누르는지 보려는 비교다. 바위는 가운데부터 치고 힌트로 좁힌다.
  */
 import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
 
 const require = createRequire(import.meta.url);
 const rules = require('../../server/src/farm/rules.js');
+const affinity = require('../../server/src/farm/affinity.js');
 const land = require('../../server/src/farm/land.js');
 const { CROPS, seedPrice, guaranteed } = require('../../server/src/farm/crops.js');
 
@@ -51,6 +55,17 @@ function seeded(seed) {
 const bestCrop = (level) => CROPS.filter((c) => c.lv <= level)
   .sort((a, b) => guaranteed(b) / b.days - guaranteed(a) / a.days || b.lv - a.lv)[0];
 
+/** 궁합 미리보기를 보고 고른다 — 하루당 보장 이익 × 성장 배율, 연작(토질 0)은 20% 덜 친다. */
+function smartCrop(farm, plot, level) {
+  let best = null; let score = -1;
+  for (const c of CROPS.filter((x) => x.lv <= level)) {
+    const m = affinity.modsFor(farm, plot, c.key);
+    const v = (guaranteed(c) / c.days) * (m?.rate ?? 1) * (m?.soil === 0 ? 0.8 : 1);
+    if (v > score) { score = v; best = c; }
+  }
+  return best;
+}
+
 /** 바위 하나를 힌트로 좁혀 가며 친다. 기력이 떨어지면 멈춘다. */
 function breakBoulder(farm, today, plot, cell, st, rand, fossils) {
   let lo = 1; let hi = land.GRAIN_SPOTS;
@@ -68,7 +83,7 @@ function breakBoulder(farm, today, plot, cell, st, rand, fossils) {
   return null;
 }
 
-function play({ eat, neighbor, fert, compost }, seed) {
+function play({ eat, neighbor, fert, compost, naive }, seed) {
   const rand = seeded(seed);
   const farm = rules.newFarm({ channelId: String(100000 + seed), guildId: '1', owner: 'me', today: D0, now: `${D0}T00:00:00.000Z`, rand });
   let hp = MAX_HP; let gold = 0; let seeds = 0; let loot = 0; let waterMissed = 0; let dead = 0;
@@ -131,7 +146,10 @@ function play({ eat, neighbor, fert, compost }, seed) {
       if (!p.open) continue;
       const soil = p.cells.map((c, i) => (c.t === 'soil' ? i : -1)).filter((i) => i >= 0);
       if (!soil.length) continue;
-      const crop = p.crop ?? bestCrop(level).key;
+      // 연작(⚔️)이 걸린 밭은 **더 심지 않고 비운다** — 다 거두면 작물이 풀려 다른 것을 심는다.
+      // 이어 심으면 밭이 영영 안 비어 연작이 풀리지 않는다(칸 하나로 연작을 피하지 못하게 한 규칙).
+      if (!naive && p.crop && affinity.modsFor(farm, pi)?.rotation === 'same') continue;
+      const crop = p.crop ?? (naive ? bestCrop(level) : smartCrop(farm, pi, level)).key;
       const r = rules.plant(farm, today, { plot: pi, cells: soil, crop });
       if (r.ok) { seeds += r.cost; gold -= r.cost; }
     }
@@ -153,6 +171,7 @@ function play({ eat, neighbor, fert, compost }, seed) {
 }
 
 const STRATS = [
+  ['생각없이', { eat: true, neighbor: false, naive: true }],
   ['혼자', { eat: false, neighbor: false }],
   ['먹으며', { eat: true, neighbor: false }],
   ['이웃', { eat: false, neighbor: true }],

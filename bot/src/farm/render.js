@@ -54,14 +54,27 @@ export function grid(farm, crops) {
   return lines.join('\n');
 }
 
-/** 열린 밭마다 한 줄. 토질 · 작물 · 익은 것 · 남은 물주기 · 오늘 물 · 돌. */
+/**
+ * 궁합 한 토막(3a). 성장 배율이 1 이면 빈 문자열.
+ * `🤝 +20%` · `⚔️ −15% 연작` · `🤝 +10% 윤작` — 서버가 준 `rate`·`rotation` 만 읽는다.
+ */
+export function modsBadge(mods) {
+  if (!mods) return '';
+  const pct = Math.round((mods.rate - 1) * 100);
+  const rot = mods.rotation === 'same' ? ' 연작' : mods.rotation === 'varied' ? ' 윤작' : '';
+  if (!pct && !rot) return '';
+  if (!pct) return mods.rotation === 'same' ? `⚔️${rot}` : `🤝${rot}`;
+  return pct > 0 ? `🤝 +${pct}%${rot}` : `⚔️ −${-pct}%${rot}`;
+}
+
+/** 열린 밭마다 한 줄. 토질 · 작물 · 궁합 · 익은 것 · 남은 물주기 · 오늘 물 · 돌. */
 export function plotLines(farm, crops) {
   return farm.plots.map((p, i) => {
     if (!p.open) return null;
     const count = (st) => p.cells.filter((s) => s === st).length;
     const head = `**${plotNo(i)}번 밭** ${stars(p.star)}`;
     const bits = [];
-    if (p.crop) bits.push(`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}`);
+    if (p.crop) bits.push(`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}${modsBadge(p.mods) ? ` ${modsBadge(p.mods)}` : ''}`);
     if (p.ripe) bits.push(`🧺 수확 ${p.ripe}`);
     if (p.growing) bits.push(`자라는 중 ${p.growing}${p.left != null ? ` (물 ${p.left}번 더)` : ''}`);
     if (p.need) bits.push(`💧 오늘 ${p.need}`);
@@ -119,5 +132,5 @@ export function farmEmbed(farm, crops, { name } = {}) {
 }
 
 export default {
-  FARM_COLOR, plotNo, stars, cropName, cropEmoji, cellEmoji, grid, plotLines, levelLine, nextLine, waterLine, farmEmbed,
+  FARM_COLOR, plotNo, stars, cropName, cropEmoji, cellEmoji, grid, modsBadge, plotLines, levelLine, nextLine, waterLine, farmEmbed,
 };

@@ -282,6 +282,14 @@ export const fertilizeFarm = ({ channelId, userId, plot, item, count = 1 }) => f
 export const compostCrops = ({ userId, crop, count = 1 }) => farmPost('compost', { userId, crop, count });
 /** 곡괭이를 한 단계 올린다. */
 export const upgradePickaxe = (userId) => farmPost('pickaxe', { userId });
+/**
+ * 궁합 미리보기(3a). `crop` 을 주면 그 작물의 보정 전부(`mods`), 안 주면 모든 작물의 요약(`all`).
+ * 셈은 서버가 한다 — 봇은 궁합표를 갖지 않는다.
+ */
+export const getPreview = (channelId, plot, crop = null) => request(
+  `/api/farms/${encodeURIComponent(channelId)}/preview?plot=${plot}${crop ? `&crop=${encodeURIComponent(crop)}` : ''}`,
+  { bot: true },
+);
 /** 곡괭이 표 · 그 사람의 곡괭이 · 농장 레벨. */
 export const getTools = (userId) => request(`/api/farms/tools/${encodeURIComponent(userId)}`, { bot: true });
 
@@ -332,5 +340,5 @@ export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview,
 };

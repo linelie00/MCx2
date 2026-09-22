@@ -31,7 +31,7 @@ import {
 } from 'discord.js';
 import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview,
 } from '../api.js';
 import { base, fail, trunc } from '../embeds.js';
 import { forget } from '../casino/alive.js';
@@ -39,7 +39,7 @@ import { forgetBag } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
 import {
-  FARM_COLOR, farmEmbed, cropName, cellEmoji, plotNo, stars,
+  FARM_COLOR, farmEmbed, cropName, cellEmoji, plotNo, stars, modsBadge,
 } from '../farm/render.js';
 
 export const PREFIX = 'farm';
@@ -212,14 +212,39 @@ const unlocked = (crops, level) => crops
 
 // ---------------------------------------------------------------- 심기 창
 
+/** 심기 창이 보여 줄 밭. `plot` 이 열린 밭이 아니면 빈 흙이 있는 밭을 고른다. */
+const plantPlot = (farm, plot) => (plot != null && farm.plots[plot]?.open ? plot : pickPlot(farm, (p) => soilCells(p).length));
+
+/**
+ * 궁합 미리보기(3a)를 받는다. 셀렉트 줄마다 붙일 요약(`all`)과, 고른 작물의 보정 전부(`mods`).
+ * 밭에 이미 작물이 있으면 그 밭의 보정은 농장 보기(`plot.mods`)에 이미 있다 — 요약만 받는다.
+ * 미리보기가 안 와도 창은 연다(궁합 표시만 빠진다).
+ */
+async function previewFor(ch, farm, at, crop) {
+  const fixed = farm.plots[at]?.crop;
+  try {
+    const [{ all }, one] = await Promise.all([
+      getPreview(ch, at),
+      crop && !fixed ? getPreview(ch, at, crop) : Promise.resolve(null),
+    ]);
+    return { all, mods: fixed ? farm.plots[at].mods : one?.mods ?? null };
+  } catch {
+    return { all: null, mods: fixed ? farm.plots[at].mods : null };
+  }
+}
+
+/** 궁합 문구 줄(심기 창). 서버가 준 `notes` 그대로 — 좋은 것 🤝, 나쁜 것 ⚔️. */
+const modsLines = (mods) => (mods?.notes ?? []).slice(0, 5).map((n) => `${n.good ? '🤝' : '⚔️'} ${n.text}`);
+
 /**
  * 심기 창. `plot` 이 열린 밭이 아니면 알아서 고른다. 밭에 이미 작물이 있으면 그 작물로 묶는다.
  * `mask` 는 빈 흙인 칸만 남긴다 — 그사이 바뀌었을 수 있다.
+ * `preview` 는 `previewFor` 가 받아 온 궁합 — 셀렉트 줄마다 🤝/⚔️, 고른 작물의 문구.
  */
 function plantPayload({
-  ch, plot, crop, mask, owner, farm, crops, note,
+  ch, plot, crop, mask, owner, farm, crops, note, preview = null,
 }) {
-  const at = plot != null && farm.plots[plot]?.open ? plot : pickPlot(farm, (p) => soilCells(p).length);
+  const at = plantPlot(farm, plot);
   const p = farm.plots[at];
   const fixed = p.crop;
   const key = fixed ?? crop ?? null;
@@ -242,6 +267,10 @@ function plantPayload({
     lines.push('_먼저 심을 작물을 고르세요._');
   }
   if (fixed) lines.push('_이 밭엔 이미 이 작물이 자라고 있어요. 한 밭엔 한 작물만 심어요._');
+  if (c) {
+    const ml = modsLines(preview?.mods);
+    if (ml.length) lines.push('', ...ml);
+  }
   lines.push('', soil.length
     ? `고른 칸 **${picked.length}** / 빈 칸 ${soil.length}${c ? ` · 씨앗값 **${num(cost)}골드**` : ''}`
     : '_이 밭엔 빈 흙이 없어요. 돌·잡초는 `/농장 개간` 으로 치워요._');
@@ -257,7 +286,7 @@ function plantPayload({
           label: trunc(`${x.name} — 씨앗 ${x.seed}골드`, 100),
           value: x.key,
           emoji: x.emoji,
-          description: trunc(`${x.days}일 · 거두면 칸당 +${x.profit}골드 이상${x.regrow ? ` · ${x.regrow}일마다 또 열림` : ''}`, 100),
+          description: trunc(`${modsBadge(preview?.all?.[x.key]) ? `${modsBadge(preview.all[x.key])} · ` : ''}${x.days}일 · 거두면 칸당 +${x.profit}골드 이상${x.regrow ? ` · ${x.regrow}일마다 또 열림` : ''}`, 100),
           default: x.key === c?.key,
         }))),
     ));
@@ -312,8 +341,10 @@ async function openPlant(interaction, ch, { plot = null, crop = null } = {}) {
   if (at) return refuse(interaction, seatedMessage('그쪽', at));
   const want = crops.find((c) => c.key === crop);
   const note = want && want.lv > farm.level ? `⚠️ ${why({ reason: 'level', crop: want.key, need: want.lv }, crops)}` : undefined;
+  const where = plantPlot(farm, plot);
+  const preview = await previewFor(ch, farm, where, want?.lv <= farm.level ? want.key : null);
   return interaction.editReply(plantPayload({
-    ch, plot, crop: want?.key ?? null, mask: 0, owner: me, farm, crops, note,
+    ch, plot: where, crop: want?.key ?? null, mask: 0, owner: me, farm, crops, note, preview,
   }));
 }
 
@@ -835,8 +866,9 @@ async function plantButton(interaction, act, [ch, plotS, cropS, maskS, arg, owne
   let mask = Number(maskS) || 0;
   const [{ farm }, crops] = await Promise.all([getFarm(ch), getFarmCrops()]);
   if (!farm) return interaction.editReply({ embeds: [fail(why({ reason: 'none' }))], components: [] });
+  let preview = null;
   const payload = (note) => plantPayload({
-    ch, plot, crop, mask, owner, farm, crops, note,
+    ch, plot, crop, mask, owner, farm, crops, note, preview,
   });
 
   if (act === 'pc') crop = interaction.values?.[0] ?? crop;
@@ -849,7 +881,12 @@ async function plantButton(interaction, act, [ch, plotS, cropS, maskS, arg, owne
     plot = nextOpen(farm, plot);
     mask = 0;
   }
-  if (act !== 'pg') return interaction.editReply(payload());
+  // 칸만 누른 것(pt·pa)은 궁합이 안 바뀐다 — 그래도 창을 다시 그리므로 한 번 받아 둔다.
+  if (act !== 'pg') {
+    plot = plantPlot(farm, plot);
+    preview = await previewFor(ch, farm, plot, crop);
+    return interaction.editReply(payload());
+  }
 
   // 심기. 판에 앉았는지 **누르는 순간** 다시 본다 — 창을 연 뒤에 앉았을 수 있다.
   const at = seatedAt(owner);
@@ -1008,7 +1045,7 @@ async function component(interaction) {
 
 /** 검사용(scripts/check-farm.mjs). 화면은 상태가 없어 그대로 불러 볼 수 있다. */
 export {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, why, cellsOf, maskOf, unlocked,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, why, cellsOf, maskOf, unlocked, modsLines,
 };
 
 export default {

@@ -23,9 +23,9 @@ process.env.GEMINI_API_KEY ||= '';
 
 import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
-import { grid, plotLines, cellEmoji, levelLine, nextLine } from '../src/farm/render.js';
+import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, why, cellsOf, maskOf, unlocked,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, why, cellsOf, maskOf, unlocked, modsLines,
 } from '../src/commands/farm.js';
 import { SHELVES } from '../src/commands/shop.js';
 
@@ -33,6 +33,7 @@ const require = createRequire(import.meta.url);
 const { CROPS, publicCrop } = require('../../server/src/farm/crops.js');
 const land = require('../../server/src/farm/land.js');
 const rules = require('../../server/src/farm/rules.js');
+const affinity = require('../../server/src/farm/affinity.js');
 
 let ok = 0; let bad = 0;
 const eq = (name, got, want) => {
@@ -164,6 +165,28 @@ eq('조건이 되면 바꿀 수 있다', tp.components[0].toJSON().components[0]
 eq('레벨이 모자라면 막힌다', toolsPayload({ owner: OWNER, tools: { ...tools, level: 5 }, account: { gold: 500, items: { ironLump: 2 } } }).components[0].toJSON().components[0].disabled, true);
 eq('원석은 섞어서 센다', toolsPayload({ owner: OWNER, tools: { ...tools, tool: 'iron', level: 9 }, account: { gold: 1000, items: { oreRed: 2, oreBlue: 1 } } }).components[0].toJSON().components[0].disabled, false);
 eq('미스릴이면 버튼이 없다', toolsPayload({ owner: OWNER, tools: { ...tools, tool: 'mithril' }, account: {} }).components.length, 0);
+
+// 궁합(3a)
+eq('궁합 없음', modsBadge({ rate: 1, rotation: null }), '');
+eq('궁합 좋음', modsBadge({ rate: 1.2, rotation: null }), '🤝 +20%');
+eq('연작', modsBadge({ rate: 0.85, rotation: 'same' }), '⚔️ −15% 연작');
+eq('윤작(성장은 그대로)', modsBadge({ rate: 1, rotation: 'varied' }), '🤝 윤작');
+{
+  const f = rules.newFarm({ channelId: CH, guildId: '1', owner: OWNER, today: D, now: `${D}T00:00:00.000Z` });
+  f.plots[4].cells = f.plots[4].cells.map(() => ({ t: 'soil' }));
+  f.plots[1] = { open: true, crop: 'onion', soilXp: 0, history: [], streak: 0, cells: Array.from({ length: 9 }, () => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: D, wet: null })) };
+  rules.plant(f, D, { plot: 4, cells: [0], crop: 'carrot' });
+  const vv = rules.view(f, D);
+  eq('밭 줄에 궁합', plotLines(vv, crops).split('\n').find((l) => l.startsWith('**5번 밭**')).includes('🥕 당근 🤝 +10%'), true);
+  const all = Object.fromEntries(crops.map((c) => [c.key, affinity.modsFor({ ...f, plots: f.plots.map((p, i) => (i === 4 ? { ...p, crop: null } : p)) }, 4, c.key)]).filter(([, m]) => m));
+  const pp = plantPayload({ ch: CH, plot: 4, crop: null, mask: 0, owner: OWNER, farm: rules.view({ ...f, plots: f.plots.map((p, i) => (i === 4 ? { ...p, crop: null, cells: p.cells.map(() => ({ t: 'soil' })) } : p)) }, D), crops, preview: { all, mods: null } });
+  const carrotOpt = pp.components[0].toJSON().components[0].options.find((o) => o.value === 'carrot');
+  eq('셀렉트 줄에 궁합', carrotOpt.description.startsWith('🤝 +10% · '), true);
+  eq('궁합 문구 줄', modsLines(affinity.modsFor(f, 4)), ['🤝 파속 이웃 +10% · 벌레를 쫓는다 (2번)']);
+  const withNotes = plantPayload({ ch: CH, plot: 4, crop: 'carrot', mask: 0, owner: OWNER, farm: vv, crops, preview: { all, mods: vv.plots[4].mods } });
+  eq('고른 작물의 궁합이 창에 적힌다', withNotes.embeds[0].toJSON().description.includes('🤝 파속 이웃 +10%'), true);
+  eq('미리보기가 없어도 창은 열린다', plantPayload({ ch: CH, plot: 4, crop: null, mask: 0, owner: OWNER, farm: vv, crops }).components.length > 0, true);
+}
 
 // ---------------------------------------------------------------- 5. 사유
 

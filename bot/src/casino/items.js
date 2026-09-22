@@ -84,6 +84,9 @@ export const ITEMS = [
   { key: 'starShard',       name: '희미한 별 조각',           kind: '잡화', price:   30, sell: false, heal: -10,        desc: '어두운 곳에서 은은하게 빛나는 작은 돌 조각. 마법 재료일 수도 있다.' },
   { key: 'ironLump',        name: '묵직한 철 덩어리',         kind: '잡화', price:   10, sell: true,  heal: 0,          desc: '대장장이가 원하는 재료일지도? 그냥은 좀 더 무거운 돌덩이와 다름 없다.' },
   { key: 'oldCoin',         name: '옛 동전',                  kind: '잡화', price:   50, sell: true,  heal: -5,  loot: false, desc: '밭을 갈다 나온 동전. 새겨진 얼굴은 닳아서 누군지 모르겠다. 상인은 그래도 값을 쳐 준다.' },
+  // ---- 농장 거름(docs/FARM.md §8.1). 먹는 게 아니라 밭에 넣는 것이다 — `/농장 거름`. 먹으면 아프다.
+  { key: 'compost',         name: '퇴비',                     kind: '잡화', price:    3, sell: true,  heal: -5,  loot: false, desc: '잡초와 시든 잎, 남은 채소를 푹 썩힌 것. 밭에 넣으면 흙이 살아난다. 먹을 생각은 하지 말자.' },
+  { key: 'fertilizer',      name: '비료',                     kind: '잡화', price:   30, sell: false, heal: -20, loot: false, desc: '가게에서 파는 알갱이 비료. 한 포대면 밭 한 뙈기의 흙이 몰라보게 달라진다. 하루에 한 밭 한 포대까지.' },
   { key: 'glowingStone',    name: '붉게 빛나는 돌 조각',      kind: '잡화', price:   15, sell: true,  heal: 5,          desc: '손에 쥐면 약간 따뜻한 느낌이 드는 돌 조각.' },
   { key: 'boneChip',        name: '작은 뼛조각',              kind: '잡화', price:    3, sell: true,  heal: 3,          desc: '희미한 무늬가 새겨진 작은 뼛조각. 동물의 것 같지만 정확히는 알 수 없다.' },
   { key: 'whiteShell',      name: '하얀 조개껍데기',          kind: '잡화', price:    5, sell: true,  heal: 0,          desc: '부드럽고 매끈한 하얀 조개껍데기. 귀에 대면 바다 소리가 들릴 것 같다.' },

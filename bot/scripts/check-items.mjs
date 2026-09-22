@@ -33,7 +33,7 @@ const eq = (name, got, want) => {
 };
 
 console.log('\n모양');
-eq('239종 — 시트 95 + 요리 재료 42+22 + 독 8 + 괴식 10 + 낚시 24+24 + 미끼 2 + 농장 작물 11 + 개간 1', ITEMS.length, 239);
+eq('241종 — 시트 95 + 요리 재료 42+22 + 독 8 + 괴식 10 + 낚시 24+24 + 미끼 2 + 농장 작물 11 + 개간 1 + 거름 2', ITEMS.length, 241);
 eq('키가 안 겹친다', Object.keys(ITEM_BY_KEY).length, ITEMS.length);
 eq('이름이 안 겹친다', new Set(ITEMS.map((i) => i.name)).size, ITEMS.length);
 eq('키는 영문 카멜케이스', ITEMS.filter((i) => !/^[a-z][A-Za-z0-9]*$/.test(i.key)).map((i) => i.key), []);
@@ -51,7 +51,7 @@ eq('임베드 한 칸에 들어간다', ITEMS.filter((i) => i.desc.length > 200)
 console.log('\n재료');
 const FOOD = ITEMS.filter((i) => i.kind === '재료');
 eq('재료 백예순여덟 — 장보기 둘째 배치로 스물둘, 농장 작물로 열하나가 늘었다', FOOD.length, 168);
-eq('잡화는 예순다섯 — 낚시 잡동사니 넷 · 개간 옛 동전 하나', ITEMS.filter((i) => i.kind === '잡화').length, 65);
+eq('잡화는 예순일곱 — 낚시 잡동사니 넷 · 개간 옛 동전 하나 · 거름 둘', ITEMS.filter((i) => i.kind === '잡화').length, 67);
 eq('진열대가 다 있다', FOOD.filter((i) => !CATS.some((c) => c.key === i.cat)).map((i) => i.key), []);
 eq('진열대는 재료만', ITEMS.filter((i) => i.kind !== '재료' && (i.cat || i.shop)).map((i) => i.key), []);
 eq('상점에서 파는 재료는 값이 있다', FOOD.filter((i) => i.shop && !(i.price > 0)).map((i) => i.key), []);
@@ -89,7 +89,7 @@ eq('숫자 아니면 [a, b]', ITEMS.filter((i) => !shape(i.heal)).map((i) => i.k
 eq('최대치를 안 넘는다', ITEMS.filter((i) => Math.max(...[i.heal].flat()) > MAX_HP).map((i) => i.key), []);
 eq('HP 최대치는 100', MAX_HP, 100);
 eq('범위로 적힌 것은 다섯 — 회복약 넷과 비명 뿌리', ITEMS.filter((i) => Array.isArray(i.heal)).length, 5);
-eq('먹으면 깎이는 것 일흔둘 — 농장 고추·토란·강낭콩, 옛 동전', ITEMS.filter((i) => i.heal < 0).length, 72);
+eq('먹으면 깎이는 것 일흔넷 — 농장 고추·토란·강낭콩, 옛 동전, 거름 둘', ITEMS.filter((i) => i.heal < 0).length, 74);
 
 const small = ITEM_BY_KEY.potionSmall;
 const rolled = new Set(Array.from({ length: 500 }, () => healOf(small)));
@@ -113,6 +113,9 @@ eq('당근은 4골드에 산다', buyPrice(ITEM_BY_KEY.carrot), 4);
 eq('부활의 영약은 그대로 1000', buyPrice(ITEM_BY_KEY.potionRevive), 1000);
 eq('일반 미끼는 그대로 10', buyPrice(ITEM_BY_KEY.bait), 10);
 eq('따로 적은 buy 는 정수', ITEMS.filter((i) => 'buy' in i && !(Number.isSafeInteger(i.buy) && i.buy >= i.price)).map((i) => i.key), []);
+// 30 은 simulate-farm 으로 맞췄다 — 60 이면 90일이 지나도 본전을 못 뽑는다.
+eq('비료는 30골드에 산다 — 잡화라 두 배가 아니다', buyPrice(ITEM_BY_KEY.fertilizer), 30);
+eq('비료는 되팔 수 없다', ITEM_BY_KEY.fertilizer.sell, false);
 
 console.log('\n시트에서 옮긴 값 몇 개');
 eq('부활의 영약', [ITEM_BY_KEY.potionRevive.price, ITEM_BY_KEY.potionRevive.heal], [1000, [100, 100]]);
@@ -182,8 +185,8 @@ const itemLines = (body) => lines(body).filter((l) => !l.startsWith('──'));
 
 console.log('\n/아이템 — 목록');
 let c = read(await show(null));
-eq('전체 229종', c.fields[0], '종류=**239**');
-eq('열두 쪽', c.fields[1], '쪽=1 / 12');
+eq('전체 241종', c.fields[0], '종류=**241**');
+eq('열세 쪽', c.fields[1], '쪽=1 / 13');
 eq('한 쪽에 스무 줄(머리줄 빼고)', itemLines(c.body).length, 20);
 eq('첫 줄은 종류 머리줄', lines(c.body)[0].startsWith('── 소비'), true);
 eq('갈래 버튼 넷', c.labels.slice(0, 4), ['전체', '소비', '잡화', '재료']);
@@ -225,7 +228,7 @@ eq('값 칸은 비운다', c.fields[1], '값=_없음_');
 
 eq('먹어 봐야 안다', read(await show('redFeather')).footer, '먹으면 어떻게 될지는 먹어 봐야 알아요');
 eq('목록에도 회복 칸이 없다', /\s[−-]?\d+\s*$/m.test(read(await click('item:list:use:0')).body.replace(/[\d,]+골드/g, '')), false);
-eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**239**');
+eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**241**');
 eq('독은 카드에 안 적는다 — 먹어 봐야 안다', /☠️|독/.test(read(await show('deathCap')).body), false);
 eq('괴식이면 카드에 적는다', /🪱 \*\*괴식\*\*/.test(read(await show('bugPile')).body), true);
 eq('멀쩡한 것은 아무 표시 없다', /☠️|🪱/.test(read(await show('honey')).body), false);

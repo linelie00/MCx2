@@ -13,6 +13,8 @@
  *   먹으며      체력이 반 밑이면 거둔 작물 가운데 먹으면 차는 것을 먹는다(나머지는 판다)
  *   이웃        남이 하루 체력 20만큼 물을 대신 준다
  *   이웃+먹으며 둘 다
+ *   +비료       이웃+먹으며에 더해, 골드가 넉넉하면(200 넘게) 밭마다 하루 비료 하나를 사서 넣는다
+ *   +퇴비       이웃+먹으며에 더해, 팔 작물을 퇴비로 바꿔(다섯에 하나) 밭마다 하루 셋까지 넣는다
  *
  * 작물은 **하루당 보장 이익이 가장 큰 것**을 심는다. 바위는 가운데부터 치고 힌트로 좁힌다.
  */
@@ -22,13 +24,16 @@ import { ITEM_BY_KEY } from '../src/casino/items.js';
 const require = createRequire(import.meta.url);
 const rules = require('../../server/src/farm/rules.js');
 const land = require('../../server/src/farm/land.js');
-const { CROPS, CROP_BY_KEY, seedPrice, guaranteed } = require('../../server/src/farm/crops.js');
+const { CROPS, seedPrice, guaranteed } = require('../../server/src/farm/crops.js');
 
 const DAYS = Number(process.argv[2]) || 60;
 const RUNS = Number(process.argv[3]) || 20;
 const D0 = '2026-10-01';
 const MAX_HP = 100;
 const CHECKIN_HEAL = 20;
+/** 비료 한 포대(봇 명부의 값 — `FERT_PRICE=20` 으로 바꿔 볼 수 있다). 사고 나서도 이만큼은 남긴다. */
+const FERT_PRICE = Number(process.env.FERT_PRICE) || ITEM_BY_KEY.fertilizer.price;
+const FERT_RESERVE = 200;
 
 /** 되풀이할 수 있는 난수(mulberry32). */
 function seeded(seed) {
@@ -63,10 +68,11 @@ function breakBoulder(farm, today, plot, cell, st, rand, fossils) {
   return null;
 }
 
-function play({ eat, neighbor }, seed) {
+function play({ eat, neighbor, fert, compost }, seed) {
   const rand = seeded(seed);
   const farm = rules.newFarm({ channelId: String(100000 + seed), guildId: '1', owner: 'me', today: D0, now: `${D0}T00:00:00.000Z`, rand });
   let hp = MAX_HP; let gold = 0; let seeds = 0; let loot = 0; let waterMissed = 0; let dead = 0;
+  let fertSpent = 0; let compostHeld = 0; let cropBank = 0;
   const reached = {};
   let lowHpDays = 0;
 
@@ -100,7 +106,22 @@ function play({ eat, neighbor }, seed) {
         let left = c;
         const heal = ITEM_BY_KEY[k]?.heal ?? 0;
         while (eat && left > 0 && heal > 0 && hp < MAX_HP / 2) { hp = Math.min(MAX_HP, hp + heal); left -= 1; }
+        if (compost && k !== 'dandelion' && k !== 'compost') { cropBank += left; left = 0; }
+        if (k === 'compost') { compostHeld += left; left = 0; }
         gold += left * (ITEM_BY_KEY[k]?.price ?? 0);
+      }
+    }
+
+    // 거름 — 퇴비(작물 다섯에 하나)와 비료(골드가 넉넉하면)
+    if (compost) { compostHeld += Math.floor(cropBank / land.COMPOST_CROPS); cropBank %= land.COMPOST_CROPS; }
+    for (const [pi, p] of farm.plots.entries()) {
+      if (!p.open) continue;
+      if (compostHeld > 0) {
+        const r = rules.fertilize(farm, today, { plot: pi, item: 'compost', count: compostHeld });
+        if (r.ok) compostHeld -= r.used;
+      }
+      if (fert && gold - FERT_PRICE >= FERT_RESERVE && rules.fertilize(farm, today, { plot: pi, item: 'fertilizer' }).ok) {
+        gold -= FERT_PRICE; fertSpent += FERT_PRICE;
       }
     }
 
@@ -125,7 +146,10 @@ function play({ eat, neighbor }, seed) {
     if (!reached[lv]) reached[lv] = n + 1;
   }
   const cells = farm.plots.reduce((a, p) => a + p.cells.filter((c) => c.t === 'plant').length, 0);
-  return { reached, gold, seeds, loot, waterMissed, dead, lowHpDays, level: rules.levelOf(farm), cells };
+  const soils = farm.plots.filter((p) => p.open).map((p) => land.soilStar(p.soilXp));
+  return {
+    reached, gold, seeds, loot, waterMissed, dead, lowHpDays, level: rules.levelOf(farm), cells, soils, fertSpent,
+  };
 }
 
 const STRATS = [
@@ -133,6 +157,8 @@ const STRATS = [
   ['먹으며', { eat: true, neighbor: false }],
   ['이웃', { eat: false, neighbor: true }],
   ['이웃+먹으며', { eat: true, neighbor: true }],
+  ['+비료', { eat: true, neighbor: true, fert: true }],
+  ['+퇴비', { eat: true, neighbor: true, compost: true }],
 ];
 
 const avg = (xs) => xs.reduce((a, x) => a + x, 0) / xs.length;
@@ -152,5 +178,7 @@ for (const [name, s] of STRATS) {
     + ` · 개간 전리품 ${fmt(avg(res.map((r) => r.loot)))}골드어치`);
   console.log(`         못 준 물 ${fmt(avg(res.map((r) => r.waterMissed)))}포기 · 죽은 칸 ${fmt(avg(res.map((r) => r.dead)))}`
     + ` · 체력 30 밑인 날 ${fmt(avg(res.map((r) => r.lowHpDays)))}일 · 마지막 날 심긴 칸 ${fmt(avg(res.map((r) => r.cells)))}`);
+  console.log(`         토질 ★ 평균 ${avg(res.map((r) => avg(r.soils))).toFixed(2)} (★5 밭 ${avg(res.map((r) => r.soils.filter((x) => x === 5).length)).toFixed(1)}개)`
+    + `${s.fert ? ` · 비료에 쓴 골드 ${fmt(avg(res.map((r) => r.fertSpent)))}` : ''}`);
 }
 console.log('\n목표: 성실하면 6~8주(42~56일)에 Lv10 (docs/FARM.md §8.2)\n');

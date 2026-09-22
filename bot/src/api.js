@@ -274,6 +274,16 @@ export const harvestFarm = ({ channelId, userId, plot = null }) => farmPost('har
 export const clearFarm = ({ channelId, userId, plot, cell = null, pos = null, all = false }) => farmPost('clear', {
   channelId, userId, plot, cell, pos, all,
 });
+/** 거름 — `item` 은 `fertilizer`(+15, 밭마다 하루 1) · `compost`(+5, 하루 3). 한도·가진 것만큼만 넣는다. */
+export const fertilizeFarm = ({ channelId, userId, plot, item, count = 1 }) => farmPost('fertilize', {
+  channelId, userId, plot, item, count,
+});
+/** 거둔 작물 다섯 → 퇴비 하나. `count` 는 만들 퇴비 수. */
+export const compostCrops = ({ userId, crop, count = 1 }) => farmPost('compost', { userId, crop, count });
+/** 곡괭이를 한 단계 올린다. */
+export const upgradePickaxe = (userId) => farmPost('pickaxe', { userId });
+/** 곡괭이 표 · 그 사람의 곡괭이 · 농장 레벨. */
+export const getTools = (userId) => request(`/api/farms/tools/${encodeURIComponent(userId)}`, { bot: true });
 
 // ---------------------------------------------------------------- 자가진단
 
@@ -322,4 +332,5 @@ export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools,
 };

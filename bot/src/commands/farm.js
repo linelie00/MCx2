@@ -14,7 +14,9 @@
  *     남의 채널 농장을 띄워도 버튼이 그 농장을 가리키게.
  *   - **심기 창** — 에페메랄. 작물 셀렉트 + 칸 3×3 토글 + 조작 한 줄(5줄, 디스코드 한도).
  *   - **개간 창** — 에페메랄. 칸 3×3(돌·잡초는 누르면 치우고, 바위는 바위 창으로) + 조작 한 줄.
- *   - **바위 창** — 에페메랄. 결 자리 `[1]`~`[5]` + 힌트. 결 자리는 서버만 안다.
+ *   - **바위 창** — 에페메랄. 결 자리 `[1]`~`[5]` + 힌트. 결 자리는 서버만 안다(미스릴 곡괭이면
+ *     후보 두 자리를 주인에게만 준다).
+ *   - **거름 창 · 곡괭이 창** — 에페메랄(2b). 비료·퇴비를 밭에 넣고, 곡괭이를 올린다.
  *   상태가 없는 핸들러라 창의 상태(밭·칸·작물·고른 칸)와 **주인 id(맨 뒤)** 를 customId 에 싣는다.
  *
  * **판에 앉아 있으면 못 심고 물도 못 준다.** 씨앗값은 골드를, 물은 체력을 쓰는데 판이 도는 동안
@@ -29,6 +31,7 @@ import {
 } from 'discord.js';
 import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts,
 } from '../api.js';
 import { base, fail, trunc } from '../embeds.js';
 import { forget } from '../casino/alive.js';
@@ -53,6 +56,21 @@ const MAX_SWINGS = 3;
 /** 결 자리 수(서버 `land.GRAIN_SPOTS`). */
 const GRAIN_SPOTS = 5;
 
+/** 거름 — 밭마다 하루 한도와 토질 경험(서버 `land.FERTS` 와 같다 — 화면에 적는 용도). */
+const FERTS = {
+  fertilizer: { name: '비료', emoji: '🧪', soil: 15, perDay: 1 },
+  compost: { name: '퇴비', emoji: '🟤', soil: 5, perDay: 3 },
+};
+/** 퇴비 한 개에 드는 작물 수(서버 `land.COMPOST_CROPS`). */
+const COMPOST_CROPS = 5;
+
+/** 곡괭이 효과 한 줄. 값·재료·해금 레벨은 서버가 준다(`/farms/tools`). */
+const PICKAXE_NOTE = {
+  wood: '기본 곡괭이. 빗나가면 방향만 알려 줘요.',
+  iron: '빗나가면 결까지 **몇 칸**인지 알려 줘요.',
+  mithril: '휘두르기 전에 결 후보를 **두 자리**로 좁혀 줘요 — 완벽 확률 20% → 50%.',
+};
+
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 
 // ---------------------------------------------------------------- 사유
@@ -74,6 +92,12 @@ function why(r, crops) {
     case 'gold': return `골드가 모자라요. 씨앗값 **${num(r.need)}골드** · 가진 골드 **${num(r.gold)}**`;
     case 'nothing': return '거둘 게 없어요. 칸에 작물 그림이 보이면(다 자람) 수확할 수 있어요.';
     case 'noRocks': return '이 밭엔 치울 돌이 없어요. 바위는 하나씩 눌러 깨세요.';
+    case 'fertCap': return `오늘 이 밭엔 **${FERTS[r.item]?.name ?? r.item}** 을(를) 더 못 넣어요 — 밭마다 하루 ${r.perDay}개.`;
+    case 'soilMax': return '이 밭은 이미 토질 ★5 예요. 더 넣어도 소용없어요.';
+    case 'noItem': return `**${r.item === 'ore' ? '원석' : itemName(crops, r.item)}** 이(가) 모자라요 — 가진 것 ${num(r.have)}${r.need ? ` / 필요 ${num(r.need)}` : ''}.`;
+    case 'noFarm': return '곡괭이는 농장이 있어야 올릴 수 있어요. `/농장 등록`';
+    case 'maxTool': return '이미 가장 좋은 곡괭이예요.';
+    case 'toolLevel': return `그 곡괭이는 농장 **Lv.${r.need}** 부터 만들 수 있어요.`;
     case 'notStone': return '거기엔 캘 게 없어요.';
     case 'taken': return `이미 <@${r.owner}> 님의 땅이에요. 물은 누구나 줄 수 있어요 — \`/농장 물주기\``;
     case 'mine': return '이미 내 농장이에요. `/농장 보기`';
@@ -299,7 +323,7 @@ const staminaLine = (st) => `⛏️ 오늘 개간 기력 **${st?.left ?? 0}** / 
 
 /** 개간 창. 돌·잡초는 누르면 바로 치우고, 바위는 바위 창으로 간다. */
 function clearPayload({
-  ch, plot, owner, farm, stamina, crops, note,
+  ch, plot, owner, farm, stamina, crops, note, me,
 }) {
   const at = plot != null && farm.plots[plot]?.open ? plot : pickPlot(farm, (p) => stoneCells(p).length);
   const p = farm.plots[at];
@@ -310,7 +334,7 @@ function clearPayload({
   const id = (act, cell = '-', arg = '-') => [PREFIX, act, ch, at, cell, arg, owner].join(':');
 
   const lines = [
-    staminaLine(stamina),
+    staminaLine(stamina) + (me?.pickaxe ? ` · ${pickaxeName(me.pickaxe)}` : ''),
     '🪨 돌은 기력 1로 치워요 · ⛰️ 바위는 결을 찾아 깨요(기회 3번, 첫 방에 맞히면 ✨ 완벽) · 🌼 잡초는 그냥 뽑아요',
   ];
   if (!stoneCells(p).length) lines.push('', '_이 밭엔 치울 게 없어요._');
@@ -359,15 +383,17 @@ function clearPayload({
 
 /** 바위 창. 결 자리는 서버만 안다 — 여기서는 휘두른 횟수와 힌트만 적는다. */
 function boulderPayload({
-  ch, plot, cell, owner, farm, stamina, crops, note,
+  ch, plot, cell, owner, farm, stamina, crops, note, me,
 }) {
   const p = farm.plots[plot];
   const state = p?.cells[cell];
   if (state !== 'boulder' && state !== 'crack') {
     return clearPayload({
-      ch, plot, owner, farm, stamina, crops, note,
+      ch, plot, owner, farm, stamina, crops, note, me,
     });
   }
+  // 미스릴이면 결 후보 두 자리(서버가 주인에게만 준다)
+  const cand = me?.candidates?.[plot]?.[cell] ?? null;
   const swings = p.swings?.[cell] ?? 0;
   const id = (act, arg = '-') => [PREFIX, act, ch, plot, cell, arg, owner].join(':');
   const tired = !stamina?.left;
@@ -379,6 +405,8 @@ function boulderPayload({
     lines.push(`결은 **1~${GRAIN_SPOTS}** 가운데 한 자리에 숨어 있어요. 남은 기회 **${MAX_SWINGS - swings}**`
       + (swings === 0 ? ' · _첫 방에 맞히면 ✨ 완벽 — 전리품 두 번!_' : ''));
     lines.push('_다 빗나가면 금이 가서, 다음엔 어디를 쳐도 깨져요._');
+    if (cand) lines.push(`💎 미스릴 곡괭이 — 결은 **${cand[0]}번** 또는 **${cand[1]}번**이에요.`);
+    else if (me?.pickaxe === 'iron') lines.push('⛏️ 철 곡괭이 — 빗나가면 결까지 몇 칸인지 알려 줘요.');
   }
   if (note) lines.push('', note);
 
@@ -391,7 +419,8 @@ function boulderPayload({
     })],
     components: [
       new ActionRowBuilder().addComponents(Array.from({ length: GRAIN_SPOTS }, (_, k) => new ButtonBuilder()
-        .setCustomId(id('cs', k + 1)).setLabel(String(k + 1)).setStyle(ButtonStyle.Danger).setDisabled(tired))),
+        .setCustomId(id('cs', k + 1)).setLabel(String(k + 1))
+        .setStyle(cand?.includes(k + 1) ? ButtonStyle.Success : ButtonStyle.Danger).setDisabled(tired))),
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(id('cz')).setLabel('돌아가기').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(id('cx')).setLabel('닫기').setStyle(ButtonStyle.Secondary),
@@ -408,7 +437,7 @@ async function openClear(interaction, ch, { plot = null } = {}) {
   if (!farm) return refuse(interaction, why({ reason: 'none' }));
   if (farm.owner !== me) return refuse(interaction, why({ reason: 'notOwner', owner: farm.owner }));
   return interaction.editReply(clearPayload({
-    ch, plot, owner: me, farm, stamina: mine?.stamina, crops,
+    ch, plot, owner: me, farm, stamina: mine?.stamina, crops, me: mine,
   }));
 }
 
@@ -426,8 +455,113 @@ function swingNote(r, crops) {
     return `${r.perfect ? '✨ **완벽하게** 쪼갰어요!' : '⛰️ 바위를 깼어요!'}${lootNote(r.loot, crops)}`;
   }
   const where = r.hint.dir === 'left' ? '왼쪽' : '오른쪽';
-  return `💨 빗나갔어요 — 결이 **${where}**으로 느껴져요${r.hint.near ? ' · **바로 옆**이에요!' : ''}`
+  const far = r.hint.dist ? ` · 결까지 **${r.hint.dist}칸**` : '';
+  return `💨 빗나갔어요 — 결이 **${where}**으로 느껴져요${r.hint.near ? ' · **바로 옆**이에요!' : far}`
     + (r.cracked ? '\n💥 세 번 다 빗나가 바위에 **금이 갔어요** — 다음엔 어디를 쳐도 깨져요.' : '');
+}
+
+// ---------------------------------------------------------------- 거름 창 · 곡괭이 창 (2b)
+
+const pickaxeName = (key, list) => {
+  const t = list?.find((x) => x.key === key);
+  if (t) return `${t.emoji} ${t.name}`;
+  return { wood: '🪓 나무 곡괭이', iron: '⛏️ 철 곡괭이', mithril: '💎 미스릴 곡괭이' }[key] ?? key;
+};
+
+/** 거름 창. 밭 하나의 토질과 오늘 넣은 것, 가진 거름을 보여 주고 넣는다. */
+function fertPayload({
+  ch, plot, owner, farm, items, note,
+}) {
+  const at = plot != null && farm.plots[plot]?.open ? plot : pickPlot(farm, () => true);
+  const p = farm.plots[at];
+  const id = (act) => [PREFIX, act, ch, at, owner].join(':');
+  const used = p.fert ?? {};
+
+  const lines = [
+    `토질 ${stars(p.star)} · 경험 **${num(p.soilXp)}**${p.soilNext != null ? ` / 다음 ★ ${num(p.soilNext)}` : ' · 최고'}`,
+    `🟤 퇴비 조각 **${farm.compostBits ?? 0}** / 3 — 잡초·죽은 칸을 치우면 모이고, 셋이면 퇴비 하나`,
+    '',
+  ];
+  for (const [key, f] of Object.entries(FERTS)) {
+    lines.push(`${f.emoji} **${f.name}** +${f.soil} · 오늘 ${used[key] ?? 0} / ${f.perDay} · 가진 것 **${num(items?.[key])}**`);
+  }
+  lines.push('', `_비료는 상점 🌾 농사 진열대에서, 퇴비는 \`/농장 퇴비\` 로 작물 ${COMPOST_CROPS}개에 하나씩 만들어요._`);
+  if (note) lines.push('', note);
+
+  const button = (key, all = false) => {
+    const f = FERTS[key];
+    const room = Math.max(0, f.perDay - (used[key] ?? 0));
+    const n = all ? Math.min(room, items?.[key] ?? 0) : 1;
+    return new ButtonBuilder()
+      .setCustomId(id(all ? `${key === 'compost' ? 'fC' : 'fF'}` : `${key === 'compost' ? 'fc' : 'ff'}`))
+      .setLabel(all ? `${f.name} ${n}개 넣기` : `${f.name} 넣기`).setEmoji(f.emoji)
+      .setStyle(ButtonStyle.Success).setDisabled(!room || !(items?.[key] > 0));
+  };
+  const row = [button('fertilizer'), button('compost'), button('compost', true)];
+  if (openPlots(farm).length > 1) row.push(new ButtonBuilder().setCustomId(id('fn')).setLabel('다른 밭').setStyle(ButtonStyle.Secondary));
+  row.push(new ButtonBuilder().setCustomId(id('fx')).setLabel('닫기').setStyle(ButtonStyle.Secondary));
+
+  return {
+    embeds: [base({
+      title: `🟤 거름 — ${plotNo(at)}번 밭`,
+      description: lines.join('\n'),
+      color: FARM_COLOR,
+      footer: '토질이 오르면 물 한 번에 더 자라고, 한 칸에서 더 많이 나와요',
+    })],
+    components: [new ActionRowBuilder().addComponents(row)],
+    allowedMentions: QUIET,
+  };
+}
+
+async function openFert(interaction, ch, { plot = null } = {}) {
+  const me = interaction.user.id;
+  const [{ farm }, { accounts }] = await Promise.all([getFarm(ch), getAccounts([me])]);
+  if (!farm) return refuse(interaction, why({ reason: 'none' }));
+  if (farm.owner !== me) return refuse(interaction, why({ reason: 'notOwner', owner: farm.owner }));
+  return interaction.editReply(fertPayload({
+    ch, plot, owner: me, farm, items: accounts[me]?.items,
+  }));
+}
+
+/** 곡괭이 창. 지금 것 · 다음 것의 값과 재료 · 해금 레벨. */
+function toolsPayload({ owner, tools, account, note }) {
+  const list = tools.pickaxes;
+  const now = list.find((t) => t.key === tools.tool) ?? list[0];
+  const next = list[list.indexOf(now) + 1] ?? null;
+  const cost = (t) => [`${num(t.gold)}골드`, ...Object.entries(t.items).map(([k, n]) => `${k === 'ore' ? '원석(아무거나)' : itemName(null, k)} ${n}`)].join(' · ');
+  const oreHave = ['oreBlue', 'oreRed', 'oreGold', 'oreGreen', 'oreBlack', 'oreWhite'].reduce((a, k) => a + (account?.items?.[k] ?? 0), 0);
+  const haveOf = (k) => (k === 'ore' ? oreHave : account?.items?.[k] ?? 0);
+
+  const lines = [`지금 **${now.emoji} ${now.name}** — ${PICKAXE_NOTE[now.key]}`, ''];
+  let ready = false;
+  if (next) {
+    const lvOk = (tools.level ?? 0) >= next.lv;
+    const goldOk = (account?.gold ?? 0) >= next.gold;
+    const itemsOk = Object.entries(next.items).every(([k, n]) => haveOf(k) >= n);
+    ready = lvOk && goldOk && itemsOk;
+    lines.push(`다음 **${next.emoji} ${next.name}** — ${PICKAXE_NOTE[next.key]}`);
+    lines.push(`값: ${cost(next)}`);
+    lines.push(`${lvOk ? '✅' : '🔒'} 농장 Lv.${next.lv}${tools.level ? ` (지금 Lv.${tools.level})` : ''} · ${goldOk ? '✅' : '❌'} 골드 ${num(account?.gold)}`
+      + Object.entries(next.items).map(([k, n]) => ` · ${haveOf(k) >= n ? '✅' : '❌'} ${k === 'ore' ? '원석' : itemName(null, k)} ${haveOf(k)}/${n}`).join(''));
+  } else {
+    lines.push('_가장 좋은 곡괭이예요._');
+  }
+  if (note) lines.push('', note);
+
+  return {
+    embeds: [base({ title: '⛏️ 곡괭이', description: lines.join('\n'), color: FARM_COLOR, footer: '곡괭이는 폐농해도 남아요 · 재료는 개간 전리품에서 나와요' })],
+    components: next ? [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`${PREFIX}:k:${owner}`).setLabel(`${next.name}로 바꾸기`).setEmoji(next.emoji)
+        .setStyle(ButtonStyle.Success).setDisabled(!ready),
+    )] : [],
+    allowedMentions: QUIET,
+  };
+}
+
+async function openTools(interaction) {
+  const me = interaction.user.id;
+  const [tools, { accounts }] = await Promise.all([getTools(me), getAccounts([me])]);
+  return interaction.editReply(toolsPayload({ owner: me, tools, account: accounts[me] }));
 }
 
 // ---------------------------------------------------------------- 명령
@@ -450,6 +584,12 @@ const data = new SlashCommandBuilder()
     .addIntegerOption((o) => plotOption(o, '밭 번호 (안 적으면 전부)')))
   .addSubcommand((s) => s.setName('개간').setDescription('돌을 치우고 바위를 깹니다 — 하루 기력만큼')
     .addIntegerOption((o) => plotOption(o, '밭 번호 (안 적으면 알아서)')))
+  .addSubcommand((s) => s.setName('거름').setDescription('비료·퇴비를 밭에 넣어 토질을 올립니다')
+    .addIntegerOption((o) => plotOption(o, '밭 번호 (안 적으면 알아서)')))
+  .addSubcommand((s) => s.setName('퇴비').setDescription(`거둔 작물 ${COMPOST_CROPS}개로 퇴비 하나를 만듭니다`)
+    .addStringOption((o) => o.setName('작물').setDescription('퇴비로 만들 작물').setAutocomplete(true).setRequired(true))
+    .addIntegerOption((o) => o.setName('개수').setDescription('만들 퇴비 수 (기본 1)').setMinValue(1).setMaxValue(100)))
+  .addSubcommand((s) => s.setName('곡괭이').setDescription('곡괭이를 봅니다 · 더 좋은 것으로 바꿉니다'))
   .addSubcommand((s) => s.setName('폐농').setDescription('내 농장을 없앱니다 — 등록 24시간 안이면 무르기'));
 
 async function register(interaction) {
@@ -552,6 +692,35 @@ async function clearCmd(interaction) {
   return openClear(interaction, interaction.channelId, { plot: n ? n - 1 : null });
 }
 
+async function fertCmd(interaction) {
+  await interaction.deferReply({ flags: EPH });
+  const n = interaction.options.getInteger('밭');
+  return openFert(interaction, interaction.channelId, { plot: n ? n - 1 : null });
+}
+
+async function compostCmd(interaction) {
+  await interaction.deferReply({ flags: EPH });
+  const me = interaction.user.id;
+  const crop = interaction.options.getString('작물');
+  const count = interaction.options.getInteger('개수') ?? 1;
+  const [r, crops] = await Promise.all([compostCrops({ userId: me, crop, count }), getFarmCrops()]);
+  if (!r.ok) return refuse(interaction, why(r, crops));
+  forgetBag(me);
+  return interaction.editReply({
+    embeds: [base({
+      title: `🟤 퇴비 ${r.made}개를 만들었어요`,
+      description: `${itemName(crops, r.crop)} ×${r.used} → 퇴비 ×${r.made} · 가진 퇴비 **${num(r.account?.items?.compost)}**
+_\`/농장 거름\` 으로 밭에 넣으세요 — 하나에 토질 경험 +${FERTS.compost.soil}._`,
+      color: FARM_COLOR,
+    })],
+  });
+}
+
+async function toolsCmd(interaction) {
+  await interaction.deferReply({ flags: EPH });
+  return openTools(interaction);
+}
+
 async function abandonCmd(interaction) {
   await interaction.deferReply({ flags: EPH });
   const me = interaction.user.id;
@@ -590,6 +759,9 @@ const RUN = {
   심기: plantCmd,
   수확: harvestCmd,
   개간: clearCmd,
+  거름: fertCmd,
+  퇴비: compostCmd,
+  곡괭이: toolsCmd,
   폐농: abandonCmd,
 };
 
@@ -714,7 +886,7 @@ async function clearButton(interaction, act, [ch, plotS, cellS, arg, owner]) {
   const [{ farm, me }, crops] = await Promise.all([getFarm(ch, owner), getFarmCrops()]);
   if (!farm) return interaction.editReply({ embeds: [fail(why({ reason: 'none' }))], components: [] });
   const base0 = {
-    ch, owner, farm, stamina: me?.stamina, crops,
+    ch, owner, farm, stamina: me?.stamina, crops, me,
   };
 
   if (act === 'cn') return interaction.editReply(clearPayload({ ...base0, plot: nextOpen(farm, plot) }));
@@ -731,7 +903,7 @@ async function clearButton(interaction, act, [ch, plotS, cellS, arg, owner]) {
     all: act === 'ca',
   });
   const next = {
-    ...base0, farm: r.farm ?? farm, stamina: r.stamina ?? me?.stamina,
+    ...base0, farm: r.farm ?? farm, stamina: r.stamina ?? me?.stamina, me: r.me ?? me,
   };
   if (!r.ok) {
     const note = `⚠️ ${why(r, crops)}`;
@@ -746,6 +918,52 @@ async function clearButton(interaction, act, [ch, plotS, cellS, arg, owner]) {
     ? boulderPayload({ ...next, plot, cell, note })
     : clearPayload({ ...next, plot, note }));
   return announceLevel(interaction, r.levelUp, crops);
+}
+
+/** 거름 창의 조작. 주인만 누른다(customId 맨 뒤). */
+async function fertButton(interaction, act, [ch, plotS, owner]) {
+  if (interaction.user.id !== owner) {
+    return interaction.reply({ embeds: [fail('자기 거름 창에서만 누를 수 있어요.')], flags: EPH });
+  }
+  await interaction.deferUpdate();
+  if (act === 'fx') return interaction.editReply({ embeds: [base({ title: '🟤 거름 창을 닫았어요', color: FARM_COLOR })], components: [] });
+
+  let plot = Number(plotS);
+  const [{ farm }, { accounts }, crops] = await Promise.all([getFarm(ch), getAccounts([owner]), getFarmCrops()]);
+  if (!farm) return interaction.editReply({ embeds: [fail(why({ reason: 'none' }))], components: [] });
+  if (act === 'fn') {
+    plot = nextOpen(farm, plot);
+    return interaction.editReply(fertPayload({ ch, plot, owner, farm, items: accounts[owner]?.items }));
+  }
+
+  const item = act === 'ff' || act === 'fF' ? 'fertilizer' : 'compost';
+  const count = act === 'fC' ? FERTS.compost.perDay : 1;
+  const r = await fertilizeFarm({ channelId: ch, userId: owner, plot, item, count });
+  if (!r.ok) {
+    return interaction.editReply(fertPayload({
+      ch, plot, owner, farm: r.farm ?? farm, items: accounts[owner]?.items, note: `⚠️ ${why(r, crops)}`,
+    }));
+  }
+  forgetBag(owner);
+  const f = FERTS[item];
+  const up = r.to > r.from ? ` · 🎉 토질 **${stars(r.to)}**!` : '';
+  return interaction.editReply(fertPayload({
+    ch, plot, owner, farm: r.farm, items: r.account?.items, note: `${f.emoji} ${f.name} ${r.used}개를 넣었어요 — 토질 경험 +${r.soil}${up}`,
+  }));
+}
+
+/** 곡괭이 바꾸기. */
+async function toolButton(interaction, [owner]) {
+  if (interaction.user.id !== owner) {
+    return interaction.reply({ embeds: [fail('자기 곡괭이 창에서만 누를 수 있어요.')], flags: EPH });
+  }
+  await interaction.deferUpdate();
+  const [r, crops] = await Promise.all([upgradePickaxe(owner), getFarmCrops()]);
+  const [tools, { accounts }] = await Promise.all([getTools(owner), getAccounts([owner])]);
+  forget(owner);
+  forgetBag(owner);
+  const note = r.ok ? `🎉 **${pickaxeName(r.tool, tools.pickaxes)}** 을(를) 손에 넣었어요! (−${num(r.paid.gold)}골드)` : `⚠️ ${why(r, crops)}`;
+  return interaction.editReply(toolsPayload({ owner, tools, account: accounts[owner], note }));
 }
 
 /** 폐농 확인. */
@@ -778,6 +996,8 @@ async function component(interaction) {
   try {
     if (['w', 'h', 'p', 'c', 'v'].includes(act)) return await viewButton(interaction, act, rest[0]);
     if (act === 'ab' || act === 'abx') return await abandonButton(interaction, act, rest);
+    if (act === 'k') return await toolButton(interaction, rest);
+    if (act.startsWith('f')) return await fertButton(interaction, act, rest);
     if (act.startsWith('c')) return await clearButton(interaction, act, rest);
     return await plantButton(interaction, act, rest);
   } catch (err) {
@@ -788,7 +1008,7 @@ async function component(interaction) {
 
 /** 검사용(scripts/check-farm.mjs). 화면은 상태가 없어 그대로 불러 볼 수 있다. */
 export {
-  plantPayload, clearPayload, boulderPayload, swingNote, why, cellsOf, maskOf, unlocked,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, why, cellsOf, maskOf, unlocked,
 };
 
 export default {

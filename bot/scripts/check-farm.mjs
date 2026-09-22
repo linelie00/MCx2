@@ -12,6 +12,7 @@
  *   3. 격자와 밭 줄이 서버가 주는 모양 그대로 그려진다
  *   4. 심기·개간·바위 창이 5줄 · 줄마다 5개 · customId 100자 안이고, customId 가 겹치지 않는다
  *   5. 서버가 돌려줄 수 있는 사유(`reason`)마다 문장이 있다
+ *   6. 봇이 화면에 적으려고 옮겨 적은 수(거름 한도 · 퇴비 비율 · 곡괭이)가 서버와 같다
  *
  * 레포 안에서만 도는 검사라 서버 파일을 직접 읽는다(배포된 봇은 서버 폴더를 모른다).
  */
@@ -24,8 +25,9 @@ import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
 import { grid, plotLines, cellEmoji, levelLine, nextLine } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, swingNote, why, cellsOf, maskOf, unlocked,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, why, cellsOf, maskOf, unlocked,
 } from '../src/commands/farm.js';
+import { SHELVES } from '../src/commands/shop.js';
 
 const require = createRequire(import.meta.url);
 const { CROPS, publicCrop } = require('../../server/src/farm/crops.js');
@@ -57,6 +59,9 @@ eq('Lv1 이면 Lv1 작물만', unlocked(crops, 1).every((c) => c.lv === 1), true
 const lootKeys = [...new Set([...land.LOOT.normal, ...land.LOOT.perfect].map(([k]) => k).filter((k) => k !== 'ore')), ...land.ORES, 'dandelion'];
 eq('전리품 키가 명부에 있다', lootKeys.filter((k) => !ITEM_BY_KEY[k]), []);
 eq('전리품은 팔 수 있다', lootKeys.filter((k) => !ITEM_BY_KEY[k]?.sell), []);
+eq('거름 키가 명부에 있다', Object.keys(land.FERTS).filter((k) => !ITEM_BY_KEY[k]), []);
+eq('곡괭이 재료가 명부에 있다', land.PICKAXES.flatMap((t) => Object.keys(t.items)).filter((k) => k !== 'ore' && !ITEM_BY_KEY[k]), []);
+eq('비료는 상점 농사 진열대에 있다', SHELVES.find((sh) => sh.key === 'farm')?.keys, ['fertilizer']);
 
 // ---------------------------------------------------------------- 3. 화면
 
@@ -135,13 +140,51 @@ eq('빗나감 문구', swingNote({ kind: 'boulder', broke: false, hint: { dir: '
 eq('완벽 문구', swingNote({ kind: 'boulder', broke: true, perfect: true, loot: { oldCoin: 1 } }, crops), '✨ **완벽하게** 쪼갰어요! · 🎁 옛 동전 ×1');
 eq('돌 모두 문구', swingNote({ kind: 'rocks', cleared: 2, left: 1, loot: {} }, crops), '🪨 돌 **2개**를 치웠어요 (기력이 모자라 1개는 남겼어요)');
 
+// 곡괭이 힌트
+eq('거리 문구(철 곡괭이)', swingNote({ kind: 'boulder', broke: false, hint: { dir: 'right', near: false, dist: 3 }, cracked: false }, crops), '💨 빗나갔어요 — 결이 **오른쪽**으로 느껴져요 · 결까지 **3칸**');
+const mith = boulderPayload({ ch: CH, plot: 4, cell: 1, owner: OWNER, farm: v, stamina: st, crops, me: { pickaxe: 'mithril', candidates: { 4: { 1: [2, 4] } } } });
+limits('미스릴 바위 창', mith);
+eq('미스릴 후보 두 자리는 초록', mith.components[0].toJSON().components.map((c) => c.style), [4, 3, 4, 3, 4]);
+eq('미스릴 문구', mith.embeds[0].toJSON().description.includes('결은 **2번** 또는 **4번**'), true);
+eq('개간 창에 곡괭이 이름', clearPayload({ ch: CH, plot: 4, owner: OWNER, farm: v, stamina: st, crops, me: { pickaxe: 'iron' } }).embeds[0].toJSON().description.startsWith('⛏️ 오늘 개간 기력 **5** / 5 · ⛏️ 철 곡괭이'), true);
+
+// 거름 창
+const fp = fertPayload({ ch: CH, plot: 4, owner: OWNER, farm: { ...v, plots: v.plots.map((p, i) => (i === 4 ? { ...p, fert: { fertilizer: 1, compost: 1 } } : p)) }, items: { fertilizer: 3, compost: 5 } });
+const fr = limits('거름 창', fp);
+eq('비료는 오늘 다 넣었으면 막힌다', fr[0].components[0].disabled, true);
+eq('퇴비는 남은 한도만큼 한꺼번에', fr[0].components[2].label, '퇴비 2개 넣기');
+const fp0 = fertPayload({ ch: CH, plot: 4, owner: OWNER, farm: v, items: {} });
+eq('거름이 없으면 전부 막힌다', fp0.components[0].toJSON().components.slice(0, 3).map((c) => c.disabled), [true, true, true]);
+
+// 곡괭이 창
+const tools = { pickaxes: land.PICKAXES, tool: 'wood', level: 6 };
+const tp = toolsPayload({ owner: OWNER, tools, account: { gold: 500, items: { ironLump: 2 } } });
+limits('곡괭이 창', tp);
+eq('조건이 되면 바꿀 수 있다', tp.components[0].toJSON().components[0].disabled, false);
+eq('레벨이 모자라면 막힌다', toolsPayload({ owner: OWNER, tools: { ...tools, level: 5 }, account: { gold: 500, items: { ironLump: 2 } } }).components[0].toJSON().components[0].disabled, true);
+eq('원석은 섞어서 센다', toolsPayload({ owner: OWNER, tools: { ...tools, tool: 'iron', level: 9 }, account: { gold: 1000, items: { oreRed: 2, oreBlue: 1 } } }).components[0].toJSON().components[0].disabled, false);
+eq('미스릴이면 버튼이 없다', toolsPayload({ owner: OWNER, tools: { ...tools, tool: 'mithril' }, account: {} }).components.length, 0);
+
 // ---------------------------------------------------------------- 5. 사유
 
 const REASONS = ['none', 'notOwner', 'already', 'noPlants', 'tired', 'locked', 'level', 'otherCrop', 'occupied', 'gold',
-  'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown'];
-const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1 };
+  'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown',
+  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel'];
+const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1, item: 'compost', have: 0, perDay: 3 };
 eq('사유마다 문장이 있다', REASONS.filter((r) => why({ ...sample, reason: r }, crops).startsWith('하지 못했어요')), []);
 eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 }, crops) !== why({ reason: 'tired', stamina: st }, crops), true);
+
+// ---------------------------------------------------------------- 6. 옮겨 적은 수
+
+const src = await import('node:fs').then((fs) => fs.readFileSync(new URL('../src/commands/farm.js', import.meta.url), 'utf-8'));
+const num = (re) => Number(src.match(re)?.[1]);
+eq('거름 한도·토질이 서버와 같다', [
+  num(/fertilizer: \{[^}]*soil: (\d+)/), num(/fertilizer: \{[^}]*perDay: (\d+)/),
+  num(/compost: \{[^}]*soil: (\d+)/), num(/compost: \{[^}]*perDay: (\d+)/),
+], [land.FERTS.fertilizer.soil, land.FERTS.fertilizer.perDay, land.FERTS.compost.soil, land.FERTS.compost.perDay]);
+eq('퇴비 비율이 서버와 같다', num(/const COMPOST_CROPS = (\d+)/), land.COMPOST_CROPS);
+eq('바위 기회·결 자리가 서버와 같다', [num(/const MAX_SWINGS = (\d+)/), num(/const GRAIN_SPOTS = (\d+)/)], [land.MAX_SWINGS, land.GRAIN_SPOTS]);
+eq('곡괭이 효과 문구가 다 있다', land.PICKAXES.filter((t) => !src.includes(`${t.key}: '`)).map((t) => t.key), []);
 
 console.log(`\n${bad ? '✗' : '✓'} ${ok + bad}건 중 통과 ${ok} · 실패 ${bad}`);
 process.exit(bad ? 1 : 0);

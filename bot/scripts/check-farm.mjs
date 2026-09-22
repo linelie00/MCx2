@@ -25,7 +25,8 @@ import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
 import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, why, cellsOf, maskOf, unlocked, modsLines,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, harvestNote, why, cellsOf, maskOf, unlocked, modsLines,
+  PLANT_PAGE,
 } from '../src/commands/farm.js';
 import { SHELVES } from '../src/commands/shop.js';
 
@@ -49,20 +50,23 @@ eq('파는 값이 명부와 같다', CROPS.filter((c) => ITEM_BY_KEY[c.key]?.pri
 eq('이름이 명부와 같다', CROPS.filter((c) => ITEM_BY_KEY[c.key]?.name !== c.name).map((c) => c.key), []);
 eq('팔 수 있다', CROPS.filter((c) => !ITEM_BY_KEY[c.key]?.sell).map((c) => c.key), []);
 const crops = CROPS.map(publicCrop);
-eq('씨앗값 < 파는 값', crops.filter((c) => !(c.seed >= 1 && c.seed < c.price)).map((c) => c.key), []);
+eq('씨앗값 < 파는 값', crops.filter((c) => !c.seedOnly && !(c.seed >= 1 && c.seed < c.price)).map((c) => c.key), []);
+eq('희귀 작물은 씨앗값 0', crops.filter((c) => c.seedOnly && c.seed !== 0).map((c) => c.key), []);
 eq('이모지가 있다', crops.filter((c) => !c.emoji).map((c) => c.key), []);
-eq('심기 셀렉트는 25개까지', unlocked(crops, 10).length, 25);
-eq('심기 셀렉트는 최근에 풀린 것부터', unlocked(crops, 10)[0].lv, 5);
-eq('Lv1 이면 Lv1 작물만', unlocked(crops, 1).every((c) => c.lv === 1), true);
+eq('심을 수 있는 작물은 최근에 풀린 것부터', unlocked(crops, 10)[0].lv, 8);
+eq('Lv1 이면 Lv1 작물만(희귀 빼고)', unlocked(crops, 1).every((c) => c.lv === 1 && !c.seedOnly), true);
+eq('희귀는 주머니에 있을 때만 · 맨 앞', unlocked(crops, 1, { walkingCap: 2 }).map((c) => c.key)[0], 'walkingCap');
+eq('주머니가 0 이면 안 보인다', unlocked(crops, 10, { walkingCap: 0 }).some((c) => c.seedOnly), false);
 
 // ---------------------------------------------------------------- 2. 전리품
 
-const lootKeys = [...new Set([...land.LOOT.normal, ...land.LOOT.perfect].map(([k]) => k).filter((k) => k !== 'ore')), ...land.ORES, 'dandelion'];
+const lootKeys = [...new Set([...land.LOOT.normal, ...land.LOOT.perfect].map(([k]) => k).filter((k) => k !== 'ore' && k !== 'seed')), ...land.ORES, 'dandelion'];
+eq('희귀 씨앗은 작물표의 희귀 작물', land.RARE_SEEDS.filter((k) => !crops.find((c) => c.key === k)?.seedOnly), []);
 eq('전리품 키가 명부에 있다', lootKeys.filter((k) => !ITEM_BY_KEY[k]), []);
 eq('전리품은 팔 수 있다', lootKeys.filter((k) => !ITEM_BY_KEY[k]?.sell), []);
 eq('거름 키가 명부에 있다', Object.keys(land.FERTS).filter((k) => !ITEM_BY_KEY[k]), []);
 eq('곡괭이 재료가 명부에 있다', land.PICKAXES.flatMap((t) => Object.keys(t.items)).filter((k) => k !== 'ore' && !ITEM_BY_KEY[k]), []);
-eq('비료는 상점 농사 진열대에 있다', SHELVES.find((sh) => sh.key === 'farm')?.keys, ['fertilizer']);
+eq('비료·귀마개는 상점 농사 진열대에 있다', SHELVES.find((sh) => sh.key === 'farm')?.keys, ['fertilizer', 'earPlug']);
 
 // ---------------------------------------------------------------- 3. 화면
 
@@ -188,11 +192,42 @@ eq('윤작(성장은 그대로)', modsBadge({ rate: 1, rotation: 'varied' }), '�
   eq('미리보기가 없어도 창은 열린다', plantPayload({ ch: CH, plot: 4, crop: null, mask: 0, owner: OWNER, farm: vv, crops }).components.length > 0, true);
 }
 
+// 3c — 쪽 넘김 · 주머니 · 비명 · 씨앗
+{
+  const big = { ...rules.view(rules.newFarm({ channelId: CH, guildId: '1', owner: OWNER, today: D, now: `${D}T00:00:00.000Z` }), D), level: 8 };
+  big.plots[4].cells = big.plots[4].cells.map(() => 'soil');
+  const p0 = plantPayload({ ch: CH, plot: 4, crop: null, mask: 0, owner: OWNER, farm: big, crops });
+  const sel = p0.components[0].toJSON().components[0];
+  limits('쪽이 둘인 심기 창', p0);
+  eq('셀렉트는 25칸 안(작물 24 + 다른 작물)', [sel.options.length <= 25, sel.options.at(-1).value.startsWith('__page:')], [true, true]);
+  eq('다른 작물 쪽', sel.options.at(-1).label, `▶ 다른 작물 (1/${Math.ceil(unlocked(crops, 8).length / PLANT_PAGE)}쪽)`);
+  const p1 = plantPayload({ ch: CH, plot: 4, crop: null, mask: 0, owner: OWNER, farm: big, crops, page: 1 });
+  const keys1 = p1.components[0].toJSON().components[0].options.map((o) => o.value);
+  eq('둘째 쪽엔 첫 쪽 작물이 없다', keys1.filter((k) => sel.options.some((o) => o.value === k) && !k.startsWith('__')), []);
+  const low = unlocked(crops, 8).at(-1).key;
+  const pLow = plantPayload({ ch: CH, plot: 4, crop: low, mask: 0, owner: OWNER, farm: big, crops });
+  eq('고른 작물이 있는 쪽을 연다', pLow.components[0].toJSON().components[0].options.some((o) => o.value === low && o.default), true);
+
+  const pr = plantPayload({ ch: CH, plot: 4, crop: 'screamRoot', mask: maskOf([0, 1]), owner: OWNER, farm: big, crops, pouch: { screamRoot: 3 } });
+  const d = pr.embeds[0].toJSON().description;
+  eq('주머니가 보인다', d.includes('🎒 주머니 비명 뿌리 ×3'), true);
+  eq('희귀 규칙 안내', d.includes('📜 비명'), true);
+  eq('희귀 심기 버튼은 주머니 씨앗 수', pr.components.at(-1).toJSON().components.find((c) => c.custom_id.startsWith('farm:pg:')).label, '심기 · 🎒 2개');
+  eq('주머니가 없으면 희귀는 못 고른다', plantPayload({ ch: CH, plot: 4, crop: 'screamRoot', mask: 0, owner: OWNER, farm: big, crops }).components.at(-1).toJSON().components.find((c) => c.custom_id.startsWith('farm:pg:')).custom_id.split(':')[4], '-');
+  const rice = plantPayload({ ch: CH, plot: 4, crop: 'rice', mask: 0, owner: OWNER, farm: big, crops }).embeds[0].toJSON().description;
+  eq('쌀 — 물 욕심 안내', rice.includes('📜 물 욕심'), true);
+
+  eq('비명 — 귀마개로 막음', harvestNote('1', { harvested: 1, items: { screamRoot: 1 }, screams: 1, plugs: 1, hpLost: 0, hp: 90 }, crops).includes('귀마개 1개로 막았어요'), true);
+  eq('비명 — 체력', harvestNote('1', { harvested: 1, items: { screamRoot: 1 }, screams: 1, plugs: 0, hpLost: 5, hp: 85 }, crops).includes('체력 −5 (남은 체력 85)'), true);
+  eq('퍼짐 문구', harvestNote('1', { harvested: 1, items: { mint: 1 }, spread: 1 }, crops).includes('🍀 박하가 1포기 번졌어요'), true);
+  eq('씨앗을 주웠다', swingNote({ kind: 'boulder', broke: true, perfect: false, loot: {}, seeds: { walkingCap: 1 } }, crops).includes('🎒 **도망가는 버섯갓 씨앗**'), true);
+}
+
 // ---------------------------------------------------------------- 5. 사유
 
 const REASONS = ['none', 'notOwner', 'already', 'noPlants', 'tired', 'locked', 'level', 'otherCrop', 'occupied', 'gold',
   'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown',
-  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel'];
+  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed'];
 const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1, item: 'compost', have: 0, perDay: 3 };
 eq('사유마다 문장이 있다', REASONS.filter((r) => why({ ...sample, reason: r }, crops).startsWith('하지 못했어요')), []);
 eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 }, crops) !== why({ reason: 'tired', stamina: st }, crops), true);

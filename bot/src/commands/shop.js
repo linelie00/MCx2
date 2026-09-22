@@ -62,7 +62,7 @@ const baitNote = (key) => `${BAITS[key].tries}번 던질 수 있는 한 판`;
  * 재료는 명부의 `shop: true` 로 고른다 — 새 재료를 들이면 여기는 안 고쳐도 된다.
  */
 /** 농사 용품. 밭에 넣는 것이라 먹을거리 진열대와 따로 둔다(`/농장 거름`). */
-export const FARM_GOODS = ['fertilizer'];
+export const FARM_GOODS = ['fertilizer', 'earPlug'];
 
 export const SHELVES = [
   { key: 'potion', label: '회복약', icon: '🍶', keys: STOCK },
@@ -179,7 +179,7 @@ function listPayload(side, owner, account, shelfKey = 'potion', page = 0) {
       + (dead
         ? '\n💀 _쓰러져 있어서 부활의 영약만 보여요._'
         : (shelf.key === 'potion' ? '\n_회복약만 효능이 적혀 있어요. 재료는 먹어 봐야 알아요._'
-          : shelf.key === 'farm' ? '\n_비료는 `/농장 거름` 으로 밭에 넣어요. 밭마다 하루 한 포대._' : '')),
+          : shelf.key === 'farm' ? '\n_비료는 `/농장 거름` 으로 밭에 넣어요(밭마다 하루 한 포대). 귀마개는 비명 뿌리를 거둘 때 저절로 써요._' : '')),
     color: THEME_COLOR,
     footer: '산 것은 /사용 으로 먹습니다',
   }).addFields({ name: '가진 골드', value: `**${num(gold)}**`, inline: true });

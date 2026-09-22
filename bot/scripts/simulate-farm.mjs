@@ -52,15 +52,21 @@ function seeded(seed) {
 }
 
 /** 레벨이 닿는 작물 가운데 하루당 보장 이익이 가장 큰 것. */
-const bestCrop = (level) => CROPS.filter((c) => c.lv <= level)
+const bestCrop = (level) => CROPS.filter((c) => c.lv <= level && !c.seedOnly)
   .sort((a, b) => guaranteed(b) / b.days - guaranteed(a) / a.days || b.lv - a.lv)[0];
 
-/** 궁합 미리보기를 보고 고른다 — 하루당 보장 이익 × 성장 배율, 연작(토질 0)은 20% 덜 친다. */
+/**
+ * 오래 두고 봤을 때의 하루당 가치(보장 몫). 재수확 작물은 두 번째부터 씨앗값이 없어
+ * `파는 값 / 재수확 간격` 이다 — 처음 한 번의 보장 이익만 보면 재수확 작물을 과소평가한다.
+ */
+const longRun = (c) => (c.regrow ? c.price / c.regrow : guaranteed(c) / c.days);
+
+/** 궁합 미리보기를 보고 고른다 — 하루당 가치 × 성장 배율, 연작(토질 0)은 20% 덜 친다. */
 function smartCrop(farm, plot, level) {
   let best = null; let score = -1;
-  for (const c of CROPS.filter((x) => x.lv <= level)) {
+  for (const c of CROPS.filter((x) => x.lv <= level && !x.seedOnly)) {
     const m = affinity.modsFor(farm, plot, c.key);
-    const v = (guaranteed(c) / c.days) * (m?.rate ?? 1) * (m?.soil === 0 ? 0.8 : 1);
+    const v = longRun(c) * (m?.rate ?? 1) * (m?.soil === 0 ? 0.8 : 1);
     if (v > score) { score = v; best = c; }
   }
   return best;

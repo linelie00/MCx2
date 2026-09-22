@@ -87,6 +87,7 @@ export const ITEMS = [
   // ---- 농장 거름(docs/FARM.md §8.1). 먹는 게 아니라 밭에 넣는 것이다 — `/농장 거름`. 먹으면 아프다.
   { key: 'compost',         name: '퇴비',                     kind: '잡화', price:    3, sell: true,  heal: -5,  loot: false, desc: '잡초와 시든 잎, 남은 채소를 푹 썩힌 것. 밭에 넣으면 흙이 살아난다. 먹을 생각은 하지 말자.' },
   { key: 'fertilizer',      name: '비료',                     kind: '잡화', price:   30, sell: false, heal: -20, loot: false, desc: '가게에서 파는 알갱이 비료. 한 포대면 밭 한 뙈기의 흙이 몰라보게 달라진다. 하루에 한 밭 한 포대까지.' },
+  { key: 'earPlug',         name: '귀마개',                   kind: '잡화', price:   50, sell: true,  heal: -3,  loot: false, desc: '비명 뿌리를 뽑을 때 쓰는 두툼한 귀마개. 한 번 쓰면 흙투성이가 되어 버린다.' },
   { key: 'glowingStone',    name: '붉게 빛나는 돌 조각',      kind: '잡화', price:   15, sell: true,  heal: 5,          desc: '손에 쥐면 약간 따뜻한 느낌이 드는 돌 조각.' },
   { key: 'boneChip',        name: '작은 뼛조각',              kind: '잡화', price:    3, sell: true,  heal: 3,          desc: '희미한 무늬가 새겨진 작은 뼛조각. 동물의 것 같지만 정확히는 알 수 없다.' },
   { key: 'whiteShell',      name: '하얀 조개껍데기',          kind: '잡화', price:    5, sell: true,  heal: 0,          desc: '부드럽고 매끈한 하얀 조개껍데기. 귀에 대면 바다 소리가 들릴 것 같다.' },
@@ -283,6 +284,10 @@ export const ITEMS = [
   { key: 'kidneyBean',      name: '강낭콩',                  kind: '재료', cat: 'grain', price:    3, sell: true,  heal:  -1,  loot: false, desc: '날로 먹으면 배가 아프다. 푹 삶으면 포근하다.' },
   { key: 'basil',           name: '바질',                    kind: '재료', cat: 'spice', price:    3, sell: true,  heal:   2,  loot: false, desc: '잎을 문지르면 손에서 여름 냄새가 난다.' },
   { key: 'sesame',          name: '참깨',                    kind: '재료', cat: 'spice', price:    4, sell: true,  heal:   1,  loot: false, desc: '털면 쏟아진다. 볶으면 고소하다. 흘리면 못 줍는다.' },
+  { key: 'sunflower',       name: '해바라기',                kind: '재료', cat: 'grain', price:    4, sell: true,  heal:   2,  loot: false, desc: '키가 사람만 하다. 꽃판을 털면 씨가 쏟아진다. 옆 밭에 그늘을 드리운다.' },
+  { key: 'lavender',        name: '라벤더',                  kind: '재료', cat: 'spice', price:    6, sell: true,  heal:   2,  loot: false, desc: '밭 둑을 지나기만 해도 향이 따라온다. 옆에서 자라는 것들이 덩달아 좋아진다.' },
+  { key: 'koreanMelon',     name: '참외',                    kind: '재료', cat: 'fruit', price:    6, sell: true,  heal:   6,  loot: false, desc: '노랗고 줄무늬가 있다. 씨째로 먹는 사람과 긁어내는 사람이 있다.' },
+  { key: 'melon',           name: '멜론',                    kind: '재료', cat: 'fruit', price:   14, sell: true,  heal:   9,  loot: false, desc: '겉에 그물 무늬가 있다. 잘 익으면 꼭지 쪽에서 단내가 난다.' },
   { key: 'pepper',          name: '통후추',                   kind: '재료', cat: 'spice', price:   25, sell: true,  heal: -3,  shop: true,  loot: false, desc: '한 알에 은화 한 닢이던 시절도 있었다. 지금이 그 시절이다.' },
   { key: 'cinnamon',        name: '계피',                     kind: '재료', cat: 'spice', price:   20, sell: true,  heal: 0,   shop: true,  loot: false, desc: '나무껍질인데 비싸다. 향이 모든 걸 설명한다.' },
   { key: 'saffron',         name: '사프란',                   kind: '재료', cat: 'spice', price:   60, sell: true,  heal: 0,   shop: true,  loot: false, desc: '꽃술 세 가닥. 금보다 비싸다는 소문이 있다.' },

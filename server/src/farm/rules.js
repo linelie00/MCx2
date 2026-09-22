@@ -29,6 +29,7 @@
  *       scar     한 번이라도 시들었나 (3단계의 품질·거대 작물이 읽는다)
  *       ripeDay  다 자란 날. 있으면 더는 물이 필요 없고, 대신 과숙·썩음을 센다
  *       wet      마지막으로 물을 받은 날
+ *       regrows  재수확으로 다시 자란 횟수 — 재수확으로 거둔 칸은 농장 경험치가 절반이다(3c)
  *   { t: 'dead', why: 'dry' | 'rot' }               죽음. 치우면 빈 흙
  */
 const { CROPS, CROP_BY_KEY, seedPrice, gradeOf, YIELD } = require('./crops');
@@ -357,16 +358,19 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
     const [lo, hi] = crop ? YIELD[gradeOf(crop)][land.soilStar(p.soilXp) - 1] : [0, 0];
     // 궁합은 **거두기 전** 밭 모양으로 셈한다 — 거두다 이웃이 비면 값이 흔들린다.
     const mods = crop ? affinity.modsFor(farm, farm.plots.indexOf(p)) : null;
-    let here = 0;
+    let here = 0; let again = 0;
     p.cells.forEach((cell, i) => {
       if (cell.t === 'dead') { p.cells[i] = soil(); cleared += 1; farm.compostBits += 1; return; }
       if (cell.t === 'weed') { p.cells[i] = soil(); weeds += 1; farm.compostBits += 1; add('dandelion', 1); return; }
       if (cell.t !== 'plant' || !cell.ripeDay || !crop) return;
       add(crop.key, land.between(rand, lo, hi));
       here += 1;
+      if (cell.regrows) again += 1;
       if (crop.regrow) {
         // 새 한 철이다. 시든 흔적도 지운다.
-        Object.assign(cell, { g: round(crop.days - crop.regrow), thirst: 0, scar: false, ripeDay: null });
+        Object.assign(cell, {
+          g: round(crop.days - crop.regrow), thirst: 0, scar: false, ripeDay: null, regrows: (cell.regrows ?? 0) + 1,
+        });
       } else {
         p.cells[i] = soil();
       }
@@ -387,7 +391,8 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
       const base = here + (crop.family === 'legume' ? land.LEGUME_SOIL : 0);
       p.soilXp += Math.round(base * (mods?.soil ?? 1));
       if (!crop.regrow) p.streak = (p.streak ?? 0) + here;
-      xp += here * land.XP.harvest;
+      // 처음 거둔 칸은 1, 재수확으로 거둔 칸은 절반
+      xp += (here - again) * land.XP.harvest + again * land.XP.regrow;
       if (!farm.grown.includes(crop.key)) { farm.grown.push(crop.key); xp += land.XP.firstCrop; }
       harvested += here;
     }
@@ -585,7 +590,7 @@ function view(farm, today) {
     graceUntil: new Date(Date.parse(farm.createdAt) + GRACE_MS).toISOString(),
     today,
     level,
-    xp: farm.xp,
+    xp: Math.floor(farm.xp),     // 재수확 경험치가 절반이라 소수가 생긴다 — 화면엔 내림
     xpFloor: land.LEVEL_XP[level - 1],
     xpNext: land.nextLevelXp(level),
     sign: land.signOf(level),

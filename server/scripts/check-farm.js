@@ -236,7 +236,8 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('재수확 작물은 칸이 남는다', [cell(f).t, f.plots[P].crop], ['plant', 'cucumber']);
   at(f, 4); W(f, 4); at(f, 5); W(f, 5);
   eq('그다음엔 이틀 뒤 다시 익는다', rules.view(f, day(5)).plots[P].ripe, 3);
-  eq('두 번째부터는 첫 작물 보너스가 없다', rules.harvest(f, day(5), {}, { rand: ZERO }).xp, 3);
+  eq('재수확으로 거둔 칸은 경험치 절반 · 첫 작물 보너스 없음', rules.harvest(f, day(5), {}, { rand: ZERO }).xp, 1.5);
+  eq('재수확 횟수를 센다', cell(f).regrows, 2);
 }
 {
   const f = fresh();

@@ -33,6 +33,7 @@
  */
 const { CROPS, CROP_BY_KEY, seedPrice, gradeOf, YIELD } = require('./crops');
 const land = require('./land');
+const affinity = require('./affinity');
 
 /** 밭 수, 한 밭의 칸 수. 둘 다 3×3 이고 키패드 배치다(1 2 3 / 4 5 6 / 7 8 9). */
 const PLOTS = 9;
@@ -69,7 +70,9 @@ const addDays = (key, n) => keyOf(dayNum(key) + n);
 // ---------------------------------------------------------------- 만들기 · 레벨
 
 const soil = () => ({ t: 'soil' });
-const lockedPlot = () => ({ open: false, crop: null, soilXp: 0, cells: [] });
+const lockedPlot = () => ({
+  open: false, crop: null, soilXp: 0, history: [], streak: 0, cells: [],
+});
 
 /** 새 농장. 가운데 밭 하나만 열려 있고, 그 밭도 돌과 바위가 반을 넘는다. */
 function newFarm({ channelId, guildId, owner, today, now, rand = Math.random }) {
@@ -111,6 +114,8 @@ function upgrade(farm) {
   if (!farm.fert || typeof farm.fert !== 'object') farm.fert = { day: null, plots: {} };
   for (const p of farm.plots) {
     if (!Number.isFinite(p.soilXp)) p.soilXp = 0;
+    if (!Array.isArray(p.history)) p.history = [];     // 3a — 다 거두고 비운 작물 계열
+    if (!Number.isFinite(p.streak)) p.streak = 0;      // 3a — 비우지 않고 이어 거둔 칸 수
     if (!Array.isArray(p.cells)) p.cells = [];
     for (const c of p.cells) {
       if (c.t === 'plant' && c.wet === undefined) c.wet = farm.water.day ?? null;
@@ -141,10 +146,12 @@ function gainXp(farm, n, rand) {
   return { from, to, opened, crops };
 }
 
-/** 그 밭에서 물 한 번에 쌓이는 성장 — 토질 배율 × 잡초. */
-function rateOf(plot) {
+/** 그 밭에서 물 한 번에 쌓이는 성장 — 토질 배율 × 잡초 × 궁합·연작(`affinity.js`). */
+function rateOf(farm, pi) {
+  const plot = farm.plots[pi];
   const speed = land.SOIL_SPEED[land.soilStar(plot.soilXp) - 1];
-  return plot.cells.some((c) => c.t === 'weed') ? speed * land.WEED_SLOW : speed;
+  const weed = plot.cells.some((c) => c.t === 'weed') ? land.WEED_SLOW : 1;
+  return speed * weed * (affinity.modsFor(farm, pi)?.rate ?? 1);
 }
 
 const loseSoil = (plot, n) => { plot.soilXp = Math.max(0, (plot.soilXp ?? 0) - n); };
@@ -242,7 +249,7 @@ function water(farm, today, userId, { budget = Infinity, plot = null, rand = Mat
     if (cell.thirst >= WITHER) { revived += 1; cell.scar = true; }
     cell.thirst = 0;
     cell.wet = today;
-    cell.g = round(cell.g + rateOf(p));
+    cell.g = round(cell.g + rateOf(farm, pi));
     if (cell.g >= crop.days) { cell.ripeDay = today; ripened += 1; }
   }
 
@@ -291,6 +298,7 @@ function plant(farm, today, { plot, cells, crop }) {
       t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: today, wet: null,
     };
   }
+  if (p.crop !== crop) p.streak = 0;
   p.crop = crop;
   return { ok: true, cost: seedPrice(c) * cells.length, count: cells.length, crop };
 }
@@ -302,7 +310,9 @@ function plant(farm, today, { plot, cells, crop }) {
  *
  * 칸마다 **토질 ★ 과 작물 등급**으로 1~3개(§4). 품질은 3단계 — 지금은 전부 보통.
  * 재수확 작물은 칸이 남아 `regrow` 일 뒤에 다시 익는다.
- * 토질 경험: 거둔 칸마다 +1, 콩 계열 밭이면 한 번에 +10. 농장 경험치: 칸마다 +1, 처음 거둔 작물 +10.
+ * 토질 경험: 거둔 칸마다 +1, 콩 계열 밭이면 한 번에 +10 — 여기에 윤작 ×1.5 · 연작 ×0 · 콩 이웃 ×1.5
+ * (`affinity.js`). 농장 경험치: 칸마다 +1, 처음 거둔 작물 +10.
+ * 밭이 다 비면 그 작물 계열을 `history` 에 적는다(최근 셋) — 다음 작물의 윤작·연작이 이걸 본다.
  * 잡초는 민들레 하나와 퇴비 조각, 죽은 칸은 퇴비 조각.
  */
 function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {}) {
@@ -316,6 +326,8 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
   for (const p of targets) {
     const crop = CROP_BY_KEY[p.crop];
     const [lo, hi] = crop ? YIELD[gradeOf(crop)][land.soilStar(p.soilXp) - 1] : [0, 0];
+    // 궁합은 **거두기 전** 밭 모양으로 셈한다 — 거두다 이웃이 비면 값이 흔들린다.
+    const mods = crop ? affinity.modsFor(farm, farm.plots.indexOf(p)) : null;
     let here = 0;
     p.cells.forEach((cell, i) => {
       if (cell.t === 'dead') { p.cells[i] = soil(); cleared += 1; farm.compostBits += 1; return; }
@@ -331,12 +343,18 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
       }
     });
     if (here) {
-      p.soilXp += here + (crop.family === 'legume' ? land.LEGUME_SOIL : 0);
+      const base = here + (crop.family === 'legume' ? land.LEGUME_SOIL : 0);
+      p.soilXp += Math.round(base * (mods?.soil ?? 1));
+      if (!crop.regrow) p.streak = (p.streak ?? 0) + here;
       xp += here * land.XP.harvest;
       if (!farm.grown.includes(crop.key)) { farm.grown.push(crop.key); xp += land.XP.firstCrop; }
       harvested += here;
     }
-    if (p.cells.every((cell) => cell.t === 'soil')) p.crop = null;
+    if (p.crop && p.cells.every((cell) => cell.t === 'soil')) {
+      if (crop && !crop.perennial) p.history = [...(p.history ?? []), crop.family].slice(-3);
+      p.crop = null;
+      p.streak = 0;
+    }
   }
   if (!harvested && !cleared && !weeds) return { ok: false, reason: 'nothing' };
   const levelUp = gainXp(farm, xp, rand);
@@ -532,7 +550,9 @@ function view(farm, today) {
       const growing = p.cells.filter((cell) => cell.t === 'plant' && !cell.ripeDay);
       const dry = growing.filter((cell) => cell.wet !== today);
       const star = land.soilStar(p.soilXp);
-      const rate = p.open ? rateOf(p) : 1;
+      const pi = farm.plots.indexOf(p);
+      const rate = p.open ? rateOf(farm, pi) : 1;
+      const mods = p.open ? affinity.modsFor(farm, pi) : null;
       const swings = {};
       p.cells.forEach((cell, i) => { if (cell.t === 'boulder') swings[i] = cell.swings; });
       return {
@@ -551,7 +571,9 @@ function view(farm, today) {
           ? Math.min(...growing.map((cell) => Math.max(0, Math.ceil(round((crop.days - cell.g) / rate)))))
           : null,
         swings,
-        fert: p.open ? fertToday(farm, today, farm.plots.indexOf(p)) : {},
+        fert: p.open ? fertToday(farm, today, pi) : {},
+        history: p.history ?? [],
+        mods: mods && { growth: mods.growth, rate: round(mods.rate), quality: mods.quality, soil: mods.soil, rotation: mods.rotation, notes: mods.notes },
       };
     }),
   };

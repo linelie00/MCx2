@@ -11,13 +11,14 @@
  * `key` 는 곧 수확물의 아이템 키다. **바꾸지 않는다.**
  *
  *   lv      심을 수 있게 되는 농장 레벨
- *   family  계열(docs/FARM.md §5). 2단계는 콩 계열(토질 경험 +10)만 읽는다 — 궁합·윤작은 3단계
+ *   family  계열(docs/FARM.md §5). 이웃 궁합·윤작·연작(`affinity.js`)과 콩 토질(+10)이 읽는다
  *   days    기본 성장일. 물을 받을 때마다 토질 배율만큼 쌓여 이만큼이 되면 다 자란다
  *           (docs/FARM.md §4 — 기본가 구간 + 작물 성격 보정)
  *   regrow  재수확. 거둔 뒤 이만큼 뒤에 다시 다 자란다. 없으면 거두면 칸이 빈다
+ *   tall    키가 크다 — 이웃 밭에 그늘을 드리운다(버섯·잎 +10%, 열매·박 −5%, `affinity.js`)
  *
  * 특수 규칙이 있는 작물(박하 퍼짐 · 쌀 물 욕심 · 해바라기·옥수수 그늘 · 과수)은 그 규칙이
- * 들어오는 단계에서 넣는다. 옥수수는 그늘 없이 먼저 심는다.
+ * 들어오는 단계에서 넣는다.
  */
 const CROPS = [
   // ---- Lv1
@@ -40,7 +41,7 @@ const CROPS = [
   // ---- Lv3
   { key: 'eggplant',    name: '가지',     lv: 3, family: 'fruitveg', price: 3, days: 3, regrow: 2, emoji: '🍆' },
   { key: 'sweetPotato', name: '고구마',   lv: 3, family: 'root',     price: 3, days: 4,            emoji: '🍠' },
-  { key: 'corn',        name: '옥수수',   lv: 3, family: 'grain',    price: 3, days: 4,            emoji: '🌽' },
+  { key: 'corn',        name: '옥수수',   lv: 3, family: 'grain',    price: 3, days: 4, tall: true, emoji: '🌽' },
   { key: 'chili',       name: '고추',     lv: 3, family: 'fruitveg', price: 4, days: 4, regrow: 2, emoji: '🌶️' },
   { key: 'turnip',      name: '순무',     lv: 3, family: 'root',     price: 3, days: 3,            emoji: '🟣' },
   { key: 'oats',        name: '귀리',     lv: 3, family: 'grain',    price: 3, days: 3,            emoji: '🌾' },

@@ -35,6 +35,7 @@ const { dayKey } = require('../services/dayKey');
 const { CROPS, CROP_BY_KEY, publicCrop } = require('../farm/crops');
 const rules = require('../farm/rules');
 const land = require('../farm/land');
+const affinity = require('../farm/affinity');
 
 /** 디스코드 id(유저·채널·길드). NPC 는 농장을 안 가진다. */
 const SNOWFLAKE = /^\d{5,25}$/;
@@ -157,6 +158,34 @@ exports.get = (req, res) => {
   const user = String(req.query.user ?? '');
   const me = user === f.owner ? meFor(data, f, user, today) : null;
   return res.json({ farm: rules.view(f, today), me, today });
+};
+
+/**
+ * GET /api/farms/:channelId/preview?plot=&crop= — 그 밭에 그 작물을 심으면 걸리는 궁합·연작.
+ * `crop` 을 빼면 모든 작물의 요약(`all`)을 준다.
+ *
+ * 심기 창이 부른다. 셈은 서버가 한다 — 봇이 궁합표를 다시 갖지 않게. 쓰지 않는다.
+ */
+exports.preview = (req, res) => {
+  const channelId = String(req.params.channelId);
+  if (!SNOWFLAKE.test(channelId)) return res.status(400).json({ error: 'channelId 모양이 아닙니다' });
+  const plot = Number(req.query.plot);
+  const crop = req.query.crop == null ? null : String(req.query.crop);
+  if (!Number.isInteger(plot) || plot < 0 || plot >= rules.PLOTS) return res.status(400).json({ error: BAD.plot });
+  if (crop !== null && !CROP_BY_KEY[crop]) return res.status(400).json({ error: BAD.crop });
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const farm = data.farms[channelId];
+  if (!farm) return res.json({ mods: null, all: null });
+  const f = current(farm, dayKey());
+  if (crop !== null) return res.json({ mods: affinity.modsFor(f, plot, crop) });
+  // 작물을 안 주면 **모든 작물의 요약** — 심기 셀렉트가 줄마다 🤝/⚔️ 를 붙인다. 한 번에 준다.
+  const all = {};
+  for (const c of CROPS) {
+    const m = affinity.modsFor(f, plot, c.key);
+    if (m) all[c.key] = { rate: Math.round(m.rate * 1000) / 1000, quality: m.quality, rotation: m.rotation };
+  }
+  return res.json({ all });
 };
 
 /** GET /api/farms/by-owner/:userId — 그 사람의 농장. 채널이 지워졌어도 찾는다. */

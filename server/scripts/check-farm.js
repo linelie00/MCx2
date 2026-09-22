@@ -19,6 +19,7 @@ process.env.BOT_KEY = 'test-key';
 
 const rules = require('../src/farm/rules');
 const land = require('../src/farm/land');
+const affinity = require('../src/farm/affinity');
 const { CROPS, seedPrice, guaranteed } = require('../src/farm/crops');
 const { dayKey } = require('../src/services/dayKey');
 
@@ -305,6 +306,76 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('완벽 두 번 뽑기 중 화석은 하나만', [r.fossils, r.loot], [1, { oddFossil: 1, crackleStone: 1 }]);
 }
 
+// --- 3a: 궁합 · 세 자매 · 윤작과 연작
+{
+  /** 원하는 밭에 원하는 작물이 심긴 농장. `{ 밭: 작물 }` */
+  const layout = (map, { history = {} } = {}) => {
+    const f = fresh();
+    for (const [pi, crop] of Object.entries(map)) {
+      f.plots[pi] = {
+        open: true, crop, soilXp: 0, history: history[pi] ?? [], streak: 0,
+        cells: Array.from({ length: 9 }, () => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: D0, wet: null })),
+      };
+    }
+    return f;
+  };
+  eq('이웃은 상하좌우', [affinity.neighbors(4).sort(), affinity.neighbors(0).sort(), affinity.neighbors(8).sort()], [[1, 3, 5, 7], [1, 3], [5, 7]]);
+
+  const alone = affinity.modsFor(layout({ 4: 'carrot' }), 4);
+  eq('이웃이 없으면 보정 없음', [alone.growth, alone.rate, alone.quality, alone.soil, alone.rotation, alone.notes], [0, 1, 0, 1, null, []]);
+
+  const onionCarrot = affinity.modsFor(layout({ 4: 'carrot', 1: 'onion' }), 4);
+  eq('파속 이웃 → 뿌리 +10% · 품질 +5', [onionCarrot.growth, onionCarrot.quality, onionCarrot.notes[0].good], [0.1, 5, true]);
+  eq('대각선은 안 본다', affinity.modsFor(layout({ 4: 'carrot', 0: 'onion' }), 4).growth, 0);
+  eq('박끼리 −10%', affinity.modsFor(layout({ 4: 'cucumber', 5: 'pumpkin' }), 4).growth, -0.1);
+  eq('콩 이웃 → 잎 +10% · 토질 ×1.5', [affinity.modsFor(layout({ 4: 'lettuce', 3: 'soybean' }), 4).growth, affinity.modsFor(layout({ 4: 'lettuce', 3: 'soybean' }), 4).soil], [0.1, 1.5]);
+  eq('옥수수 그늘 → 잎 +10% · 열매 −5%', [affinity.modsFor(layout({ 4: 'lettuce', 1: 'corn' }), 4).growth, affinity.modsFor(layout({ 4: 'tomato', 1: 'corn' }), 4).growth], [0.1, -0.05]);
+  eq('허브 이웃 → 열매 품질 +5', affinity.modsFor(layout({ 4: 'tomato', 1: 'basil' }), 4).quality, 5);
+
+  // 세 자매 — 옥수수(4) · 콩(1) · 박(5): 4-1, 4-5 가 맞닿음
+  const sis = layout({ 4: 'corn', 1: 'soybean', 5: 'cucumber' });
+  eq('세 자매 — 옥수수', affinity.threeSisters(sis, 4, CROPS.find((c) => c.key === 'corn')), true);
+  eq('세 자매 — 끝의 박도 받는다(콩과는 안 맞닿아도 이어져 있다)', affinity.threeSisters(sis, 5, CROPS.find((c) => c.key === 'cucumber')), true);
+  const m = affinity.modsFor(sis, 4);
+  eq('세 자매 +20% + 콩 이웃 +10% = +30%', [m.growth, m.quality], [0.3, 10]);
+  eq('떨어져 있으면 세 자매가 아니다', affinity.threeSisters(layout({ 4: 'corn', 1: 'soybean', 8: 'cucumber' }), 4, CROPS.find((c) => c.key === 'corn')), false);
+  const many = affinity.modsFor(layout({ 4: 'carrot', 1: 'onion', 3: 'garlic', 5: 'greenOnion', 7: 'onion' }), 4);
+  eq('궁합은 +30% 에서 자른다', [many.growth, many.rate, many.notes.some((n) => n.text.includes('까지만'))], [0.3, 1.3, true]);
+
+  // 윤작 · 연작
+  const same = affinity.modsFor(layout({ 4: 'carrot' }, { history: { 4: ['leaf', 'root'] } }), 4);
+  eq('연작 — ×0.85 · 품질 −10 · 토질 0', [same.rotation, same.rate, same.quality, same.soil], ['same', 0.85, -10, 0]);
+  const varied = affinity.modsFor(layout({ 4: 'carrot' }, { history: { 4: ['leaf', 'legume'] } }), 4);
+  eq('윤작 — 품질 +10 · 토질 ×1.5', [varied.rotation, varied.quality, varied.soil], ['varied', 10, 1.5]);
+  eq('기록이 하나면 윤작도 아니다', affinity.modsFor(layout({ 4: 'carrot' }, { history: { 4: ['leaf'] } }), 4).rotation, null);
+  const streak = layout({ 4: 'carrot' });
+  streak.plots[4].streak = 9;
+  eq('비우지 않고 아홉 칸 넘게 거두면 연작', affinity.modsFor(streak, 4).rotation, 'same');
+  const regrow = layout({ 4: 'cucumber' });
+  regrow.plots[4].streak = 30;
+  eq('재수확 작물은 이어 거둬도 연작이 아니다', affinity.modsFor(regrow, 4).rotation, null);
+  eq('미리보기 — 다른 작물을 심으면', affinity.modsFor(layout({ 4: 'carrot' }, { history: { 4: ['root'] } }), 4, 'lettuce').rotation, null);
+
+  // 규칙에 붙었나 — 성장 · 수확 토질 · history
+  const g = layout({ 4: 'carrot', 1: 'onion' });
+  rules.water(g, D0, 'u1', { budget: 1, plot: 4 });
+  eq('물 한 번에 궁합만큼 자란다', g.plots[4].cells[0].g, 1.1);
+  const v = rules.view(g, D0).plots[4].mods;
+  eq('보기에 궁합이 실린다', [v.growth, v.rate, v.notes.length], [0.1, 1.1, 1]);
+  const h = fresh();
+  rules.plant(h, D0, { plot: P, cells: [0], crop: 'potato' });
+  W(h, 0); at(h, 1); W(h, 1);
+  rules.harvest(h, day(1), {}, { rand: ZERO });
+  eq('밭이 비면 history 에 계열을 적는다', h.plots[P].history, ['root']);
+  rules.plant(h, day(1), { plot: P, cells: [0], crop: 'carrot' });
+  eq('같은 계열을 또 심으면 연작', rules.view(h, day(1)).plots[P].mods.rotation, 'same');
+  h.plots[P].soilXp = 0;
+  W(h, 1); at(h, 2); W(h, 2); at(h, 3); W(h, 3); at(h, 4); W(h, 4);
+  rules.harvest(h, day(4), {}, { rand: ZERO });
+  eq('연작 수확은 토질 경험이 없다', h.plots[P].soilXp, 0);
+  eq('history 는 최근 셋까지', (() => { const x = fresh(); x.plots[P].history = ['a', 'b', 'c']; rules.plant(x, D0, { plot: P, cells: [0], crop: 'potato' }); W(x, 0); at(x, 1); W(x, 1); rules.harvest(x, day(1), {}, { rand: ZERO }); return x.plots[P].history; })(), ['b', 'c', 'root']);
+}
+
 // --- 2b: 거름 · 퇴비 · 곡괭이
 {
   const f = fresh();
@@ -361,6 +432,7 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('옛 농장: 물 준 사람은 배열로', up.water.by, ['guest']);
   eq('옛 농장: 칸마다 wet 을 옮긴다', up.plots[P].cells.slice(0, 4).map((c) => c.wet), [D0, D0, D0, D0]);
   eq('옛 농장: 경험치·토질·퇴비는 0', [up.xp, up.plots[P].soilXp, up.plots[0].soilXp, up.compostBits, up.grown, up.fert], [0, 0, 0, 0, [], { day: null, plots: {} }]);
+  eq('옛 농장: history · streak', [up.plots[P].history, up.plots[P].streak], [[], 0]);
   eq('upgrade 는 두 번 해도 같다', rules.upgrade(structuredClone(up)), up);
   eq('옛 농장: 오늘은 물을 다 줬다', rules.water(structuredClone(up), D0, 'o').reason, 'already');
   const t = rules.tick(rules.upgrade(structuredClone(old)), day(1));
@@ -514,6 +586,16 @@ const server = app.listen(0, async () => {
     eq('공개 화면에는 결도 후보도 없다', JSON.stringify((await hit(`/farms/${CH2}`)).body).includes('candidates'), false);
     const miss2 = (await post('/farms/clear', { channelId: CH2, userId: W2, plot: 4, cell: 8, pos: 5 })).body;
     eq('미스릴도 빗나가면 거리를 준다', miss2.hint, { dir: 'left', near: false, dist: 3 });
+
+    // --- 3a: 궁합 미리보기
+    const pv = (await hit(`/farms/${CH2}/preview?plot=4&crop=carrot`)).body.mods;
+    eq('미리보기', [typeof pv.rate, Array.isArray(pv.notes)], ['number', true]);
+    eq('미리보기 — 모르는 작물 400', (await hit(`/farms/${CH2}/preview?plot=4&crop=rose`)).status, 400);
+    const pall = (await hit(`/farms/${CH2}/preview?plot=4`)).body.all;
+    eq('미리보기 — 작물을 안 주면 전부', [Object.keys(pall).length, typeof pall.carrot.rate], [CROPS.length, 'number']);
+    eq('미리보기 — 밭 번호 400', (await hit(`/farms/${CH2}/preview?plot=9&crop=carrot`)).status, 400);
+    eq('미리보기 — 없는 농장', (await hit(`/farms/2999999/preview?plot=4&crop=carrot`)).body.mods, null);
+    eq('보기에 궁합이 실린다', 'mods' in (await hit(`/farms/${CH2}`)).body.farm.plots[4], true);
 
     // --- 1단계에 연 농장이 파일에 있을 때
     const d5 = readFile();

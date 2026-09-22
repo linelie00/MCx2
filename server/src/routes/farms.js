@@ -17,6 +17,7 @@ router.get('/crops', requireBot, ctrl.crops);
 router.get('/by-owner/:userId', requireBot, ctrl.byOwner);
 router.get('/tools/:userId', requireBot, ctrl.tools);
 router.get('/:channelId', requireBot, ctrl.get);
+router.get('/:channelId/preview', requireBot, ctrl.preview);
 router.post('/register', requireBot, express.json(), ctrl.register);
 router.post('/abandon', requireBot, express.json(), ctrl.abandon);
 router.post('/water', requireBot, express.json(), ctrl.water);

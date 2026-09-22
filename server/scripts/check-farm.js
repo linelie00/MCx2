@@ -21,6 +21,12 @@ const rules = require('../src/farm/rules');
 const land = require('../src/farm/land');
 const affinity = require('../src/farm/affinity');
 const quality = require('../src/farm/quality');
+const weather = require('../src/farm/weather');
+
+// 날씨·제철을 고정한다(맑음 · 모두 제철) — 날씨 전에 짠 검사가 날짜마다 흔들리지 않게.
+// 날씨 검사는 아래 「4a」 에서 따로 바꿔 가며 본다.
+const NEUTRAL = { weather: 'clear', inSeason: true };
+weather.pin(NEUTRAL);
 const { CROPS, seedPrice, guaranteed } = require('../src/farm/crops');
 const { dayKey } = require('../src/services/dayKey');
 
@@ -43,7 +49,7 @@ eq('희귀 작물은 씨앗값이 없다(주머니 씨앗)', CROPS.filter((c) =>
 eq('희귀 씨앗 목록 = seedOnly 작물', [...land.RARE_SEEDS].sort(), CROPS.filter((c) => c.seedOnly).map((c) => c.key).sort());
 eq('보장 이익은 성장일의 절반(올림)', CROPS.filter((c) => guaranteed(c) !== Math.min(Math.ceil(c.days / 2), c.price - 1)).map((c) => c.key), []);
 eq('키가 안 겹친다', new Set(CROPS.map((c) => c.key)).size, CROPS.length);
-eq('레벨은 1~8', CROPS.filter((c) => !(c.lv >= 1 && c.lv <= 8)).map((c) => c.key), []);
+eq('레벨은 1~10', CROPS.filter((c) => !(c.lv >= 1 && c.lv <= 10)).map((c) => c.key), []);
 eq('특수 규칙이 있으면 안내 문구가 있다', CROPS.filter((c) => (c.thirsty || c.spread || c.flee || c.scream || c.shadeNeed || c.perennial || c.seedOnly) && !c.note).map((c) => c.key), []);
 eq('다년생은 재수확 작물이다', CROPS.filter((c) => c.perennial && !c.regrow).map((c) => c.key), []);
 eq('Lv1 작물 여덟(희귀 빼고)', CROPS.filter((c) => c.lv === 1 && !c.seedOnly).length, 8);
@@ -55,7 +61,8 @@ eq('처음 성장일은 재수확 간격의 두 배 이상', CROPS.filter((c) =>
 eq('해시 난수는 늘 같다', land.hashRand('a', 1), land.hashRand('a', 1));
 eq('해시 난수는 [0,1)', [land.hashRand('x'), land.hashRand('y', 2)].every((x) => x >= 0 && x < 1), true);
 eq('토질 ★', [0, 19, 20, 60, 299, 300, 9999].map(land.soilStar), [1, 1, 2, 3, 4, 5, 5]);
-eq('레벨', [0, 19, 20, 50, 1049, 1050, 99999].map(land.levelOf), [1, 1, 2, 3, 9, 10, 10]);
+eq('레벨', [0, 19, 20, 50, 819, 820, 99999].map(land.levelOf), [1, 1, 2, 3, 9, 10, 10]);
+eq('레벨표는 오르기만 한다', land.LEVEL_XP.every((x, i) => !i || x > land.LEVEL_XP[i - 1]), true);
 eq('간판', [1, 3, 6, 9, 10].map(land.signOf), ['🛖', '🏠', '🏡', '🏯', '🏰']);
 eq('기력 Lv1 5 · Lv3 6', [land.staminaOf(1), land.staminaOf(3)], [5, 6]);
 eq('밭이 열리는 순서는 아홉 칸 전부', [...land.PLOT_ORDER].sort(), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
@@ -573,6 +580,81 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('수확 분포', rules.harvest(giantFarm(), D0, {}, { rand: seq(0.99, 0, 0.999) }).grades.radish.reduce((a, n) => a + n, 0), 9);
 }
 
+// --- 4a: 계절 · 날씨
+{
+  weather.pin(null);                                 // 여기서만 진짜 날씨
+  eq('2026-09-21 은 가을 1일째', [weather.seasonOf('2026-09-21').key, weather.seasonOf('2026-09-21').day], ['autumn', 1]);
+  eq('2주 뒤는 겨울 · 그 전 2주는 여름', [weather.seasonOf('2026-10-05').key, weather.seasonOf('2026-09-20').key], ['winter', 'summer']);
+  eq('8주가 1년', weather.seasonOf('2026-11-16').key, 'autumn');
+  eq('계절 확률표는 합이 100', Object.values(weather.TABLE).map((t) => Object.values(t).reduce((a, n) => a + n, 0)), [100, 100, 100, 100]);
+  eq('날씨는 늘 같다', weather.weatherOf('2027-01-05').key, weather.weatherOf('2027-01-05').key);
+  const days = Array.from({ length: 800 }, (_, n) => rules.addDays('2026-09-21', n));
+  eq('겨울엔 폭염이 없다', days.filter((d) => weather.seasonOf(d).key === 'winter').some((d) => weather.weatherOf(d).key === 'heat'), false);
+  eq('무지개는 비 온 다음 날에만', days.filter((d) => weather.weatherOf(d).key === 'rainbow').every((d) => weather.weatherOf(rules.addDays(d, -1)).water), true);
+  eq('폭염엔 한 포기에 체력 2', [weather.hpCost(days.find((d) => weather.weatherOf(d).key === 'heat')), weather.hpCost(days.find((d) => weather.weatherOf(d).key === 'clear'))], [2, 1]);
+  const lettuce = CROPS.find((c) => c.key === 'lettuce');
+  const winterDay = days.find((d) => weather.seasonOf(d).key === 'winter');
+  eq('상추는 겨울에 제철이 아니다', weather.inSeason(lettuce, winterDay), false);
+  eq('겨울 보강 — 당근·양배추·비트·딸기는 겨울 제철', ['carrot', 'cabbage', 'beet', 'strawberry'].every((k) => weather.inSeason(CROPS.find((c) => c.key === k), winterDay)), true);
+  eq('향송이와 희귀는 사계절', ['pineMushroom', 'screamRoot', 'walkingCap', 'keeperBerry'].every((k) => weather.allSeasons(CROPS.find((c) => c.key === k))), true);
+  eq('제철 작물 수', weather.SEASONS.map((x) => CROPS.filter((c) => c.seasons.includes(x.key)).length).every((n) => n >= 15), true);
+
+  // 날씨를 골라 가며 규칙을 본다
+  const on = (map) => weather.pin({ weather: (d) => map[d] ?? 'clear', inSeason: true });
+  on({ [day(1)]: 'rain' });
+  const r1 = fresh();
+  for (let i = 1; i < 9; i += 1) r1.plots[P].cells[i] = { t: 'rock' };   // 잡초(×0.95)가 끼지 않게
+  rules.plant(r1, D0, { plot: P, cells: [0], crop: 'carrot' });
+  W(r1, 0);
+  const t1 = rules.tick(structuredClone(r1), day(1));
+  eq('비 오는 날엔 물을 안 줘도 자라고 안 목마르다', [cell(t1).g, cell(t1).thirst, cell(t1).wet], [2, 0, day(1)]);
+  eq('비 오는 날 물주기 → rain', rules.water(t1, day(1), 'u1').reason, 'rain');
+  eq('오늘 비는 두 번 셈해도 같다', rules.tick(structuredClone(t1), day(1)), t1);
+  at(r1, 3);
+  eq('비 온 다음 날은 물을 받은 셈 · 그다음 날부터 목마르다', cell(r1).thirst, 1);
+
+  on({ [D0]: 'cloudy' });
+  const c1 = fresh();
+  rules.plant(c1, D0, { plot: P, cells: [0], crop: 'carrot' });
+  W(c1, 0);
+  eq('흐리면 ×0.9', cell(c1).g, 0.9);
+
+  weather.pin({ weather: 'clear', inSeason: false });
+  const o1 = fresh();
+  rules.plant(o1, D0, { plot: P, cells: [0], crop: 'carrot' });
+  W(o1, 0);
+  eq('제철이 아니면 ×0.7', cell(o1).g, 0.7);
+  eq('제철이 아니면 보기에 표시', rules.view(o1, D0).plots[P].inSeason, false);
+  eq('제철 품질 몫', [weather.qualityOf(lettuce, D0)], [weather.OFF_SEASON_QUALITY]);
+
+  on({ [day(1)]: 'frost' });
+  weather.pin({ weather: (d) => (d === day(1) ? 'frost' : 'clear'), inSeason: false });
+  const f1 = fresh();
+  rules.plant(f1, D0, { plot: P, cells: [0], crop: 'carrot' });
+  W(f1, 0); at(f1, 1); W(f1, 1); at(f1, 2);
+  eq('서리 — 제철이 아닌 칸이 물을 받았어도 상한다', cell(f1).thirst, 1);
+
+  on({ [day(1)]: 'storm' });
+  const s1 = fresh();
+  s1.xp = land.LEVEL_XP[2];
+  rules.plant(s1, D0, { plot: P, cells: [0, 1, 2, 3, 4, 5, 6, 7, 8], crop: 'corn' });
+  W(s1, 0); at(s1, 1); W(s1, 1); at(s1, 2);
+  const fell = s1.plots[P].cells.filter((c) => c.scar).length;
+  eq('폭풍 — 옥수수 일부가 쓰러져 시든 흔적', fell > 0 && fell < 9, true);
+  eq('쓰러진 칸은 🍂', rules.view(s1, day(2)).plots[P].cells.filter((x) => x === 'dry').length, fell);
+
+  const hot = CROPS.find((c) => c.key === 'dragonChili');
+  const moon = CROPS.find((c) => c.key === 'moonHerb');
+  const rice = CROPS.find((c) => c.key === 'rice');
+  on({ [D0]: 'heat', [day(1)]: 'rain', [day(2)]: 'cloudy' });
+  eq('용의 고추 폭염 ×2 · 쌀 비 ×1.2 · 월광초 흐리면 0', [weather.growthOf(hot, D0), weather.growthOf(rice, day(1)), weather.growthOf(moon, day(2)), weather.growthOf(moon, day(3))], [2, 1.2, 0, 1]);
+  on({ [D0]: 'downpour' });
+  eq('폭우 날 뿌리 품질 −10', weather.qualityOf(CROPS.find((c) => c.key === 'carrot'), D0), 0);
+  on({ [D0]: 'rainbow' });
+  eq('무지개 날 품질 +10', weather.qualityOf(lettuce, D0), 20);
+  weather.pin(NEUTRAL);
+}
+
 // --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
 {
   // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
@@ -591,6 +673,10 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('옛 농장: 칸마다 wet 을 옮긴다', up.plots[P].cells.slice(0, 4).map((c) => c.wet), [D0, D0, D0, D0]);
   eq('옛 농장: 경험치·토질·퇴비는 0', [up.xp, up.plots[P].soilXp, up.plots[0].soilXp, up.compostBits, up.grown, up.fert], [0, 0, 0, 0, [], { day: null, plots: {} }]);
   eq('옛 농장: history · streak', [up.plots[P].history, up.plots[P].streak], [[], 0]);
+  const behind = structuredClone(old); behind.xp = land.LEVEL_XP[2];          // Lv3 인데 밭은 하나
+  const caught = rules.upgrade(structuredClone(behind));
+  eq('레벨보다 덜 열린 밭은 읽을 때 연다(돌투성이로)', [caught.plots[1].open, caught.plots[3].open, caught.plots[1].cells.some((c) => c.t === 'rock' || c.t === 'boulder')], [true, true, true]);
+  eq('그 밭은 몇 번 읽어도 같다', rules.upgrade(structuredClone(behind)).plots[1], caught.plots[1]);
   eq('upgrade 는 두 번 해도 같다', rules.upgrade(structuredClone(up)), up);
   eq('옛 농장: 오늘은 물을 다 줬다', rules.water(structuredClone(up), D0, 'o').reason, 'already');
   const t = rules.tick(rules.upgrade(structuredClone(old)), day(1));
@@ -797,6 +883,22 @@ const server = app.listen(0, async () => {
     eq('도감 — 비명 뿌리 세 번 거둠', [bk.book.screamRoot?.n, bk.total], [3, CROPS.length]);
     eq('도감 — 이상한 id 400', (await hit('/farms/book/abc')).status, 400);
     eq('도감 — 안 키운 사람은 빈 도감', (await hit('/farms/book/1999999')).body.book, {});
+
+    // --- 4a: 날씨 · 폭염 체력
+    const wf = (await hit('/farms/weather?days=3')).body;
+    eq('날씨 라우트', [typeof wf.today.weather.key, wf.tomorrow.day, wf.ahead.length, Array.isArray(wf.inSeason)], ['string', rules.addDays(dayKey(), 1), 3, true]);
+    weather.pin({ weather: 'heat', inSeason: true });
+    const d20 = readFile();
+    d20.farms[CH2].plots[4].cells = d20.farms[CH2].plots[4].cells.map(() => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: dayKey(), wet: null }));
+    d20.farms[CH2].plots[4].crop = 'carrot';
+    writeFile(d20);
+    await post('/accounts/deltas', { hp: { [W2]: 100 } });
+    await post('/accounts/deltas', { hp: { [W2]: -94 } });      // 체력 6 → 폭염이면 (6−1)/2 = 2포기
+    const hw = (await post('/farms/water', { channelId: CH2, userId: W2 })).body;
+    eq('폭염 — 한 포기에 체력 2', [hw.cost, hw.watered, hw.hp], [2, 2, 2]);
+    weather.pin({ weather: 'rain', inSeason: true });
+    eq('비 오는 날 — 물주기는 rain', (await post('/farms/water', { channelId: CH2, userId: W2 })).body.reason, 'rain');
+    weather.pin(NEUTRAL);
 
     // --- 1단계에 연 농장이 파일에 있을 때
     const d5 = readFile();

@@ -43,6 +43,7 @@ const { CROPS, CROP_BY_KEY, publicCrop } = require('../farm/crops');
 const rules = require('../farm/rules');
 const land = require('../farm/land');
 const affinity = require('../farm/affinity');
+const weather = require('../farm/weather');
 
 /** 디스코드 id(유저·채널·길드). NPC 는 농장을 안 가진다. */
 const SNOWFLAKE = /^\d{5,25}$/;
@@ -310,8 +311,9 @@ function farmFor(data, channelId, today, res) {
 /**
  * POST /api/farms/water — `{ channelId, userId, plot? }`. **누구나** 줄 수 있다.
  *
- * 한 포기에 체력 1. 줄 수 있는 것은 `hp − 1` 포기까지다. 모자라면 급한 칸(시든 칸 → 목마른 칸)
- * 부터 주고 나머지는 남긴다 — 다른 사람이 이어서 줄 수 있다.
+ * 한 포기에 체력 1 — **폭염이면 2**(4a). 체력은 1 을 남기고 줄 수 있는 만큼만. 모자라면 급한 칸
+ * (시든 칸 → 목마른 칸)부터 주고 나머지는 남긴다 — 다른 사람이 이어서 줄 수 있다.
+ * 비·폭우인 날은 비가 이미 줬다(`reason: 'rain'`).
  * 계정에는 체력과 전적(`farmWater`, 남의 농장이면 `farmHelp`)이 같이 나간다.
  */
 exports.water = (req, res) => {
@@ -329,14 +331,15 @@ exports.water = (req, res) => {
   const farm = farmFor(data, channelId, today, res);
   if (!farm) return undefined;
   const hp = load(acctData, userId, today).hp;
-  const r = rules.water(farm, today, userId, { budget: Math.max(0, hp - KEEP_HP), plot });
+  const cost = weather.hpCost(today);
+  const r = rules.water(farm, today, userId, { budget: Math.floor(Math.max(0, hp - KEEP_HP) / cost), plot });
   if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
-  if (!r.ok) return res.json({ ...r, hp, farm: rules.view(farm, today), today });
+  if (!r.ok) return res.json({ ...r, hp, cost, farm: rules.view(farm, today), today });
 
   // 계정 먼저 — 체력은 자원이다(§ 머리말 2). 여기서 실패하면 물은 안 준 채로 끝난다.
   const helper = userId !== farm.owner;
   const acct = touch(acctData, userId, today, (a) => {
-    a.hp -= r.watered;
+    a.hp -= r.watered * cost;
     bump(a, 'farmWater');
     if (helper) bump(a, 'farmHelp');
   });
@@ -345,7 +348,7 @@ exports.water = (req, res) => {
   if (!save(farmStore, data, res, '농장')) return undefined;
 
   return res.json({
-    ...r, helper, hp: acct.hp, account: publicView(acct), farm: rules.view(farm, today), today,
+    ...r, helper, cost, hp: acct.hp, account: publicView(acct), farm: rules.view(farm, today), today,
   });
 };
 
@@ -633,6 +636,26 @@ exports.pickaxe = (req, res) => {
   if (!save(farmStore, data, res, '농장')) return undefined;
   return res.json({
     ok: true, tool: next.key, paid: { gold: next.gold, items: take }, account: publicView(acct), today,
+  });
+};
+
+/**
+ * GET /api/farms/weather — 오늘·내일 날씨와 계절, 오늘 제철인 작물(4a). 모든 농장이 같다.
+ * `?days=n` 이면 앞으로 n 일(최대 14)의 날씨도.
+ */
+exports.weather = (req, res) => {
+  const today = dayKey();
+  const days = Math.max(0, Math.min(14, Number(req.query.days) || 0));
+  const ahead = [];
+  for (let n = 0; n < days; n += 1) {
+    const day = rules.addDays(today, n);
+    ahead.push({ day, weather: weather.weatherOf(day), season: weather.seasonOf(day) });
+  }
+  return res.json({
+    ...weather.forecast(today),
+    inSeason: CROPS.filter((c) => weather.inSeason(c, today)).map((c) => c.key),
+    ahead,
+    today,
   });
 };
 

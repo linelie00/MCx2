@@ -13,7 +13,8 @@
  * 돌리므로, 아직 안 센 날들 가운데 그 칸이 물을 받은 날은 많아야 그 하루뿐이다.
  *
  * 하루치 셈의 무작위(잡초)는 **해시 난수**다. 그래서 조회(`GET`)는 셈만 하고 쓰지 않아도,
- * 몇 번 다시 셈해도 같다.
+ * 몇 번 다시 셈해도 같다. 날씨(`weather.js`, 4a)도 날짜 해시다 — 비 · 서리 · 폭풍이 같은 칸에
+ * 같게 걸린다. **오늘 비**도 조회할 때 셈한다(`wet=오늘` 로 적으므로 두 번 셈해도 같다).
  *
  * **물은 칸마다 준다.** 물 한 포기에 주는 사람의 체력이 1 든다(컨트롤러가 셈한다). 체력이
  * 모자라면 줄 수 있는 만큼만 주고, 나머지는 다른 사람이 이어서 줄 수 있다.
@@ -38,6 +39,7 @@ const {
 const land = require('./land');
 const affinity = require('./affinity');
 const quality = require('./quality');
+const weather = require('./weather');
 
 /** 밭 수, 한 밭의 칸 수. 둘 다 3×3 이고 키패드 배치다(1 2 3 / 4 5 6 / 7 8 9). */
 const PLOTS = 9;
@@ -129,6 +131,13 @@ function upgrade(farm) {
       if (c.t === 'plant' && c.wet === undefined) c.wet = farm.water.day ?? null;
     }
   }
+  // 레벨표를 낮춰(4a) 레벨만 오르고 밭이 안 열린 농장 — 그 레벨까지의 밭을 연다. 조회도 이 길을
+  // 지나므로 돌 자리는 **해시로** 정한다(몇 번 셈해도 같은 밭).
+  land.PLOT_ORDER.slice(0, levelOf(farm)).forEach((pi) => {
+    if (farm.plots[pi].open) return;
+    let n = 0;
+    farm.plots[pi] = land.makePlot(() => land.hashRand(farm.channelId, 'plot', pi, n++));
+  });
   return farm;
 }
 
@@ -154,12 +163,43 @@ function gainXp(farm, n, rand) {
   return { from, to, opened, crops };
 }
 
-/** 그 밭에서 물 한 번에 쌓이는 성장 — 토질 배율 × 잡초 × 궁합·연작(`affinity.js`). */
-function rateOf(farm, pi) {
+/**
+ * 그 밭에서 그날 물 한 번에 쌓이는 성장 — 토질 배율 × 잡초 × 궁합·연작(`affinity.js`)
+ * × 제철·날씨(`weather.growthOf` — 흐림 ×0.9, 제철이 아니면 ×0.7, 용의 고추·쌀·월광초).
+ */
+function rateOf(farm, pi, day) {
   const plot = farm.plots[pi];
   const speed = land.SOIL_SPEED[land.soilStar(plot.soilXp) - 1];
   const weed = plot.cells.some((c) => c.t === 'weed') ? land.WEED_SLOW : 1;
-  return speed * weed * (affinity.modsFor(farm, pi)?.rate ?? 1);
+  const sky = day ? weather.growthOf(CROP_BY_KEY[plot.crop], day) : 1;
+  return speed * weed * (affinity.modsFor(farm, pi)?.rate ?? 1) * sky;
+}
+
+/**
+ * 그날 한 칸에 물을 준다 — 사람이 주든 비가 주든 같은 셈. 시든 칸은 살아나고(`scar`),
+ * 그날치 성장이 붙는다. 다 자라면 `ripeDay`. 되살렸는지(`revived`) · 익었는지(`ripened`) 를 준다.
+ */
+function wetCell(farm, pi, cell, day) {
+  const crop = CROP_BY_KEY[farm.plots[pi].crop];
+  let revived = false;
+  if (cell.thirst >= witherAt(crop)) { revived = true; cell.scar = true; }
+  cell.thirst = 0;
+  cell.wet = day;
+  cell.g = round(cell.g + rateOf(farm, pi, day));
+  const ripened = cell.g >= crop.days;
+  if (ripened) cell.ripeDay = day;
+  return { revived, ripened };
+}
+
+/** 비(폭우)가 그날 물을 준다 — 아직 그날 물을 안 받은 자라는 칸 전부. 몇 번 불러도 같다. */
+function rainOn(farm, day) {
+  if (!weather.weatherOf(day).water) return;
+  farm.plots.forEach((p, pi) => {
+    if (!p.open || !CROP_BY_KEY[p.crop]) return;
+    for (const cell of p.cells) {
+      if (cell.t === 'plant' && !cell.ripeDay && cell.wet !== day) wetCell(farm, pi, cell, day);
+    }
+  });
 }
 
 const loseSoil = (plot, n) => { plot.soilXp = Math.max(0, (plot.soilXp ?? 0) - n); };
@@ -193,6 +233,8 @@ function tick(farm, today) {
   const end = dayNum(today) - 1;
   for (let d = dayNum(farm.lastTickDay) + 1; d <= end; d += 1) {
     const key = keyOf(d);
+    const sky = weather.weatherOf(key);
+    rainOn(farm, key);                               // 비 — 체력 없이 물을 준 날
     farm.plots.forEach((plot, pi) => {
       if (!plot.open) return;
       const crop = CROP_BY_KEY[plot.crop];
@@ -221,8 +263,14 @@ function tick(farm, today) {
           }
           return;
         }
-        if (cell.wet === key) return;
-        cell.thirst += 1;
+        if (cell.wet !== key) cell.thirst += 1;
+        // 서리 — 제철이 아닌 칸이 한 단계 상한다(4b 덮개가 막는다)
+        if (sky.key === 'frost' && !weather.inSeason(crop, key) && !plot.cover) cell.thirst += 1;
+        // 폭풍 — 키 큰 작물 칸의 30% 가 쓰러져 시든다(4b 지지대가 막는다)
+        if (sky.key === 'storm' && crop?.tall && !plot.stakes && land.hashRand(farm.channelId, key, pi, i, 'storm') < weather.STORM_FALL) {
+          cell.thirst = Math.max(cell.thirst, witherAt(crop));
+          cell.scar = true;
+        }
         if (cell.thirst >= deathAt(crop)) {
           plot.cells[i] = { t: 'dead', why: 'dry' };
           loseSoil(plot, land.DEATH_SOIL);
@@ -231,6 +279,7 @@ function tick(farm, today) {
     });
   }
   if (end > dayNum(farm.lastTickDay)) farm.lastTickDay = keyOf(end);
+  rainOn(farm, today);                               // 오늘 비도 — wet=오늘 이라 몇 번 셈해도 같다
   return farm;
 }
 
@@ -260,6 +309,7 @@ function thirstyCells(farm, today, plot = null) {
  */
 function water(farm, today, userId, { budget = Infinity, plot = null, rand = Math.random } = {}) {
   if (plot !== null && (!Number.isInteger(plot) || plot < 0 || plot >= PLOTS)) return bad('plot');
+  if (weather.weatherOf(today).water) return { ok: false, reason: 'rain', weather: weather.weatherOf(today).key };
   const need = thirstyCells(farm, today, plot);
   if (!need.length) {
     const any = farm.plots.some((p) => p.cells.some((c) => c.t === 'plant' && !c.ripeDay));
@@ -270,14 +320,9 @@ function water(farm, today, userId, { budget = Infinity, plot = null, rand = Mat
   let revived = 0; let ripened = 0;
   const given = need.slice(0, budget);
   for (const { pi, i } of given) {
-    const p = farm.plots[pi];
-    const crop = CROP_BY_KEY[p.crop];
-    const cell = p.cells[i];
-    if (cell.thirst >= witherAt(crop)) { revived += 1; cell.scar = true; }
-    cell.thirst = 0;
-    cell.wet = today;
-    cell.g = round(cell.g + rateOf(farm, pi));
-    if (cell.g >= crop.days) { cell.ripeDay = today; ripened += 1; }
+    const w = wetCell(farm, pi, farm.plots[pi].cells[i], today);
+    if (w.revived) revived += 1;
+    if (w.ripened) ripened += 1;
   }
 
   if (farm.water?.day !== today) farm.water = { day: today, by: [] };
@@ -391,7 +436,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
       const n = land.between(rand, lo, hi);
       const overripe = dayNum(today) - dayNum(cell.ripeDay) >= OVERRIPE_AFTER;
       const q = quality.rollQuality({
-        crop, soilStar: star, cell, mods, overripe, bonus, rand,
+        crop, soilStar: star, cell, mods, overripe, bonus, season: weather.qualityOf(crop, today), rand,
       });
       add(starKey(crop.key, q.star), n);
       (grades[crop.key] ??= [0, 0, 0, 0])[q.star] += 1;
@@ -630,6 +675,7 @@ function view(farm, today) {
     compostBits: farm.compostBits,
     waterBy: farm.water?.day === today ? farm.water.by : [],
     need: thirstyCells(farm, today).length,
+    sky: weather.forecast(today),
     plots: farm.plots.map((p) => {
       const crop = CROP_BY_KEY[p.crop] ?? null;
       const cells = p.open ? p.cells.map((cell) => cellState(cell, crop, today)) : Array(CELLS).fill('locked');
@@ -637,7 +683,7 @@ function view(farm, today) {
       const dry = growing.filter((cell) => cell.wet !== today);
       const star = land.soilStar(p.soilXp);
       const pi = farm.plots.indexOf(p);
-      const rate = p.open ? rateOf(farm, pi) : 1;
+      const rate = p.open ? rateOf(farm, pi, today) : 1;
       const mods = p.open ? affinity.modsFor(farm, pi) : null;
       const swings = {};
       p.cells.forEach((cell, i) => { if (cell.t === 'boulder') swings[i] = cell.swings; });
@@ -659,6 +705,7 @@ function view(farm, today) {
         swings,
         fert: p.open ? fertToday(farm, today, pi) : {},
         history: p.history ?? [],
+        inSeason: crop ? weather.inSeason(crop, today) : null,
         mods: mods && { growth: mods.growth, rate: round(mods.rate), quality: mods.quality, soil: mods.soil, rotation: mods.rotation, notes: mods.notes },
       };
     }),

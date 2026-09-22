@@ -31,71 +31,77 @@
  *   seedOnly   희귀 — 씨앗을 살 수 없다. 개간에서 주운 **주머니 씨앗**으로만 심는다(레벨 제한 없음)
  *   note       심기 창에 적을 규칙 한 줄
  *   giant      거대 작물이 될 수 있다(3b) — 한 밭 아홉 칸이 다 익으면 대왕 작물 하나로 합쳐질 수 있다
+ *   seasons    제철(4a) — `spring · summer · autumn · winter`. 제철이 아니면 성장 ×0.7 · 품질 −15(`weather.js`).
+ *              기획서 §12 에 겨울 보강을 더했다: 당근·양배추(봄·가·겨) · 비트(가·겨) · 딸기(겨·봄).
+ *              향송이와 희귀 셋은 사계절
+ *   heatLove   폭염인 날 성장 ×2(용의 고추) · rainLove 비 오는 날 ×1.2(쌀) · clearOnly 맑은 날에만 자람(월광초)
  *
- * 과수(한 그루가 밭 하나) · 날씨를 타는 작물(용의 고추 · 월광초) · 인삼 · 황금 밀은 그 규칙이
- * 들어오는 단계(4~6)에서 넣는다.
+ * 과수(한 그루가 밭 하나, 4c) · 인삼(6단계) · 황금 밀(5단계)은 그 규칙이 들어오는 단계에서 넣는다.
  */
 const CROPS = [
   // ---- Lv1
-  { key: 'potato',      name: '감자',     lv: 1, family: 'root',     price: 2, days: 2,            emoji: '🥔' },
-  { key: 'carrot',      name: '당근',     lv: 1, family: 'root',     price: 2, days: 3,            emoji: '🥕' },
-  { key: 'spinach',     name: '시금치',   lv: 1, family: 'leaf',     price: 3, days: 2,            emoji: '🥬' },
-  { key: 'cucumber',    name: '오이',     lv: 1, family: 'gourd',    price: 2, days: 4, regrow: 2, emoji: '🥒' },
-  { key: 'radish',      name: '무',       lv: 1, family: 'root',     price: 3, days: 3, giant: true, emoji: '⚪' },
-  { key: 'lettuce',     name: '상추',     lv: 1, family: 'leaf',     price: 2, days: 4, regrow: 2, emoji: '🥗' },
-  { key: 'wheat',       name: '밀 이삭',  lv: 1, family: 'grain',    price: 2, days: 3,            emoji: '🌾' },
-  { key: 'soybean',     name: '콩',       lv: 1, family: 'legume',   price: 3, days: 3,            emoji: '🫘' },
+  { key: 'potato',      name: '감자',     lv: 1, family: 'root',     price: 2, days: 2,            seasons: ['spring', 'autumn'], emoji: '🥔' },
+  { key: 'carrot',      name: '당근',     lv: 1, family: 'root',     price: 2, days: 3,            seasons: ['spring', 'autumn', 'winter'], emoji: '🥕' },
+  { key: 'spinach',     name: '시금치',   lv: 1, family: 'leaf',     price: 3, days: 2,            seasons: ['autumn', 'winter'], emoji: '🥬' },
+  { key: 'cucumber',    name: '오이',     lv: 1, family: 'gourd',    price: 2, days: 4, regrow: 2, seasons: ['summer'], emoji: '🥒' },
+  { key: 'radish',      name: '무',       lv: 1, family: 'root',     price: 3, days: 3, giant: true, seasons: ['autumn', 'winter'], emoji: '⚪' },
+  { key: 'lettuce',     name: '상추',     lv: 1, family: 'leaf',     price: 2, days: 4, regrow: 2, seasons: ['spring', 'autumn'], emoji: '🥗' },
+  { key: 'wheat',       name: '밀 이삭',  lv: 1, family: 'grain',    price: 2, days: 3,            seasons: ['spring', 'autumn'], emoji: '🌾' },
+  { key: 'soybean',     name: '콩',       lv: 1, family: 'legume',   price: 3, days: 3,            seasons: ['summer'], emoji: '🫘' },
   // ---- Lv2
-  { key: 'onion',       name: '양파',     lv: 2, family: 'allium',   price: 2, days: 3,            emoji: '🧅' },
-  { key: 'garlic',      name: '마늘',     lv: 2, family: 'allium',   price: 3, days: 4,            emoji: '🧄' },
-  { key: 'greenOnion',  name: '대파',     lv: 2, family: 'allium',   price: 3, days: 4, regrow: 2, emoji: '🎋' },
-  { key: 'cabbage',     name: '양배추',   lv: 2, family: 'leaf',     price: 3, days: 3, giant: true, emoji: '🥬' },
-  { key: 'tomato',      name: '토마토',   lv: 2, family: 'fruitveg', price: 4, days: 4, regrow: 2, emoji: '🍅' },
-  { key: 'perilla',     name: '깻잎',     lv: 2, family: 'herb',     price: 2, days: 2, regrow: 1, emoji: '🍃' },
-  { key: 'pea',         name: '완두콩',   lv: 2, family: 'legume',   price: 3, days: 3,            emoji: '🫛' },
+  { key: 'onion',       name: '양파',     lv: 2, family: 'allium',   price: 2, days: 3,            seasons: ['spring'], emoji: '🧅' },
+  { key: 'garlic',      name: '마늘',     lv: 2, family: 'allium',   price: 3, days: 4,            seasons: ['autumn', 'winter'], emoji: '🧄' },
+  { key: 'greenOnion',  name: '대파',     lv: 2, family: 'allium',   price: 3, days: 4, regrow: 2, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🎋' },
+  { key: 'cabbage',     name: '양배추',   lv: 2, family: 'leaf',     price: 3, days: 3, giant: true, seasons: ['spring', 'autumn', 'winter'], emoji: '🥬' },
+  { key: 'tomato',      name: '토마토',   lv: 2, family: 'fruitveg', price: 4, days: 4, regrow: 2, seasons: ['summer'], emoji: '🍅' },
+  { key: 'perilla',     name: '깻잎',     lv: 2, family: 'herb',     price: 2, days: 2, regrow: 1, seasons: ['summer'], emoji: '🍃' },
+  { key: 'pea',         name: '완두콩',   lv: 2, family: 'legume',   price: 3, days: 3,            seasons: ['spring'], emoji: '🫛' },
   // ---- Lv3
-  { key: 'eggplant',    name: '가지',     lv: 3, family: 'fruitveg', price: 3, days: 4, regrow: 2, emoji: '🍆' },
-  { key: 'sweetPotato', name: '고구마',   lv: 3, family: 'root',     price: 3, days: 4,            emoji: '🍠' },
-  { key: 'corn',        name: '옥수수',   lv: 3, family: 'grain',    price: 3, days: 4, tall: true, emoji: '🌽' },
-  { key: 'chili',       name: '고추',     lv: 3, family: 'fruitveg', price: 4, days: 4, regrow: 2, emoji: '🌶️' },
-  { key: 'turnip',      name: '순무',     lv: 3, family: 'root',     price: 3, days: 3,            emoji: '🟣' },
-  { key: 'oats',        name: '귀리',     lv: 3, family: 'grain',    price: 3, days: 3,            emoji: '🌾' },
-  { key: 'barley',      name: '보리',     lv: 3, family: 'grain',    price: 3, days: 3,            emoji: '🌾' },
-  { key: 'kidneyBean',  name: '강낭콩',   lv: 3, family: 'legume',   price: 3, days: 3,            emoji: '🫘' },
+  { key: 'eggplant',    name: '가지',     lv: 3, family: 'fruitveg', price: 3, days: 4, regrow: 2, seasons: ['summer'], emoji: '🍆' },
+  { key: 'sweetPotato', name: '고구마',   lv: 3, family: 'root',     price: 3, days: 4,            seasons: ['summer', 'autumn'], emoji: '🍠' },
+  { key: 'corn',        name: '옥수수',   lv: 3, family: 'grain',    price: 3, days: 4, tall: true, seasons: ['summer'], emoji: '🌽' },
+  { key: 'chili',       name: '고추',     lv: 3, family: 'fruitveg', price: 4, days: 4, regrow: 2, seasons: ['summer'], emoji: '🌶️' },
+  { key: 'turnip',      name: '순무',     lv: 3, family: 'root',     price: 3, days: 3,            seasons: ['winter'], emoji: '🟣' },
+  { key: 'oats',        name: '귀리',     lv: 3, family: 'grain',    price: 3, days: 3,            seasons: ['spring', 'autumn'], emoji: '🌾' },
+  { key: 'barley',      name: '보리',     lv: 3, family: 'grain',    price: 3, days: 3,            seasons: ['winter', 'spring'], emoji: '🌾' },
+  { key: 'kidneyBean',  name: '강낭콩',   lv: 3, family: 'legume',   price: 3, days: 3,            seasons: ['summer'], emoji: '🫘' },
   // ---- Lv4
-  { key: 'napaCabbage', name: '배추',     lv: 4, family: 'leaf',     price: 3, days: 4, giant: true, emoji: '🥬' },
-  { key: 'broccoli',    name: '브로콜리', lv: 4, family: 'leaf',     price: 4, days: 4,            emoji: '🥦' },
-  { key: 'paprika',     name: '파프리카', lv: 4, family: 'fruitveg', price: 5, days: 6, regrow: 3, emoji: '🫑' },
-  { key: 'beet',        name: '비트',     lv: 4, family: 'root',     price: 4, days: 4,            emoji: '🔴' },
-  { key: 'buckwheat',   name: '메밀',     lv: 4, family: 'grain',    price: 4, days: 3,            emoji: '🌾' },
-  { key: 'strawberry',  name: '딸기',     lv: 4, family: 'berry',    price: 5, days: 4, regrow: 2, emoji: '🍓' },
-  { key: 'rosemary',    name: '로즈마리', lv: 4, family: 'herb',     price: 3, days: 4, regrow: 2, emoji: '🌲' },
-  { key: 'basil',       name: '바질',     lv: 4, family: 'herb',     price: 3, days: 4, regrow: 2, emoji: '☘️' },
-  { key: 'mint',        name: '박하',     lv: 4, family: 'herb',     price: 3, days: 3, regrow: 1, spread: true, emoji: '🍀', note: '퍼짐 — 거둘 때 같은 밭 빈 흙에 한 포기가 저절로 번져요' },
+  { key: 'napaCabbage', name: '배추',     lv: 4, family: 'leaf',     price: 3, days: 4, giant: true, seasons: ['autumn'], emoji: '🥬' },
+  { key: 'broccoli',    name: '브로콜리', lv: 4, family: 'leaf',     price: 4, days: 4,            seasons: ['autumn', 'winter'], emoji: '🥦' },
+  { key: 'paprika',     name: '파프리카', lv: 4, family: 'fruitveg', price: 5, days: 6, regrow: 3, seasons: ['summer'], emoji: '🫑' },
+  { key: 'beet',        name: '비트',     lv: 4, family: 'root',     price: 4, days: 4,            seasons: ['autumn', 'winter'], emoji: '🔴' },
+  { key: 'buckwheat',   name: '메밀',     lv: 4, family: 'grain',    price: 4, days: 3,            seasons: ['summer', 'autumn'], emoji: '🌾' },
+  { key: 'strawberry',  name: '딸기',     lv: 4, family: 'berry',    price: 5, days: 4, regrow: 2, seasons: ['winter', 'spring'], emoji: '🍓' },
+  { key: 'rosemary',    name: '로즈마리', lv: 4, family: 'herb',     price: 3, days: 4, regrow: 2, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🌲' },
+  { key: 'basil',       name: '바질',     lv: 4, family: 'herb',     price: 3, days: 4, regrow: 2, seasons: ['summer'], emoji: '☘️' },
+  { key: 'mint',        name: '박하',     lv: 4, family: 'herb',     price: 3, days: 3, regrow: 1, spread: true, seasons: ['spring', 'summer'], emoji: '🍀', note: '퍼짐 — 거둘 때 같은 밭 빈 흙에 한 포기가 저절로 번져요' },
   // ---- Lv5
-  { key: 'pumpkin',     name: '늙은 호박', lv: 5, family: 'gourd',   price: 8, days: 6, giant: true, emoji: '🎃' },
-  { key: 'taro',        name: '토란',     lv: 5, family: 'root',     price: 5, days: 5,            emoji: '🟤' },
-  { key: 'sesame',      name: '참깨',     lv: 5, family: 'grain',    price: 4, days: 4,            emoji: '⚫' },
-  { key: 'raspberry',   name: '산딸기',   lv: 5, family: 'berry',    price: 2, days: 4, regrow: 2, emoji: '🍒' },
-  { key: 'blueberry',   name: '블루베리', lv: 5, family: 'berry',    price: 3, days: 4, regrow: 2, emoji: '🫐' },
-  { key: 'rice',        name: '쌀',       lv: 5, family: 'grain',    price: 6, days: 5, thirsty: true, emoji: '🍚', note: '물 욕심 — 하루만 굶어도 시들고, 사흘이면 죽어요' },
-  { key: 'sunflower',   name: '해바라기', lv: 5, family: 'grain',    price: 4, days: 5, tall: true, emoji: '🌻', note: '키가 커서 이웃 밭에 그늘을 드리워요 — 버섯·잎 +10%, 열매·박 −5%' },
+  { key: 'pumpkin',     name: '늙은 호박', lv: 5, family: 'gourd',   price: 8, days: 6, giant: true, seasons: ['autumn'], emoji: '🎃' },
+  { key: 'taro',        name: '토란',     lv: 5, family: 'root',     price: 5, days: 5,            seasons: ['autumn'], emoji: '🟤' },
+  { key: 'sesame',      name: '참깨',     lv: 5, family: 'grain',    price: 4, days: 4,            seasons: ['summer'], emoji: '⚫' },
+  { key: 'raspberry',   name: '산딸기',   lv: 5, family: 'berry',    price: 2, days: 4, regrow: 2, seasons: ['summer'], emoji: '🍒' },
+  { key: 'blueberry',   name: '블루베리', lv: 5, family: 'berry',    price: 3, days: 4, regrow: 2, seasons: ['summer'], emoji: '🫐' },
+  { key: 'rice',        name: '쌀',       lv: 5, family: 'grain',    price: 6, days: 5, thirsty: true, rainLove: true, seasons: ['summer'], emoji: '🍚', note: '물 욕심 — 하루만 굶어도 시들고, 사흘이면 죽어요. 비 오는 날엔 더 잘 자라요' },
+  { key: 'sunflower',   name: '해바라기', lv: 5, family: 'grain',    price: 4, days: 5, tall: true, seasons: ['summer'], emoji: '🌻', note: '키가 커서 이웃 밭에 그늘을 드리워요 — 버섯·잎 +10%, 열매·박 −5%' },
   // ---- Lv6
-  { key: 'asparagus',   name: '아스파라거스', lv: 6, family: 'leaf', price: 6, days: 7, regrow: 3, perennial: true, emoji: '🎍', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
-  { key: 'teaLeaf',     name: '찻잎',     lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, emoji: '🍵', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
-  { key: 'ginger',      name: '생강',     lv: 6, family: 'root',     price: 4, days: 5,            emoji: '🫚' },
-  { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, aura: 5, emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
-  { key: 'koreanMelon', name: '참외',     lv: 6, family: 'gourd',    price: 6, days: 5,            emoji: '🍈' },
+  { key: 'asparagus',   name: '아스파라거스', lv: 6, family: 'leaf', price: 6, days: 7, regrow: 3, perennial: true, seasons: ['spring'], emoji: '🎍', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
+  { key: 'teaLeaf',     name: '찻잎',     lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, seasons: ['spring'], emoji: '🍵', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
+  { key: 'ginger',      name: '생강',     lv: 6, family: 'root',     price: 4, days: 5,            seasons: ['autumn'], emoji: '🫚' },
+  { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, aura: 5, seasons: ['summer'], emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
+  { key: 'koreanMelon', name: '참외',     lv: 6, family: 'gourd',    price: 6, days: 5,            seasons: ['summer'], emoji: '🍈' },
   // ---- Lv7
-  { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7, giant: true, emoji: '🍉' },
-  { key: 'melon',       name: '멜론',     lv: 7, family: 'gourd',    price: 14, days: 7, giant: true, emoji: '🍈' },
+  { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7, giant: true, seasons: ['summer'], emoji: '🍉' },
+  { key: 'melon',       name: '멜론',     lv: 7, family: 'gourd',    price: 14, days: 7, giant: true, seasons: ['summer'], emoji: '🍈' },
   // ---- Lv8
-  { key: 'pineMushroom', name: '향송이',  lv: 8, family: 'fungus',   price: 25, days: 10, shadeNeed: true, emoji: '🍄', note: '그늘이 필요해요 — 옥수수·해바라기 옆이 아니면 절반만 자라요' },
-  { key: 'saffron',     name: '사프란',   lv: 8, family: 'herb',     price: 60, days: 14,          emoji: '🌸', note: '귀한 향신료 — 오래 걸리고 한 칸에서 많이 안 나와요' },
+  { key: 'pineMushroom', name: '향송이',  lv: 8, family: 'fungus',   price: 25, days: 10, shadeNeed: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🍄', note: '그늘이 필요해요 — 옥수수·해바라기 옆이 아니면 절반만 자라요' },
+  { key: 'saffron',     name: '사프란',   lv: 8, family: 'herb',     price: 60, days: 14,          seasons: ['autumn'], emoji: '🌸', note: '귀한 향신료 — 오래 걸리고 한 칸에서 많이 안 나와요' },
+  // ---- Lv9 · 10 — 날씨를 타는 작물(4a)
+  { key: 'dragonChili', name: '용의 고추', lv: 9, family: 'fruitveg', price: 15, days: 10, regrow: 4, heatLove: true, seasons: ['summer'], emoji: '🔥', note: '폭염을 좋아해요 — 폭염인 날엔 두 배로 자라요. 날로 먹으면 아파요' },
+  { key: 'moonHerb',    name: '월광초',   lv: 10, family: 'herb',    price: 20, days: 10, clearOnly: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🌙', note: '맑은 날에만 자라요 — 흐리거나 비 오는 날엔 물을 받아도 그대로예요' },
   // ---- 희귀 — 개간에서 주운 주머니 씨앗으로만(레벨 제한 없음)
-  { key: 'screamRoot',  name: '비명 뿌리', lv: 1, family: 'monster', price: 14, days: 7, seedOnly: true, scream: true, emoji: '😱', note: '비명 — 이웃 성장 −10%, 거둘 때 귀마개가 없으면 체력 −5' },
-  { key: 'walkingCap',  name: '도망가는 버섯갓', lv: 1, family: 'monster', price: 8, days: 5, seedOnly: true, flee: true, emoji: '🏃', note: '도망 — 익은 날 안 거두면 옆 빈 흙으로 옮겨 가요. 빈 흙이 없으면 사라져요' },
-  { key: 'keeperBerry', name: '파수꾼 베리', lv: 1, family: 'berry', price: 30, days: 10, regrow: 3, seedOnly: true, emoji: '🛡️', note: '희귀 — 한 번 심으면 계속 거둬요' },
+  { key: 'screamRoot',  name: '비명 뿌리', lv: 1, family: 'monster', price: 14, days: 7, seedOnly: true, scream: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '😱', note: '비명 — 이웃 성장 −10%, 거둘 때 귀마개가 없으면 체력 −5' },
+  { key: 'walkingCap',  name: '도망가는 버섯갓', lv: 1, family: 'monster', price: 8, days: 5, seedOnly: true, flee: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🏃', note: '도망 — 익은 날 안 거두면 옆 빈 흙으로 옮겨 가요. 빈 흙이 없으면 사라져요' },
+  { key: 'keeperBerry', name: '파수꾼 베리', lv: 1, family: 'berry', price: 30, days: 10, regrow: 3, seedOnly: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🛡️', note: '희귀 — 한 번 심으면 계속 거둬요' },
 ];
 
 const CROP_BY_KEY = Object.fromEntries(CROPS.map((c) => [c.key, c]));

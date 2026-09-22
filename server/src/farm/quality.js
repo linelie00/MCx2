@@ -7,7 +7,7 @@
  *   점수 = 토질 ★×8
  *        + 한 번도 안 시듦 15
  *        + 궁합(±10 에서 자름) + 윤작 +10 / 연작 −10          ← affinity.modsFor().quality
- *        + 제철 +10                                            ← 4단계(계절) 전까지 늘 제철
+ *        + 제철 +10 / 아니면 −15 · 폭우 날 뿌리 −10 · 무지개 +10   ← weather.qualityOf() (4a)
  *        + 과숙 −15
  *        + 작물 등급(큰 −5 · 귀한 −10 · 아주 귀한 −15)
  *        + 거대 작물 실패 위로 +10
@@ -20,7 +20,7 @@
  */
 const { gradeOf } = require('./crops');
 
-/** 4단계에서 계절이 들어오기 전까지 모든 작물은 제철이다(제철이 아니면 −20 이 될 자리). */
+/** 제철 몫을 안 줬을 때(검사) — 제철로 친다. 실제로는 `weather.qualityOf()` 를 준다(4a). */
 const SEASON = 10;
 const NO_SCAR = 15;
 const OVERRIPE = -15;
@@ -52,14 +52,15 @@ const starOf = (score) => STEPS.filter((s) => score >= s).length;
  *   mods      affinity.modsFor() — 없으면 보정 0
  *   overripe  과숙인가
  *   bonus     그 밖의 더하기(거대 작물 실패 위로)
+ *   season    제철·날씨 몫(`weather.qualityOf`) — 안 주면 제철(+10)
  */
 function rollQuality({
-  crop, soilStar, cell, mods = null, overripe = false, bonus = 0, rand = Math.random,
+  crop, soilStar, cell, mods = null, overripe = false, bonus = 0, season = SEASON, rand = Math.random,
 }) {
   const score = soilStar * 8
     + (cell.scar ? 0 : NO_SCAR)
     + (mods?.quality ?? 0)
-    + SEASON
+    + season
     + (overripe ? OVERRIPE : 0)
     + gradeQuality(crop)
     + bonus

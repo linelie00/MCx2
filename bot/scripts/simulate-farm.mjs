@@ -172,7 +172,7 @@ function play({ eat, neighbor, fert, compost, naive, equip, trees, order }, seed
         if (o.kind === 'board') taken[o.id] = { day: today };
         else farm.requests = farm.requests.filter((x) => x.id !== o.id);
       }
-      const want = new Set([...(farm.requests ?? []), ...orders.activeBoard(today, taken)].map((o) => o.crop));
+      const want = new Set([...(farm.requests ?? []), ...orders.activeBoard(today, taken)].flatMap((o) => o.parts.map((x) => x.crop)));
       for (const [k, c] of Object.entries(stock)) {
         if (!c || want.has(k.replace(/S[123]$/, ''))) continue;
         gold += c * (ITEM_BY_KEY[k]?.price ?? 0);
@@ -235,7 +235,7 @@ function play({ eat, neighbor, fert, compost, naive, equip, trees, order }, seed
       // 주문 — 아직 아무 밭에도 없는 주문 작물이 있으면 그것부터(나무 · 희귀는 빼고)
       const growing = new Set(farm.plots.map((pp) => pp.crop).filter(Boolean));
       const forOrder = order && process.env.ORDER_PLANT !== '0' && !p.crop
-        ? [...(farm.requests ?? []), ...orders.activeBoard(today, taken)].map((o) => CROP_BY_KEY[o.crop])
+        ? [...(farm.requests ?? []), ...orders.activeBoard(today, taken)].flatMap((o) => o.parts.map((x) => CROP_BY_KEY[x.crop]))
           .find((c) => c && c.lv <= level && !c.tree && !c.seedOnly && !growing.has(c.key))
         : null;
       const crop = p.crop ?? forOrder?.key ?? (naive ? bestCrop(level) : smartCrop(farm, pi, level, today)).key;

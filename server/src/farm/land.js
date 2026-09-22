@@ -102,6 +102,7 @@ const XP = {
   harvest: 1,       // 거둔 칸마다
   regrow: 0.5,      // 재수확으로 거둔 칸마다 — 절반(3c). 재수확 작물이 레벨을 너무 빨리 올린다(simulate-farm)
   firstCrop: 10,    // 그 농장에서 처음 거둔 작물
+  giant: 30,        // 대왕 작물(3b)
   water: 2,         // 그날 첫 물(누가 줬든)
   rock: 1,
   boulder: 3,

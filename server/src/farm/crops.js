@@ -30,6 +30,7 @@
  *   flee       도망 — 익은 날 안 거두면 같은 밭 빈 흙으로 옮겨 간다. 빈 흙이 없으면 사라진다
  *   seedOnly   희귀 — 씨앗을 살 수 없다. 개간에서 주운 **주머니 씨앗**으로만 심는다(레벨 제한 없음)
  *   note       심기 창에 적을 규칙 한 줄
+ *   giant      거대 작물이 될 수 있다(3b) — 한 밭 아홉 칸이 다 익으면 대왕 작물 하나로 합쳐질 수 있다
  *
  * 과수(한 그루가 밭 하나) · 날씨를 타는 작물(용의 고추 · 월광초) · 인삼 · 황금 밀은 그 규칙이
  * 들어오는 단계(4~6)에서 넣는다.
@@ -40,7 +41,7 @@ const CROPS = [
   { key: 'carrot',      name: '당근',     lv: 1, family: 'root',     price: 2, days: 3,            emoji: '🥕' },
   { key: 'spinach',     name: '시금치',   lv: 1, family: 'leaf',     price: 3, days: 2,            emoji: '🥬' },
   { key: 'cucumber',    name: '오이',     lv: 1, family: 'gourd',    price: 2, days: 4, regrow: 2, emoji: '🥒' },
-  { key: 'radish',      name: '무',       lv: 1, family: 'root',     price: 3, days: 3,            emoji: '⚪' },
+  { key: 'radish',      name: '무',       lv: 1, family: 'root',     price: 3, days: 3, giant: true, emoji: '⚪' },
   { key: 'lettuce',     name: '상추',     lv: 1, family: 'leaf',     price: 2, days: 4, regrow: 2, emoji: '🥗' },
   { key: 'wheat',       name: '밀 이삭',  lv: 1, family: 'grain',    price: 2, days: 3,            emoji: '🌾' },
   { key: 'soybean',     name: '콩',       lv: 1, family: 'legume',   price: 3, days: 3,            emoji: '🫘' },
@@ -48,7 +49,7 @@ const CROPS = [
   { key: 'onion',       name: '양파',     lv: 2, family: 'allium',   price: 2, days: 3,            emoji: '🧅' },
   { key: 'garlic',      name: '마늘',     lv: 2, family: 'allium',   price: 3, days: 4,            emoji: '🧄' },
   { key: 'greenOnion',  name: '대파',     lv: 2, family: 'allium',   price: 3, days: 4, regrow: 2, emoji: '🎋' },
-  { key: 'cabbage',     name: '양배추',   lv: 2, family: 'leaf',     price: 3, days: 3,            emoji: '🥬' },
+  { key: 'cabbage',     name: '양배추',   lv: 2, family: 'leaf',     price: 3, days: 3, giant: true, emoji: '🥬' },
   { key: 'tomato',      name: '토마토',   lv: 2, family: 'fruitveg', price: 4, days: 4, regrow: 2, emoji: '🍅' },
   { key: 'perilla',     name: '깻잎',     lv: 2, family: 'herb',     price: 2, days: 2, regrow: 1, emoji: '🍃' },
   { key: 'pea',         name: '완두콩',   lv: 2, family: 'legume',   price: 3, days: 3,            emoji: '🫛' },
@@ -62,7 +63,7 @@ const CROPS = [
   { key: 'barley',      name: '보리',     lv: 3, family: 'grain',    price: 3, days: 3,            emoji: '🌾' },
   { key: 'kidneyBean',  name: '강낭콩',   lv: 3, family: 'legume',   price: 3, days: 3,            emoji: '🫘' },
   // ---- Lv4
-  { key: 'napaCabbage', name: '배추',     lv: 4, family: 'leaf',     price: 3, days: 4,            emoji: '🥬' },
+  { key: 'napaCabbage', name: '배추',     lv: 4, family: 'leaf',     price: 3, days: 4, giant: true, emoji: '🥬' },
   { key: 'broccoli',    name: '브로콜리', lv: 4, family: 'leaf',     price: 4, days: 4,            emoji: '🥦' },
   { key: 'paprika',     name: '파프리카', lv: 4, family: 'fruitveg', price: 5, days: 6, regrow: 3, emoji: '🫑' },
   { key: 'beet',        name: '비트',     lv: 4, family: 'root',     price: 4, days: 4,            emoji: '🔴' },
@@ -72,7 +73,7 @@ const CROPS = [
   { key: 'basil',       name: '바질',     lv: 4, family: 'herb',     price: 3, days: 4, regrow: 2, emoji: '☘️' },
   { key: 'mint',        name: '박하',     lv: 4, family: 'herb',     price: 3, days: 3, regrow: 1, spread: true, emoji: '🍀', note: '퍼짐 — 거둘 때 같은 밭 빈 흙에 한 포기가 저절로 번져요' },
   // ---- Lv5
-  { key: 'pumpkin',     name: '늙은 호박', lv: 5, family: 'gourd',   price: 8, days: 6,            emoji: '🎃' },
+  { key: 'pumpkin',     name: '늙은 호박', lv: 5, family: 'gourd',   price: 8, days: 6, giant: true, emoji: '🎃' },
   { key: 'taro',        name: '토란',     lv: 5, family: 'root',     price: 5, days: 5,            emoji: '🟤' },
   { key: 'sesame',      name: '참깨',     lv: 5, family: 'grain',    price: 4, days: 4,            emoji: '⚫' },
   { key: 'raspberry',   name: '산딸기',   lv: 5, family: 'berry',    price: 2, days: 4, regrow: 2, emoji: '🍒' },
@@ -86,8 +87,8 @@ const CROPS = [
   { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, aura: 5, emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
   { key: 'koreanMelon', name: '참외',     lv: 6, family: 'gourd',    price: 6, days: 5,            emoji: '🍈' },
   // ---- Lv7
-  { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7,           emoji: '🍉' },
-  { key: 'melon',       name: '멜론',     lv: 7, family: 'gourd',    price: 14, days: 7,           emoji: '🍈' },
+  { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7, giant: true, emoji: '🍉' },
+  { key: 'melon',       name: '멜론',     lv: 7, family: 'gourd',    price: 14, days: 7, giant: true, emoji: '🍈' },
   // ---- Lv8
   { key: 'pineMushroom', name: '향송이',  lv: 8, family: 'fungus',   price: 25, days: 10, shadeNeed: true, emoji: '🍄', note: '그늘이 필요해요 — 옥수수·해바라기 옆이 아니면 절반만 자라요' },
   { key: 'saffron',     name: '사프란',   lv: 8, family: 'herb',     price: 60, days: 14,          emoji: '🌸', note: '귀한 향신료 — 오래 걸리고 한 칸에서 많이 안 나와요' },
@@ -133,11 +134,21 @@ const YIELD = {
   rare: [[1, 1], [1, 1], [1, 1], [1, 2], [1, 2]],
 };
 
+/**
+ * 품질 ★ 변형의 아이템 키(3b). **바꾸지 않는다** — 계정에 저장되는 문자열이다.
+ * 봇 명부(`bot/src/casino/items.js`)가 같은 규칙으로 이름·값을 만든다.
+ */
+const STAR_MULT = [1, 1.2, 1.5, 2];
+const starKey = (key, star) => (star ? `${key}S${star}` : key);
+/** 대왕 작물의 아이템 키와 값 배수. `giantRadish` · `giantNapaCabbage` … */
+const giantKey = (key) => `giant${key[0].toUpperCase()}${key.slice(1)}`;
+const GIANT_MULT = 45;
+
 /** 봇에 주는 모양. 씨앗값까지 셈해서 준다 — 봇이 공식을 다시 갖지 않게. */
 const publicCrop = (c) => ({
   ...c, regrow: c.regrow ?? null, seed: seedPrice(c), profit: c.seedOnly ? c.price : guaranteed(c), grade: gradeOf(c),
 });
 
 module.exports = {
-  CROPS, CROP_BY_KEY, guaranteed, seedPrice, gradeOf, YIELD, publicCrop,
+  CROPS, CROP_BY_KEY, guaranteed, seedPrice, gradeOf, YIELD, publicCrop, STAR_MULT, starKey, giantKey, GIANT_MULT,
 };

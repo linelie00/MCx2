@@ -20,6 +20,7 @@ process.env.BOT_KEY = 'test-key';
 const rules = require('../src/farm/rules');
 const land = require('../src/farm/land');
 const affinity = require('../src/farm/affinity');
+const quality = require('../src/farm/quality');
 const { CROPS, seedPrice, guaranteed } = require('../src/farm/crops');
 const { dayKey } = require('../src/services/dayKey');
 
@@ -32,6 +33,8 @@ const eq = (name, got, want) => {
 /** 정해진 수열을 되풀이하는 난수. */
 const seq = (...xs) => { let i = 0; return () => xs[i++ % xs.length]; };
 const ZERO = () => 0;
+/** 작물 하나의 수확 합계 — 보통 + ★ 변형(3b). API 는 진짜 난수로 품질을 굴린다. */
+const crop = (items, key) => ['', 'S1', 'S2', 'S3'].reduce((a, sfx) => a + (items?.[key + sfx] ?? 0), 0);
 
 // ================================================================ 1. 작물표
 
@@ -245,7 +248,8 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   rules.plant(f, D0, { plot: P, cells: [0, 1], crop: 'soybean' });
   W(f, 0); at(f, 1); W(f, 1);
   const h = rules.harvest(f, day(1), {}, { rand: ZERO });
-  eq('★5 콩 두 칸 = 6개', h.items, { soybean: 6 });
+  // ★5 · 안 시듦 · 제철 = 65점(+난수 0) → ★
+  eq('★5 콩 두 칸 = 6개 · 품질 ★', h.items, { soybeanS1: 6 });
   eq('콩 계열은 토질 경험 +10', f.plots[P].soilXp, 300 + 2 + 10);
 }
 {
@@ -522,6 +526,53 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('희귀 씨앗은 주머니로(아이템이 아니라)', [found?.found, Object.keys(found?.seeds ?? {}).every((k) => land.RARE_SEEDS.includes(k)), Object.keys(found?.loot ?? {}).some((k) => k.startsWith('seed'))], [1, true, false]);
 }
 
+// --- 3b: 품질 ★ · 거대 작물
+{
+  const carrot = CROPS.find((c) => c.key === 'carrot');
+  const cell0 = { scar: false };
+  const q = (o) => quality.rollQuality({ crop: carrot, soilStar: 1, cell: cell0, rand: ZERO, ...o });
+  eq('★1 · 안 시듦 · 제철 · 난수 0 = 33점 보통', q({}), { score: 33, star: 0 });
+  eq('난수 끝(40)이면 73점 ★', q({ rand: () => 0.999 }), { score: 73, star: 1 });
+  eq('★5 면 65점 ★', q({ soilStar: 5 }), { score: 65, star: 1 });
+  eq('★5 + 궁합 +20(윤작 포함) + 난수 끝 = 125 → ★★★', q({ soilStar: 5, mods: { quality: 20 }, rand: () => 0.999 }).star, 3);
+  eq('시든 적 있으면 ★ 까지만', q({ soilStar: 5, cell: { scar: true }, mods: { quality: 20 }, rand: () => 0.999 }).star, 1);
+  eq('과숙 −15', q({ overripe: true }).score, 18);
+  eq('단계 경계', [49, 50, 74, 75, 94, 95].map(quality.starOf), [0, 1, 1, 2, 2, 3]);
+  eq('작물 등급 보정', ['carrot', 'watermelon', 'pineMushroom', 'saffron'].map((k) => quality.gradeQuality(CROPS.find((c) => c.key === k))), [0, -5, -10, -15]);
+  eq('거대 확률', [1, 5].map((x) => Math.round(quality.giantChance(x) * 100)), [14, 30]);
+  eq('궁합 품질은 ±10 에서 자른다 (윤작 몫은 따로)', (() => {
+    const f = fresh();
+    const g = (crop) => ({ open: true, crop, soilXp: 0, history: [], streak: 0, cells: Array.from({ length: 9 }, () => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: D0, wet: null })) });
+    f.plots[P] = { ...g('tomato'), history: ['leaf', 'root'] };
+    for (const n of [1, 3, 5, 7]) f.plots[n] = g('basil');
+    return affinity.modsFor(f, P).quality;               // 허브 넷 +20 → 10 · 윤작 +10
+  })(), 20);
+
+  // 거대 작물 — 아홉 칸이 다 익은 무 밭, Lv7
+  const giantFarm = () => {
+    const f = fresh();
+    f.xp = land.LEVEL_XP[6];
+    f.plots[P] = { open: true, crop: 'radish', soilXp: 0, history: [], streak: 0, cells: Array.from({ length: 9 }, () => ({ t: 'plant', g: 3, thirst: 0, scar: false, ripeDay: D0, planted: D0, wet: D0 })) };
+    return f;
+  };
+  const gHit = giantFarm();
+  const hg = rules.harvest(gHit, D0, {}, { rand: ZERO });
+  eq('대왕 무 하나', [hg.items, hg.giants, hg.harvested], [{ giantRadish: 1 }, [{ crop: 'radish', plot: P }], 9]);
+  eq('대왕 작물 경험치 +30', hg.xp >= 30, true);
+  eq('밭이 비고 무가 기록된다', [gHit.plots[P].crop, gHit.plots[P].history], [null, ['root']]);
+  const gMiss = giantFarm();
+  const hm = rules.harvest(gMiss, D0, {}, { rand: seq(0.99, 0, 0.9, 0) });
+  eq('못 합쳐지면 평소대로 아홉 칸 · 품질 +10', [hm.giants.length, crop(hm.items, 'radish'), hm.grades.radish.reduce((a, n) => a + n, 0)], [0, 9, 9]);
+  const low = giantFarm(); low.xp = 0;
+  eq('Lv7 전엔 거대 작물이 없다', rules.harvest(low, D0, {}, { rand: ZERO }).giants, []);
+  const scar = giantFarm(); scar.plots[P].cells[4].scar = true;
+  eq('한 칸이라도 시들었으면 없다', rules.harvest(scar, D0, {}, { rand: ZERO }).giants, []);
+  const notAll = giantFarm(); notAll.plots[P].cells[4].ripeDay = null;
+  eq('아홉 칸이 다 안 익었으면 없다', rules.harvest(notAll, D0, {}, { rand: ZERO }).giants, []);
+  eq('거대가 안 되는 작물', quality.giantReady({ cells: giantFarm().plots[P].cells }, CROPS.find((c) => c.key === 'carrot'), 10), false);
+  eq('수확 분포', rules.harvest(giantFarm(), D0, {}, { rand: seq(0.99, 0, 0.999) }).grades.radish.reduce((a, n) => a + n, 0), 9);
+}
+
 // --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
 {
   // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
@@ -630,8 +681,8 @@ const server = app.listen(0, async () => {
     for (const c of d2.farms[CH].plots[4].cells.slice(0, 3)) Object.assign(c, { g: 2, ripeDay: dayKey() });
     writeFile(d2);
     const h1 = (await post('/farms/harvest', { channelId: CH, userId: U })).body;
-    eq('시금치 셋 수확', [h1.ok, h1.items, h1.account.items.spinach], [true, { spinach: 3 }, 3]);
-    eq('경험치 = 물 2 + 돌 2 + 바위 3 + 수확 3 + 첫 작물 10', h1.farm.xp, 20);
+    eq('시금치 셋 수확(품질은 굴림)', [h1.ok, crop(h1.items, 'spinach'), crop(h1.account.items, 'spinach')], [true, 3, 3]);
+    eq('경험치 = 물 2 + 돌 2 + 바위 3 + 수확 3 + 첫 작물 10 (+ 품질 0~3)', h1.farm.xp >= 20 && h1.farm.xp <= 23, true);
     eq('20 이면 Lv2 — 2번 밭', [h1.levelUp?.to, h1.levelUp?.opened], [2, [1]]);
     eq('수확 전적', (await acct(U)).stats.farmHarvest, 3);
 
@@ -741,6 +792,12 @@ const server = app.listen(0, async () => {
     writeFile(d13);
     eq('비명도 체력 1 은 남긴다', (await post('/farms/harvest', { channelId: CH2, userId: W2 })).body.hp, 1);
 
+    // --- 3b: 도감
+    const bk = (await hit(`/farms/book/${W2}`)).body;
+    eq('도감 — 비명 뿌리 세 번 거둠', [bk.book.screamRoot?.n, bk.total], [3, CROPS.length]);
+    eq('도감 — 이상한 id 400', (await hit('/farms/book/abc')).status, 400);
+    eq('도감 — 안 키운 사람은 빈 도감', (await hit('/farms/book/1999999')).body.book, {});
+
     // --- 1단계에 연 농장이 파일에 있을 때
     const d5 = readFile();
     d5.farms[CH] = {
@@ -759,7 +816,7 @@ const server = app.listen(0, async () => {
     eq('옛 농장 조회', [o1.level, o1.waterBy, o1.need], [1, [V], 0]);
     eq('옛 농장 물 — 이미 줬다', (await post('/farms/water', { channelId: CH, userId: V })).body.reason, 'already');
     const oh = (await post('/farms/harvest', { channelId: CH, userId: V })).body;
-    eq('옛 농장 수확 · 경험치', [oh.ok, oh.items, oh.farm.xp], [true, { potato: 1 }, 11]);
+    eq('옛 농장 수확 · 경험치', [oh.ok, crop(oh.items, 'potato'), oh.farm.xp >= 11 && oh.farm.xp <= 12], [true, 1, true]);
     eq('옛 농장이 새 모양으로 저장된다', Array.isArray(readFile().farms[CH].water.by), true);
 
     // --- 손상된 파일은 0 으로 읽지 않는다

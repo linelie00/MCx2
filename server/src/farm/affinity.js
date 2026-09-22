@@ -5,7 +5,7 @@
  *
  *   growth   물 한 번에 쌓이는 성장에 곱하는 배율의 **더하기 몫**. 이웃 궁합·세 자매를 더해
  *            **±30% 에서 자른다.** 연작(×0.85)·그늘 없는 버섯(×0.5)은 자르지 않고 따로 곱한다
- *   quality  품질 점수 보정(3b 가 읽는다). 이웃 궁합·세 자매·윤작/연작을 더한 값
+ *   quality  품질 점수 보정(3b 가 읽는다) = 이웃 궁합·세 자매 몫(**±10 에서 자른다**) + 윤작/연작 몫(±10)
  *   soil     수확 때 토질 경험에 곱하는 배율 — 연작 ×0, 윤작 ×1.5, 콩 이웃 ×1.5
  *   notes    화면에 적을 줄 `{ good, text }` — 봇은 이것만 그린다(규칙을 다시 갖지 않는다)
  *
@@ -29,6 +29,8 @@ const FAMILY = {
 
 /** 한 밭에 걸리는 궁합 보정의 한도. */
 const CAP = 0.3;
+/** 이웃 궁합이 품질 점수에 줄 수 있는 한도(§13 — 궁합 −10~+10). 윤작·연작 ±10 은 따로. */
+const QUALITY_CAP = 10;
 /** 연작의 성장 배율. */
 const SAME_GROWTH = 0.85;
 /** 그늘이 필요한 작물(버섯)이 그늘 없이 자랄 때. */
@@ -114,7 +116,7 @@ function modsFor(farm, plot, cropKey = null) {
   const me = CROP_BY_KEY[cropKey ?? p?.crop];
   if (!p?.open || !me) return null;
 
-  let growth = 0; let quality = 0; let soil = 1;
+  let growth = 0; let quality = 0; let soil = 1;   // quality 는 여기선 이웃 몫만 — 아래에서 자른다
   const notes = [];
   const note = (x, from) => {
     const g = x.growth ?? 0; const q = x.quality ?? 0;
@@ -137,6 +139,7 @@ function modsFor(farm, plot, cropKey = null) {
     note({ growth: 0.2, text: '🌽 세 자매 — 옥수수·콩·박 +20% · 품질 +10' });
   }
   const capped = Math.max(-CAP, Math.min(CAP, growth));
+  quality = Math.max(-QUALITY_CAP, Math.min(QUALITY_CAP, quality));
   if (capped !== growth) notes.push({ good: capped > 0, text: `궁합은 ±${CAP * 100}% 까지만 (${Math.round(growth * 100)}% → ${Math.round(capped * 100)}%)` });
 
   // 그늘이 필요한 작물 — 키 큰 이웃이 없으면 절반
@@ -172,5 +175,5 @@ function modsFor(farm, plot, cropKey = null) {
 }
 
 module.exports = {
-  FAMILY, CAP, SAME_GROWTH, NO_SHADE, STREAK, neighbors, adjacent, pairRules, threeSisters, modsFor,
+  FAMILY, CAP, QUALITY_CAP, SAME_GROWTH, NO_SHADE, STREAK, neighbors, adjacent, pairRules, threeSisters, modsFor,
 };

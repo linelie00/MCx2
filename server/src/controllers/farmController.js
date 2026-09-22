@@ -32,6 +32,8 @@
  * 줍거나(개간) 쓰는(심기) 것은 칸 바꾸기와 한 번의 쓰기로 나간다 — 반쪽 상태가 없다.
  *
  * **비명 뿌리**(3c)를 거두면 한 번마다 귀마개 하나를 쓰고, 없으면 체력 −5(1 은 남긴다).
+ *
+ * **도감**(`book`, 3b)도 계정 기준 · 같은 파일이다. 수확이 농장을 쓸 때 같이 적는다.
  */
 const farmStore = require('../services/farmStore');
 const accountStore = require('../services/accountStore');
@@ -85,6 +87,21 @@ function meFor(data, farm, userId, today) {
     candidates: tool === 'mithril' ? rules.candidates(farm) : null,
     pouch: { ...(data.pouches[userId] ?? {}) },
   };
+}
+
+/** 도감에 수확을 적는다 — 작물마다 거둔 칸 수 · 최고 ★ · 대왕 작물 수. */
+function bookAdd(data, userId, grades, giants) {
+  const book = { ...(data.book[userId] ?? {}) };
+  for (const [crop, dist] of Object.entries(grades ?? {})) {
+    const was = book[crop] ?? { n: 0, best: 0, giant: 0 };
+    const best = dist.reduce((b, n, star) => (n ? star : b), was.best);
+    book[crop] = { ...was, n: was.n + dist.reduce((a, n) => a + n, 0), best: Math.max(was.best, best) };
+  }
+  for (const g of giants ?? []) {
+    const was = book[g.crop] ?? { n: 0, best: 0, giant: 0 };
+    book[g.crop] = { ...was, n: was.n + 9, giant: (was.giant ?? 0) + 1 };
+  }
+  data.book[userId] = book;
 }
 
 /** 주머니에 씨앗을 넣고 뺀다. 0 이 된 칸은 지운다. */
@@ -401,6 +418,7 @@ exports.harvest = (req, res) => {
 
   // 농장 먼저(§ 머리말 2). 계정 쓰기가 실패하면 이 수확은 잃는다 — 두 번 거두는 것보다 낫다.
   data.farms[channelId] = farm;
+  bookAdd(data, userId, r.grades, r.giants);                 // 도감 — 농장과 같은 파일 · 같은 쓰기
   if (!save(farmStore, data, res, '농장')) return undefined;
   let plugs = 0; let hpLost = 0;
   const acct = touch(acctData, userId, today, (a) => {
@@ -616,6 +634,15 @@ exports.pickaxe = (req, res) => {
   return res.json({
     ok: true, tool: next.key, paid: { gold: next.gold, items: take }, account: publicView(acct), today,
   });
+};
+
+/** GET /api/farms/book/:userId — 그 사람의 도감과 작물표 크기(수집률 셈용). */
+exports.book = (req, res) => {
+  const userId = String(req.params.userId);
+  if (!SNOWFLAKE.test(userId)) return res.status(400).json({ error: 'userId 모양이 아닙니다' });
+  const data = readFarms(res);
+  if (!data) return undefined;
+  return res.json({ book: data.book[userId] ?? {}, total: CROPS.length });
 };
 
 /** GET /api/farms/tools/:userId — 곡괭이 표와 그 사람의 곡괭이 · 농장 레벨. */

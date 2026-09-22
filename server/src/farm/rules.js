@@ -32,9 +32,12 @@
  *       regrows  재수확으로 다시 자란 횟수 — 재수확으로 거둔 칸은 농장 경험치가 절반이다(3c)
  *   { t: 'dead', why: 'dry' | 'rot' }               죽음. 치우면 빈 흙
  */
-const { CROPS, CROP_BY_KEY, seedPrice, gradeOf, YIELD } = require('./crops');
+const {
+  CROPS, CROP_BY_KEY, seedPrice, gradeOf, YIELD, starKey, giantKey,
+} = require('./crops');
 const land = require('./land');
 const affinity = require('./affinity');
+const quality = require('./quality');
 
 /** 밭 수, 한 밭의 칸 수. 둘 다 3×3 이고 키패드 배치다(1 2 3 / 4 5 6 / 7 8 9). */
 const PLOTS = 9;
@@ -337,7 +340,10 @@ function plant(farm, today, { plot, cells, crop }, { pouch = 0 } = {}) {
 /**
  * 다 자란 칸을 거두고, 죽은 칸과 잡초를 치운다. `plot` 을 안 주면 열린 밭 전부.
  *
- * 칸마다 **토질 ★ 과 작물 등급**으로 1~3개(§4). 품질은 3단계 — 지금은 전부 보통.
+ * 칸마다 **토질 ★ 과 작물 등급**으로 1~3개(§4). 품질은 칸마다 굴린다(`quality.js`, 3b) — ★ 이면
+ * `당근S1` 처럼 변형 키로 준다. 품질 경험치: ★ +1 · ★★ +2 · ★★★ +4.
+ * **거대 작물**(3b): 아홉 칸이 다 익고 한 번도 안 시든 거대 작물 밭은 확률로 대왕 작물 하나가 된다.
+ * 실패하면 그 밭 품질 +10.
  * 재수확 작물은 칸이 남아 `regrow` 일 뒤에 다시 익는다.
  * 작물 칸이 하나도 안 남으면(돌·잡초는 남아도) 밭의 작물을 비운다 — 다른 것을 심을 수 있게.
  * 토질 경험: 거둔 칸마다 +1, 콩 계열 밭이면 한 번에 +10 — 여기에 윤작 ×1.5 · 연작 ×0 · 콩 이웃 ×1.5
@@ -353,17 +359,43 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
   const items = {};
   const add = (key, n) => { items[key] = (items[key] ?? 0) + n; };
   let harvested = 0; let cleared = 0; let weeds = 0; let xp = 0; let screams = 0; let spread = 0;
+  const grades = {};            // 작물마다 칸 품질 분포 `[보통, ★, ★★, ★★★]` — 도감·문구
+  const giants = [];            // 대왕 작물 `{ crop, plot }`
+  const level = levelOf(farm);
   for (const p of targets) {
+    const pi = farm.plots.indexOf(p);
     const crop = CROP_BY_KEY[p.crop];
-    const [lo, hi] = crop ? YIELD[gradeOf(crop)][land.soilStar(p.soilXp) - 1] : [0, 0];
+    const star = land.soilStar(p.soilXp);
+    const [lo, hi] = crop ? YIELD[gradeOf(crop)][star - 1] : [0, 0];
     // 궁합은 **거두기 전** 밭 모양으로 셈한다 — 거두다 이웃이 비면 값이 흔들린다.
-    const mods = crop ? affinity.modsFor(farm, farm.plots.indexOf(p)) : null;
-    let here = 0; let again = 0;
+    const mods = crop ? affinity.modsFor(farm, pi) : null;
+    let here = 0; let again = 0; let bonus = 0;
+
+    // 거대 작물 — 아홉 칸이 하나로
+    if (quality.giantReady(p, crop, level)) {
+      if (rand() < quality.giantChance(star)) {
+        add(giantKey(crop.key), 1);
+        giants.push({ crop: crop.key, plot: pi });
+        p.cells = p.cells.map(soil);
+        here = 9;
+        xp += land.XP.giant;
+      } else {
+        bonus = quality.GIANT_MISS;        // 아깝게 못 합쳐졌다 — 그 밭 품질 +10
+      }
+    }
+
     p.cells.forEach((cell, i) => {
       if (cell.t === 'dead') { p.cells[i] = soil(); cleared += 1; farm.compostBits += 1; return; }
       if (cell.t === 'weed') { p.cells[i] = soil(); weeds += 1; farm.compostBits += 1; add('dandelion', 1); return; }
       if (cell.t !== 'plant' || !cell.ripeDay || !crop) return;
-      add(crop.key, land.between(rand, lo, hi));
+      const n = land.between(rand, lo, hi);
+      const overripe = dayNum(today) - dayNum(cell.ripeDay) >= OVERRIPE_AFTER;
+      const q = quality.rollQuality({
+        crop, soilStar: star, cell, mods, overripe, bonus, rand,
+      });
+      add(starKey(crop.key, q.star), n);
+      (grades[crop.key] ??= [0, 0, 0, 0])[q.star] += 1;
+      xp += quality.STAR_XP[q.star];
       here += 1;
       if (cell.regrows) again += 1;
       if (crop.regrow) {
@@ -407,7 +439,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
   const compost = takeCompost(farm);
   if (compost) add('compost', compost);
   return {
-    ok: true, items, harvested, cleared, weeds, xp, levelUp, compost, screams, spread,
+    ok: true, items, harvested, cleared, weeds, xp, levelUp, compost, screams, spread, grades, giants,
   };
 }
 

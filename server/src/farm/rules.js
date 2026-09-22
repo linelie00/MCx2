@@ -86,7 +86,7 @@ function newFarm({ channelId, guildId, owner, today, now, rand = Math.random }) 
     grown: [],              // 이 농장에서 한 번이라도 거둔 작물(첫 수확 경험치)
     compostBits: 0,         // 퇴비 조각 — 셋이면 퇴비 하나(2b)
     water: { day: null, by: [] },   // 오늘 물을 준 사람들
-    ownerWaterDay: null,    // 주인이 물주기 경험치를 받은 날
+    waterXpDay: null,       // 물주기 경험치(하루 한 번)를 받은 날
     plots,
   };
 }
@@ -186,7 +186,8 @@ function thirstyCells(farm, today, plot = null) {
  * `plot` 을 주면 그 밭만.
  *
  * 그 자리에서 오늘치 성장을 더한다 — 준 즉시 🌱 이 🌿 로 바뀌는 것이 보여야 재미있다.
- * 시든 칸도 살아난다. 대신 `scar` 가 남는다. 주인이 그날 처음 물을 주면 경험치 +2.
+ * 시든 칸도 살아난다. 대신 `scar` 가 남는다. 그날 **첫 물**이면 농장 경험치 +2 — 누가 줬든.
+ * 주인만 받게 하면 이웃이 먼저 물을 줄수록 주인이 손해를 본다(simulate-farm 이 잡았다).
  */
 function water(farm, today, userId, { budget = Infinity, plot = null, rand = Math.random } = {}) {
   if (plot !== null && (!Number.isInteger(plot) || plot < 0 || plot >= PLOTS)) return bad('plot');
@@ -214,9 +215,9 @@ function water(farm, today, userId, { budget = Infinity, plot = null, rand = Mat
   if (!farm.water.by.includes(userId)) farm.water.by.push(userId);
 
   let levelUp = null; let xp = 0;
-  if (userId === farm.owner && farm.ownerWaterDay !== today) {
-    farm.ownerWaterDay = today;
-    xp = land.XP.ownerWater;
+  if (farm.waterXpDay !== today) {
+    farm.waterXpDay = today;
+    xp = land.XP.water;
     levelUp = gainXp(farm, xp, rand);
   }
   return {

@@ -45,7 +45,7 @@ eq('재수확은 성장일 이하', CROPS.filter((c) => c.regrow && c.regrow > c
 eq('해시 난수는 늘 같다', land.hashRand('a', 1), land.hashRand('a', 1));
 eq('해시 난수는 [0,1)', [land.hashRand('x'), land.hashRand('y', 2)].every((x) => x >= 0 && x < 1), true);
 eq('토질 ★', [0, 19, 20, 60, 299, 300, 9999].map(land.soilStar), [1, 1, 2, 3, 4, 5, 5]);
-eq('레벨', [0, 59, 60, 150, 2999, 3000, 99999].map(land.levelOf), [1, 1, 2, 3, 9, 10, 10]);
+eq('레벨', [0, 19, 20, 50, 1049, 1050, 99999].map(land.levelOf), [1, 1, 2, 3, 9, 10, 10]);
 eq('간판', [1, 3, 6, 9, 10].map(land.signOf), ['🛖', '🏠', '🏡', '🏯', '🏰']);
 eq('기력 Lv1 5 · Lv3 6', [land.staminaOf(1), land.staminaOf(3)], [5, 6]);
 eq('밭이 열리는 순서는 아홉 칸 전부', [...land.PLOT_ORDER].sort(), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
@@ -251,22 +251,19 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
 }
 {
   const f = fresh();
-  f.xp = 58;
+  f.xp = 18;
   const up = rules.gainXp(f, 2, Math.random);
   eq('Lv2 — 2번 밭이 열린다', [up.from, up.to, up.opened], [1, 2, [1]]);
   eq('Lv2 작물이 풀린다', up.crops.includes('tomato'), true);
   eq('새 밭은 돌투성이', f.plots[1].cells.some((c) => c.t === 'rock' || c.t === 'boulder'), true);
   eq('오르지 않으면 null', rules.gainXp(f, 1, Math.random), null);
   const g = fresh(); g.xp = 0;
-  eq('한 번에 여러 레벨', rules.gainXp(g, 500, Math.random).opened, [1, 3, 5, 7]);
+  eq('한 번에 여러 레벨', rules.gainXp(g, 180, Math.random).opened, [1, 3, 5, 7]);
   const o = fresh({ owner: 'boss' });
   rules.plant(o, D0, { plot: P, cells: [0], crop: 'carrot' });
   rules.plant(o, D0, { plot: P, cells: [1], crop: 'carrot' });
-  eq('주인이 물 주면 +2', rules.water(o, D0, 'boss', { budget: 1 }).xp, 2);
-  eq('그날 두 번째는 없다', rules.water(o, D0, 'boss', { budget: 1 }).xp, 0);
-  const n = fresh({ owner: 'boss' });
-  rules.plant(n, D0, { plot: P, cells: [0], crop: 'carrot' });
-  eq('남이 물 주면 주인 경험치는 없다', rules.water(n, D0, 'guest').xp, 0);
+  eq('그날 첫 물이면 +2', rules.water(o, D0, 'guest', { budget: 1 }).xp, 2);
+  eq('그날 두 번째는 없다 — 주인이 줘도', rules.water(o, D0, 'boss', { budget: 1 }).xp, 0);
 }
 
 // --- 개간
@@ -392,15 +389,16 @@ const server = app.listen(0, async () => {
     const h1 = (await post('/farms/harvest', { channelId: CH, userId: U })).body;
     eq('시금치 셋 수확', [h1.ok, h1.items, h1.account.items.spinach], [true, { spinach: 3 }, 3]);
     eq('경험치 = 물 2 + 돌 2 + 바위 3 + 수확 3 + 첫 작물 10', h1.farm.xp, 20);
+    eq('20 이면 Lv2 — 2번 밭', [h1.levelUp?.to, h1.levelUp?.opened], [2, [1]]);
     eq('수확 전적', (await acct(U)).stats.farmHarvest, 3);
 
     // --- 레벨업이 응답에 실린다
     const d3 = readFile();
-    d3.farms[CH].xp = 59;
+    d3.farms[CH].xp = 49;
     Object.assign(d3.farms[CH].plots[4].cells[3], { g: 2, ripeDay: dayKey() });
     writeFile(d3);
     const h2 = (await post('/farms/harvest', { channelId: CH, userId: U })).body;
-    eq('레벨업 — 2번 밭', [h2.levelUp.to, h2.levelUp.opened, h2.farm.plots[1].open], [2, [1], true]);
+    eq('레벨업 — Lv3 · 4번 밭', [h2.levelUp.to, h2.levelUp.opened, h2.farm.plots[3].open], [3, [3], true]);
 
     // --- 폐농 · 쿨다운
     eq('무르기', (await post('/farms/abandon', { userId: U })).body.free, true);

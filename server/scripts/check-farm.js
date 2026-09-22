@@ -895,7 +895,8 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
     && new Set(o.parts.map((x) => x.crop)).size === o.parts.length
     && o.parts.every((x) => weather.inSeason(CROP_BY_KEY[x.crop], o.day))), true);
   eq('과수 · 희귀는 안 나온다', rq.some((o) => o.parts.some((x) => CROP_BY_KEY[x.crop].tree || CROP_BY_KEY[x.crop].seedOnly)), false);
-  eq('기한 — 적어도 그 주 일요일', rq.every((o) => o.due >= rules.addDays(o.day, 6)), true);
+  eq('기한 — 그 주 일요일부터 두 주 안', rq.every((o) => o.due >= rules.addDays(o.day, orders.REQUEST_DUE_MIN) && o.due <= rules.addDays(o.day, orders.REQUEST_DUE_MAX)), true);
+  eq('성장이 너무 긴 작물은 안 나온다', rq.every((o) => o.parts.every((x) => CROP_BY_KEY[x.crop].days <= orders.REQUEST_MAX_DAYS)), true);
   eq('경험치 = 10 + 가짓수 × 5', rq.every((o) => o.xp === 10 + 5 * o.parts.length), true);
   eq('Lv10 — 세 종 · 가끔 ★★', [rq.every((o) => o.parts.length === 3), new Set(rq.map((o) => o.minStar)).size], [true, 2]);
   const low = days.map((d) => orders.requestOf('111111', d, 2)).filter(Boolean);
@@ -919,7 +920,7 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   rules.tick(r1, rules.addDays(MON, 7));
   eq('다음 월요일에 또', r1.requests.map((o) => o.day).includes(rules.addDays(MON, 7)), true);
   rules.tick(r1, rules.addDays(MON, 60));
-  eq('기한이 지나면 지운다 · 두 건까지', [r1.requests.length <= orders.REQUEST_MAX, r1.requests.every((o) => o.due >= rules.addDays(MON, 60))], [true, true]);
+  eq('기한이 지나면 지운다 · 한도는 없다', [r1.requests.length <= 2, r1.requests.every((o) => o.due >= rules.addDays(MON, 60))], [true, true]);
   const old = { ...structuredClone(r1), requests: [{ id: 'r:1:2026-09-01', crop: 'carrot', qty: 3, due: '2099-01-01' }] };
   eq('옛 모양 의뢰는 버린다', orders.ensureRequests(old, rules.addDays(MON, 61), 10).requests.some((o) => !o.parts), false);
 

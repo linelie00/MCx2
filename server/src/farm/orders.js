@@ -43,9 +43,15 @@ const weekdayOf = (key) => (((dayNum(key) - MONDAY) % 7) + 7) % 7;
 const BOARD_DAYS = [0, 3];
 const BOARD_PER_POST = 3;
 const BOARD_START = '2026-09-21';
-/** 개인 의뢰가 오는 요일(월) · 쌓이는 한도. */
+/**
+ * 개인 의뢰가 오는 요일(월). **쌓이는 한도는 없다** — 기한으로만 관리한다(한도가 있으면 긴 의뢰를 붙잡은
+ * 주에 새 의뢰가 아예 안 왔다). 기한은 **거의 그 주 일요일**, 길어도 **두 주를 넘기지 않는다**.
+ */
 const REQUEST_DAYS = [0];
-const REQUEST_MAX = 2;
+const REQUEST_DUE_MIN = 6;
+const REQUEST_DUE_MAX = 13;
+/** 큰 의뢰에 나올 수 있는 성장일의 한도 — 기한 안에 한 번은 거둘 수 있어야 한다. */
+const REQUEST_MAX_DAYS = 10;
 /**
  * 개인 의뢰의 난이도 — 농장 레벨에 따라. 가짓수 · 수량 배수 · ★★ 를 요구할 확률.
  * Lv1~3 은 밭이 한둘이고 토질 ★1 이라 ★★ 가 안 나온다(★1 토질 ★★ 0%) — 거기에 맞춘다.
@@ -171,7 +177,7 @@ function requestOf(channelId, day, level) {
   const id = `r:${channelId}:${day}`;
   let n = 0;
   const rand = () => hashRand('request', id, n++);
-  const pool = CROPS.filter((c) => !c.seedOnly && !c.tree && c.lv <= level);
+  const pool = CROPS.filter((c) => !c.seedOnly && !c.tree && c.lv <= level && c.days <= REQUEST_MAX_DAYS);
   const now = pool.filter((c) => weather.inSeason(c, day));
   const from = [...(now.length >= 2 ? now : pool)];
   const tier = requestTier(level);
@@ -197,14 +203,15 @@ function requestOf(channelId, day, level) {
     gold,
     xp: REQUEST_XP + REQUEST_XP_PER_KIND * parts.length,
     day,
-    due: keyOf(dayNum(day) + Math.max(6, longest + DUE_EXTRA)),       // 적어도 그 주 일요일까지
+    // 거의 그 주 일요일 — 성장이 긴 작물이 끼면 늘어나되 두 주는 안 넘긴다
+    due: keyOf(dayNum(day) + Math.min(REQUEST_DUE_MAX, Math.max(REQUEST_DUE_MIN, longest + DUE_EXTRA))),
     ...(Object.keys(bonus).length ? { bonus } : {}),
     seed: seedOf(id),
   };
 }
 
 /**
- * 개인 의뢰를 챙긴다 — 기한이 지난 것을 지우고, 오늘이 의뢰 오는 날이면 하나 넣는다(`REQUEST_MAX` 건까지).
+ * 개인 의뢰를 챙긴다 — 기한이 지난 것을 지우고, 오늘이 의뢰 오는 날이면 하나 넣는다(한도 없음 — 기한으로만).
  * **제자리에서 고친다.** 하루치 셈(`rules.tick`)이 부른다. 오늘 것은 (날짜, 채널) 해시라 몇 번 셈해도 같다.
  */
 function ensureRequests(farm, today, level) {
@@ -214,7 +221,6 @@ function ensureRequests(farm, today, level) {
   farm.requests = farm.requests.filter((o) => Array.isArray(o.parts) && dayNum(o.due) >= t);
   if (farm.requestDay === today) return farm;
   farm.requestDay = today;
-  if (farm.requests.length >= REQUEST_MAX) return farm;
   const r = requestOf(farm.channelId, today, level);
   if (r) farm.requests.push(r);
   return farm;
@@ -248,7 +254,7 @@ function takeFor(order, items = {}) {
 const pruneTaken = (taken) => ({ ...(taken ?? {}) });
 
 module.exports = {
-  BOARD_DAYS, BOARD_PER_POST, BOARD_START, REQUEST_DAYS, REQUEST_MAX, REQUEST_TIERS, requestTier, DUE_EXTRA, RESERVE_FROM,
+  BOARD_DAYS, BOARD_PER_POST, BOARD_START, REQUEST_DAYS, REQUEST_DUE_MIN, REQUEST_DUE_MAX, REQUEST_MAX_DAYS, REQUEST_TIERS, requestTier, DUE_EXTRA, RESERVE_FROM,
   BOARD_GOLD, REQUEST_GOLD, BOARD_DAY_GOLD, REQUEST_DAY_GOLD, BOARD_XP, REQUEST_XP, REQUEST_XP_PER_KIND,
   SEED_CHANCE, SEED_CROP, GOLD_FERT_CHANCE, weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor, pruneTaken,
 };

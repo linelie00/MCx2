@@ -305,6 +305,43 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('완벽 두 번 뽑기 중 화석은 하나만', [r.fossils, r.loot], [1, { oddFossil: 1, crackleStone: 1 }]);
 }
 
+// --- 2b: 거름 · 퇴비 · 곡괭이
+{
+  const f = fresh();
+  eq('비료 +15', rules.fertilize(f, D0, { plot: P, item: 'fertilizer' }), { ok: true, item: 'fertilizer', used: 1, soil: 15, from: 1, to: 1, capped: false });
+  eq('비료는 밭마다 하루 하나', rules.fertilize(f, D0, { plot: P, item: 'fertilizer' }).reason, 'fertCap');
+  eq('퇴비 셋까지 — 넷을 넣으면 셋만', [rules.fertilize(f, D0, { plot: P, item: 'compost', count: 4 }).used, f.plots[P].soilXp], [3, 30]);
+  eq('토질 ★2 가 됐다', land.soilStar(f.plots[P].soilXp), 2);
+  eq('보기에 오늘 넣은 거름', rules.view(f, D0).plots[P].fert, { fertilizer: 1, compost: 3 });
+  eq('다음 날엔 다시 넣는다', rules.fertilize(f, day(1), { plot: P, item: 'fertilizer' }).ok, true);
+  eq('다음 날 보기엔 그날 것만', rules.view(f, day(1)).plots[P].fert, { fertilizer: 1 });
+  eq('모르는 거름은 모양 오류', rules.fertilize(f, D0, { plot: P, item: 'dirt' }).bad, true);
+  eq('잠긴 밭엔 못 넣는다', rules.fertilize(f, D0, { plot: 0, item: 'compost' }).reason, 'locked');
+}
+{
+  const f = fresh();
+  f.compostBits = 2;
+  f.plots[P].cells[0] = { t: 'weed' };
+  const r = rules.clear(f, D0, { plot: P, cell: 0 }, {});
+  eq('조각이 셋이 되면 퇴비 하나', [r.compost, r.loot.compost, f.compostBits], [1, 1, 0]);
+  f.compostBits = 5;
+  f.plots[P].cells[1] = { t: 'dead', why: 'dry' };
+  const h = rules.harvest(f, D0);
+  eq('수확에서도 퇴비로 바뀐다', [h.compost, h.items.compost, f.compostBits], [2, 2, 0]);
+}
+{
+  const f = fresh();
+  f.plots[P].cells[0] = { t: 'boulder', grain: 4, swings: 0, cracked: false };
+  eq('나무 곡괭이는 거리를 안 준다', rules.clear(structuredClone(f), D0, { plot: P, cell: 0, pos: 1 }, { stamina: 5 }).hint, { dir: 'right', near: false });
+  eq('철 곡괭이는 거리를 준다', rules.clear(structuredClone(f), D0, { plot: P, cell: 0, pos: 1 }, { stamina: 5, tool: 'iron' }).hint, { dir: 'right', near: false, dist: 3 });
+  const c = rules.candidates(f);
+  eq('미스릴 후보는 두 자리이고 결이 들어 있다', [c[P][0].length, c[P][0].includes(4)], [2, true]);
+  eq('후보는 늘 같다', rules.candidates(structuredClone(f)), c);
+  f.plots[P].cells[0].cracked = true;
+  eq('금 간 바위는 후보가 없다', rules.candidates(f), {});
+  eq('곡괭이 차례', [land.nextPickaxe('wood').key, land.nextPickaxe('iron').key, land.nextPickaxe('mithril')], ['iron', 'mithril', null]);
+}
+
 // --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
 {
   // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
@@ -321,7 +358,7 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   const up = rules.upgrade(structuredClone(old));
   eq('옛 농장: 물 준 사람은 배열로', up.water.by, ['guest']);
   eq('옛 농장: 칸마다 wet 을 옮긴다', up.plots[P].cells.slice(0, 4).map((c) => c.wet), [D0, D0, D0, D0]);
-  eq('옛 농장: 경험치·토질·퇴비는 0', [up.xp, up.plots[P].soilXp, up.plots[0].soilXp, up.compostBits, up.grown], [0, 0, 0, 0, []]);
+  eq('옛 농장: 경험치·토질·퇴비는 0', [up.xp, up.plots[P].soilXp, up.plots[0].soilXp, up.compostBits, up.grown, up.fert], [0, 0, 0, 0, [], { day: null, plots: {} }]);
   eq('upgrade 는 두 번 해도 같다', rules.upgrade(structuredClone(up)), up);
   eq('옛 농장: 오늘은 물을 다 줬다', rules.water(structuredClone(up), D0, 'o').reason, 'already');
   const t = rules.tick(rules.upgrade(structuredClone(old)), day(1));
@@ -365,7 +402,7 @@ const server = app.listen(0, async () => {
     eq('남의 땅', (await post('/farms/register', { channelId: CH, guildId: G, userId: V })).body.reason, 'taken');
     eq('한 사람에 하나', (await post('/farms/register', { channelId: CH2, guildId: G, userId: U })).body.reason, 'hasFarm');
     eq('NPC 는 못 연다', (await post('/farms/register', { channelId: CH2, guildId: G, userId: 'npc:migel' })).status, 400);
-    eq('주인에게는 기력을 준다', (await hit(`/farms/${CH}?user=${U}`)).body.me, { stamina: { left: 5, max: 5 } });
+    eq('주인에게는 기력·곡괭이를 준다', (await hit(`/farms/${CH}?user=${U}`)).body.me, { stamina: { left: 5, max: 5 }, pickaxe: 'wood', candidates: null });
     eq('남에게는 안 준다', (await hit(`/farms/${CH}?user=${V}`)).body.me, null);
 
     // 가운데 밭을 알려진 모양으로 — 빈 흙 여섯 · 돌 둘 · 바위 하나(결 3)
@@ -436,6 +473,45 @@ const server = app.listen(0, async () => {
     eq('24시간 지난 폐농은 쿨다운', [a2.free, a2.until], [false, rules.addDays(dayKey(), 7)]);
     eq('쿨다운 중엔 못 연다', (await post('/farms/register', { channelId: CH, guildId: G, userId: U })).body.reason, 'cooldown');
     eq('다른 사람은 그 땅을 연다', (await post('/farms/register', { channelId: CH2, guildId: G, userId: W2 })).body.ok, true);
+
+    // --- 2b: 거름 · 퇴비 · 곡괭이 (U 는 쿨다운 중이라 W2 의 CH2 농장으로 본다)
+    eq('비료가 없으면', (await post('/farms/fertilize', { channelId: CH2, userId: W2, plot: 4, item: 'fertilizer' })).body.reason, 'noItem');
+    await post('/accounts/deltas', { items: { [W2]: { fertilizer: 2, compost: 5, carrot: 12 } } });
+    const f1 = (await post('/farms/fertilize', { channelId: CH2, userId: W2, plot: 4, item: 'fertilizer', count: 2 })).body;
+    eq('비료 둘을 넣으려 하면 하나만 — 하나는 남는다', [f1.ok, f1.used, f1.capped, f1.account.items.fertilizer], [true, 1, true, 1]);
+    eq('토질 경험 +15', f1.farm.plots[4].soilXp, 15);
+    eq('오늘 두 번째 비료', (await post('/farms/fertilize', { channelId: CH2, userId: W2, plot: 4, item: 'fertilizer' })).body.reason, 'fertCap');
+    const f2 = (await post('/farms/fertilize', { channelId: CH2, userId: W2, plot: 4, item: 'compost', count: 5 })).body;
+    eq('퇴비는 셋까지 — 계정에서 셋만 빠진다', [f2.used, f2.account.items.compost, f2.farm.plots[4].star], [3, 2, 2]);
+    eq('남은 거름을 못 넣는다', (await post('/farms/fertilize', { channelId: CH2, userId: V, plot: 4, item: 'compost' })).body.reason, 'notOwner');
+    eq('모르는 거름 400', (await post('/farms/fertilize', { channelId: CH2, userId: W2, plot: 4, item: 'dirt' })).status, 400);
+
+    const cp1 = (await post('/farms/compost', { userId: W2, crop: 'carrot', count: 2 })).body;
+    eq('당근 열 개 → 퇴비 둘', [cp1.ok, cp1.used, cp1.account.items.carrot, cp1.account.items.compost], [true, 10, 2, 4]);
+    eq('모자라면 안 만든다', (await post('/farms/compost', { userId: W2, crop: 'carrot', count: 1 })).body, { ok: false, reason: 'noItem', item: 'carrot', have: 2, need: 5, today: dayKey() });
+    eq('작물이 아닌 것은 400', (await post('/farms/compost', { userId: W2, crop: 'beef' })).status, 400);
+
+    eq('곡괭이 — 레벨 모자람', (await post('/farms/pickaxe', { userId: W2 })).body, { ok: false, reason: 'toolLevel', need: 6, tool: 'iron', today: dayKey() });
+    const d6 = readFile(); d6.farms[CH2].xp = 820; writeFile(d6);    // Lv9
+    await post('/accounts/deltas', { deltas: { [W2]: 2000 } });
+    eq('곡괭이 — 철 덩어리가 없다', (await post('/farms/pickaxe', { userId: W2 })).body.reason, 'noItem');
+    await post('/accounts/deltas', { items: { [W2]: { ironLump: 2, oreBlue: 1, oreRed: 2 } } });
+    const g1 = (await acct(W2)).gold;
+    const k1 = (await post('/farms/pickaxe', { userId: W2 })).body;
+    eq('철 곡괭이 — 300골드 · 철 둘', [k1.tool, k1.account.gold, k1.account.items.ironLump ?? 0], ['iron', g1 - 300, 0]);
+    const k2 = (await post('/farms/pickaxe', { userId: W2 })).body;
+    eq('미스릴 — 원석 셋을 섞어서(많은 것부터)', [k2.tool, k2.paid.items], ['mithril', { oreRed: 2, oreBlue: 1 }]);
+    eq('더 올릴 게 없다', (await post('/farms/pickaxe', { userId: W2 })).body.reason, 'maxTool');
+    eq('곡괭이 표', (await hit(`/farms/tools/${W2}`)).body.tool, 'mithril');
+    const d7 = readFile();
+    d7.farms[CH2].plots[4].cells[8] = { t: 'boulder', grain: 2, swings: 0, cracked: false };
+    writeFile(d7);
+    const mine = (await hit(`/farms/${CH2}?user=${W2}`)).body.me;
+    eq('미스릴이면 주인에게 결 후보', [mine.pickaxe, mine.candidates[4][8].includes(2), mine.candidates[4][8].length], ['mithril', true, 2]);
+    eq('남에게는 후보가 없다', (await hit(`/farms/${CH2}?user=${V}`)).body.me, null);
+    eq('공개 화면에는 결도 후보도 없다', JSON.stringify((await hit(`/farms/${CH2}`)).body).includes('candidates'), false);
+    const miss2 = (await post('/farms/clear', { channelId: CH2, userId: W2, plot: 4, cell: 8, pos: 5 })).body;
+    eq('미스릴도 빗나가면 거리를 준다', miss2.hint, { dir: 'left', near: false, dist: 3 });
 
     // --- 1단계에 연 농장이 파일에 있을 때
     const d5 = readFile();

@@ -140,7 +140,7 @@ function makePlot(rand, { first = false } = {}) {
 
 // ---------------------------------------------------------------- 개간
 
-/** 하루 개간 기력(계정 기준). 5 + 레벨 보너스(Lv3 +1). 곡괭이 보너스는 2b. */
+/** 하루 개간 기력(계정 기준). 5 + 레벨 보너스(Lv3 +1). */
 const staminaOf = (level) => 5 + (level >= 3 ? 1 : 0);
 
 /** 바위 한 개에 휘두를 수 있는 횟수(나무 곡괭이). 다 빗나가면 금이 간다. */
@@ -183,8 +183,59 @@ function rollLoot(table, rand, { fossilLeft = 0 } = {}) {
   return key;
 }
 
-/** 빗나간 휘두름의 힌트. `dir` 은 결이 있는 쪽, `near` 는 바로 옆. */
-const hintOf = (grain, pos) => ({ dir: grain < pos ? 'left' : 'right', near: Math.abs(grain - pos) === 1 });
+/**
+ * 빗나간 휘두름의 힌트. `dir` 은 결이 있는 쪽, `near` 는 바로 옆.
+ * 철 곡괭이부터는 `dist`(몇 칸 떨어졌나)까지 준다.
+ */
+function hintOf(grain, pos, { exact = false } = {}) {
+  const hint = { dir: grain < pos ? 'left' : 'right', near: Math.abs(grain - pos) === 1 };
+  if (exact) hint.dist = Math.abs(grain - pos);
+  return hint;
+}
+
+// ---------------------------------------------------------------- 곡괭이 (2b)
+
+/**
+ * 곡괭이. **기력이 아니라 전리품 쪽**이다 — 돌은 기력보다 먼저 바닥난다(simulate-farm).
+ *   철      빗나가면 결까지 **정확한 거리**를 준다
+ *   미스릴  휘두르기 전에 결 후보를 **두 자리로** 좁혀 준다 — 완벽 확률 20% → 50%
+ * `items` 의 `ore` 는 원석 아무거나(여섯 가지 섞어서) 그만큼.
+ * 계정 기준(`tools`, farms.json) — 폐농해도 남는다. 해금은 **자기 농장 레벨**로 본다.
+ */
+const PICKAXES = [
+  { key: 'wood', name: '나무 곡괭이', emoji: '🪓', lv: 1, gold: 0, items: {} },
+  { key: 'iron', name: '철 곡괭이', emoji: '⛏️', lv: 6, gold: 300, items: { ironLump: 2 } },
+  { key: 'mithril', name: '미스릴 곡괭이', emoji: '💎', lv: 9, gold: 1000, items: { ore: 3 } },
+];
+const PICKAXE_BY_KEY = Object.fromEntries(PICKAXES.map((t) => [t.key, t]));
+const pickaxeOf = (key) => PICKAXE_BY_KEY[key] ?? PICKAXES[0];
+const nextPickaxe = (key) => PICKAXES[PICKAXES.indexOf(pickaxeOf(key)) + 1] ?? null;
+const exactHint = (key) => pickaxeOf(key).key !== 'wood';
+
+/**
+ * 미스릴 곡괭이의 결 후보 두 자리 — 진짜 결과 다른 한 자리. **해시로 정한다** — 창을 다시
+ * 열어도, 서버를 다시 셈해도 같은 두 자리여야 한다(다르면 두 번 보고 결을 알아낸다).
+ */
+function candidatesOf(channelId, plot, cell, grain) {
+  const others = Array.from({ length: GRAIN_SPOTS }, (_, i) => i + 1).filter((x) => x !== grain);
+  const other = others[Math.floor(hashRand(channelId, plot, cell, 'mithril') * others.length)];
+  return [grain, other].sort((a, b) => a - b);
+}
+
+// ---------------------------------------------------------------- 거름 (2b)
+
+/**
+ * 거름. 토질 경험을 올린다. **밭마다 하루 몇 개**까지 — 골드만으로 단숨에 ★5 가 되면
+ * 땅을 가꾸는 맛이 없다. 값(비료 60)은 봇 명부에 있고 상점이 판다. 서버는 넣기만 한다.
+ */
+const FERTS = {
+  fertilizer: { soil: 15, perDay: 1 },
+  compost: { soil: 5, perDay: 3 },
+};
+/** 퇴비 조각(잡초·죽은 칸) 이만큼이면 퇴비 하나. */
+const COMPOST_BITS = 3;
+/** 거둔 작물 이만큼이면 퇴비 하나(`/농장 퇴비`). 남는 싼 작물을 토질로 바꾸는 길이다. */
+const COMPOST_CROPS = 5;
 
 module.exports = {
   hashRand, between, shuffle,
@@ -192,4 +243,6 @@ module.exports = {
   LEVEL_XP, MAX_LEVEL, PLOT_ORDER, levelOf, nextLevelXp, signOf, XP,
   GRAIN_SPOTS, makePlot,
   staminaOf, MAX_SWINGS, ROCK_LOOT, ORES, LOOT, FOSSIL_PER_DAY, rollLoot, hintOf,
+  PICKAXES, pickaxeOf, nextPickaxe, exactHint, candidatesOf,
+  FERTS, COMPOST_BITS, COMPOST_CROPS,
 };

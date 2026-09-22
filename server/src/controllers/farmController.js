@@ -32,7 +32,7 @@ const farmStore = require('../services/farmStore');
 const accountStore = require('../services/accountStore');
 const { load, publicView } = require('./accountController');
 const { dayKey } = require('../services/dayKey');
-const { CROPS, publicCrop } = require('../farm/crops');
+const { CROPS, CROP_BY_KEY, publicCrop } = require('../farm/crops');
 const rules = require('../farm/rules');
 const land = require('../farm/land');
 
@@ -52,6 +52,8 @@ const BAD = {
   cell: '칸 번호는 0~8 이어야 합니다',
   pos: '휘두를 자리는 1~5 여야 합니다',
   crop: '모르는 작물입니다',
+  item: '거름은 fertilizer 나 compost 여야 합니다',
+  count: '개수는 1 이상의 정수여야 합니다',
 };
 
 /** 물을 줘도 남겨 두는 체력. 0 이면 쓰러진다. */
@@ -61,6 +63,19 @@ const KEEP_HP = 1;
 function dailyOf(data, userId, today) {
   const d = data.daily[userId];
   return d && d.day === today ? d : { day: today, used: 0, fossils: 0 };
+}
+
+/** 그 사람의 곡괭이 키. */
+const toolOf = (data, userId) => land.pickaxeOf(data.tools[userId]).key;
+
+/** 주인에게만 주는 것 — 기력 · 곡괭이 · (미스릴이면) 결 후보. */
+function meFor(data, farm, userId, today) {
+  const tool = toolOf(data, userId);
+  return {
+    stamina: staminaFor(data, farm, userId, today),
+    pickaxe: tool,
+    candidates: tool === 'mithril' ? rules.candidates(farm) : null,
+  };
 }
 
 /** 주인의 오늘 기력 `{ left, max }`. */
@@ -138,9 +153,9 @@ exports.get = (req, res) => {
   const farm = data.farms[channelId];
   if (!farm) return res.json({ farm: null, today });
   const f = current(farm, today);
-  // `?user=` 가 주인이면 오늘 남은 개간 기력도 준다(개간 창이 적는다).
+  // `?user=` 가 주인이면 기력 · 곡괭이 · 결 후보도 준다(개간 창이 적는다).
   const user = String(req.query.user ?? '');
-  const me = user === f.owner ? { stamina: staminaFor(data, f, user, today) } : null;
+  const me = user === f.owner ? meFor(data, f, user, today) : null;
   return res.json({ farm: rules.view(f, today), me, today });
 };
 
@@ -371,7 +386,7 @@ exports.clear = (req, res) => {
   const daily = dailyOf(data, userId, today);
   const stamina = staminaFor(data, farm, userId, today);
   const r = rules.clear(farm, today, { plot, cell, pos, all: all === true }, {
-    stamina: stamina.left, fossilLeft: land.FOSSIL_PER_DAY - daily.fossils,
+    stamina: stamina.left, fossilLeft: land.FOSSIL_PER_DAY - daily.fossils, tool: toolOf(data, userId),
   });
   if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
   if (!r.ok) return res.json({ ...r, stamina, farm: rules.view(farm, today), today });
@@ -391,8 +406,162 @@ exports.clear = (req, res) => {
   return res.json({
     ...r,
     stamina: staminaFor(data, farm, userId, today),
+    me: meFor(data, farm, userId, today),
     account: publicView(acct),
     farm: rules.view(farm, today),
     today,
+  });
+};
+
+// ---------------------------------------------------------------- 거름 · 퇴비 · 곡괭이 (2b)
+
+/**
+ * POST /api/farms/fertilize — `{ channelId, userId, plot, item, count? }`. 주인만.
+ *
+ * 계정의 비료·퇴비를 빼고 밭 토질 경험을 올린다. 밭마다 하루 한도(`land.FERTS`)를 넘는 몫과
+ * 가진 것보다 많은 몫은 안 넣고 안 뺀다(`capped`). 계정 먼저, 농장 나중 — 사이에 죽으면
+ * 거름만 잃는다.
+ */
+exports.fertilize = (req, res) => {
+  const got = ids(req.body, ['channelId', 'userId']);
+  if (typeof got === 'string') return res.status(400).json({ error: got });
+  const { channelId, userId } = got;
+  const { plot, item } = req.body;
+  const count = req.body.count ?? 1;
+  if (!land.FERTS[item]) return res.status(400).json({ error: BAD.item });
+  if (!Number.isInteger(count) || count < 1) return res.status(400).json({ error: BAD.count });
+
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const acctData = readAccounts(res);
+  if (!acctData) return undefined;
+  const today = dayKey();
+
+  const farm = farmFor(data, channelId, today, res);
+  if (!farm) return undefined;
+  if (farm.owner !== userId) return res.json({ ok: false, reason: 'notOwner', owner: farm.owner, today });
+
+  const have = load(acctData, userId, today).items[item] ?? 0;
+  if (have < 1) return res.json({ ok: false, reason: 'noItem', item, have, need: 1, today });
+  const r = rules.fertilize(farm, today, { plot, item, count: Math.min(count, have) });
+  if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
+  if (!r.ok) return res.json({ ...r, farm: rules.view(farm, today), today });
+
+  const acct = touch(acctData, userId, today, (a) => {
+    a.items[item] -= r.used;
+    if (!a.items[item]) delete a.items[item];
+  });
+  if (!save(accountStore, acctData, res, '계정')) return undefined;
+  data.farms[channelId] = farm;
+  if (!save(farmStore, data, res, '농장')) return undefined;
+  return res.json({
+    ...r, capped: r.capped || r.used < count, account: publicView(acct), farm: rules.view(farm, today), today,
+  });
+};
+
+/**
+ * POST /api/farms/compost — `{ userId, crop, count? }`. 거둔 작물 `COMPOST_CROPS` 개 → 퇴비 하나.
+ *
+ * 계정 안에서만 옮긴다(한 번의 쓰기). 농장이 없어도 된다 — 작물만 있으면 퇴비는 만든다.
+ * 농장 작물표에 있는 것만 받는다. 고기나 물고기를 거름으로 만들지는 않는다.
+ */
+exports.compost = (req, res) => {
+  const got = ids(req.body, ['userId']);
+  if (typeof got === 'string') return res.status(400).json({ error: got });
+  const { userId } = got;
+  const { crop } = req.body;
+  const count = req.body.count ?? 1;
+  if (!CROP_BY_KEY[crop]) return res.status(400).json({ error: BAD.crop });
+  if (!Number.isInteger(count) || count < 1 || count > 100) return res.status(400).json({ error: BAD.count });
+
+  const acctData = readAccounts(res);
+  if (!acctData) return undefined;
+  const today = dayKey();
+  const need = count * land.COMPOST_CROPS;
+  const have = load(acctData, userId, today).items[crop] ?? 0;
+  if (have < need) return res.json({ ok: false, reason: 'noItem', item: crop, have, need, today });
+
+  const acct = touch(acctData, userId, today, (a) => {
+    a.items[crop] -= need;
+    if (!a.items[crop]) delete a.items[crop];
+    a.items.compost = (a.items.compost ?? 0) + count;
+  });
+  if (!save(accountStore, acctData, res, '계정')) return undefined;
+  return res.json({
+    ok: true, crop, used: need, made: count, account: publicView(acct), today,
+  });
+};
+
+/**
+ * POST /api/farms/pickaxe — `{ userId }`. 곡괭이를 한 단계 올린다.
+ *
+ * 해금은 **자기 농장 레벨**로 본다(농장이 있어야 한다). 값은 골드 + 재료. 원석(`ore`)은
+ * 여섯 가지 아무거나 — 많이 가진 것부터 뺀다. 계정 먼저, 곡괭이 나중.
+ */
+exports.pickaxe = (req, res) => {
+  const got = ids(req.body, ['userId']);
+  if (typeof got === 'string') return res.status(400).json({ error: got });
+  const { userId } = got;
+
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const acctData = readAccounts(res);
+  if (!acctData) return undefined;
+  const today = dayKey();
+
+  const farm = ownedBy(data, userId);
+  if (!farm) return res.json({ ok: false, reason: 'noFarm', today });
+  const now = land.pickaxeOf(data.tools[userId]);
+  const next = land.nextPickaxe(now.key);
+  if (!next) return res.json({ ok: false, reason: 'maxTool', tool: now.key, today });
+  const level = rules.levelOf(rules.upgrade(clone(farm)));
+  if (level < next.lv) return res.json({ ok: false, reason: 'toolLevel', need: next.lv, tool: next.key, today });
+
+  const acct0 = load(acctData, userId, today);
+  if (acct0.gold < next.gold) return res.json({ ok: false, reason: 'gold', need: next.gold, gold: acct0.gold, today });
+  // 재료 — 원석은 많이 가진 것부터
+  const take = {};
+  for (const [key, n] of Object.entries(next.items)) {
+    if (key !== 'ore') {
+      const h = acct0.items[key] ?? 0;
+      if (h < n) return res.json({ ok: false, reason: 'noItem', item: key, have: h, need: n, today });
+      take[key] = n;
+    } else {
+      let left = n;
+      const ores = land.ORES.map((k) => [k, acct0.items[k] ?? 0]).sort((a, b) => b[1] - a[1]);
+      for (const [k, h] of ores) {
+        const t = Math.min(h, left);
+        if (t) { take[k] = t; left -= t; }
+      }
+      if (left > 0) return res.json({ ok: false, reason: 'noItem', item: 'ore', have: n - left, need: n, today });
+    }
+  }
+
+  const acct = touch(acctData, userId, today, (a) => {
+    a.gold -= next.gold;
+    for (const [k, n] of Object.entries(take)) {
+      a.items[k] -= n;
+      if (!a.items[k]) delete a.items[k];
+    }
+  });
+  if (!save(accountStore, acctData, res, '계정')) return undefined;
+  data.tools[userId] = next.key;
+  if (!save(farmStore, data, res, '농장')) return undefined;
+  return res.json({
+    ok: true, tool: next.key, paid: { gold: next.gold, items: take }, account: publicView(acct), today,
+  });
+};
+
+/** GET /api/farms/tools/:userId — 곡괭이 표와 그 사람의 곡괭이 · 농장 레벨. */
+exports.tools = (req, res) => {
+  const userId = String(req.params.userId);
+  if (!SNOWFLAKE.test(userId)) return res.status(400).json({ error: 'userId 모양이 아닙니다' });
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const farm = ownedBy(data, userId);
+  return res.json({
+    pickaxes: land.PICKAXES,
+    tool: toolOf(data, userId),
+    level: farm ? rules.levelOf(rules.upgrade(clone(farm))) : null,
   });
 };

@@ -87,6 +87,7 @@ function newFarm({ channelId, guildId, owner, today, now, rand = Math.random }) 
     compostBits: 0,         // 퇴비 조각 — 셋이면 퇴비 하나(2b)
     water: { day: null, by: [] },   // 오늘 물을 준 사람들
     waterXpDay: null,       // 물주기 경험치(하루 한 번)를 받은 날
+    fert: { day: null, plots: {} },  // 오늘 밭마다 넣은 거름 `{ 밭: { fertilizer, compost } }`
     plots,
   };
 }
@@ -107,6 +108,7 @@ function upgrade(farm) {
   if (farm.waterXpDay === undefined) farm.waterXpDay = null;
   if (!farm.water || typeof farm.water !== 'object') farm.water = { day: null, by: [] };
   if (!Array.isArray(farm.water.by)) farm.water.by = farm.water.by ? [farm.water.by] : [];
+  if (!farm.fert || typeof farm.fert !== 'object') farm.fert = { day: null, plots: {} };
   for (const p of farm.plots) {
     if (!Number.isFinite(p.soilXp)) p.soilXp = 0;
     if (!Array.isArray(p.cells)) p.cells = [];
@@ -146,6 +148,13 @@ function rateOf(plot) {
 }
 
 const loseSoil = (plot, n) => { plot.soilXp = Math.max(0, (plot.soilXp ?? 0) - n); };
+
+/** 퇴비 조각을 퇴비로 바꾼다. 바꾼 개수(계정에 넣을 것)를 돌려준다. 수확·개간이 부른다. */
+function takeCompost(farm) {
+  const n = Math.floor(farm.compostBits / land.COMPOST_BITS);
+  farm.compostBits -= n * land.COMPOST_BITS;
+  return n;
+}
 
 // ---------------------------------------------------------------- 하루치
 
@@ -331,8 +340,10 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
   }
   if (!harvested && !cleared && !weeds) return { ok: false, reason: 'nothing' };
   const levelUp = gainXp(farm, xp, rand);
+  const compost = takeCompost(farm);
+  if (compost) add('compost', compost);
   return {
-    ok: true, items, harvested, cleared, weeds, xp, levelUp,
+    ok: true, items, harvested, cleared, weeds, xp, levelUp, compost,
   };
 }
 
@@ -350,9 +361,10 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
  * 결 자리와 휘두른 횟수는 칸에 저장된다. 창을 닫았다 열어도 다시 굴려지지 않는다.
  *
  * 돌려주는 `used` 만큼 컨트롤러가 기력을 깎고, `fossils` 만큼 화석 상한을 쓴다.
+ * `tool` 은 곡괭이(`land.PICKAXES`). 철부터는 빗나간 힌트에 거리(`dist`)가 붙는다.
  */
 function clear(farm, today, { plot, cell = null, pos = null, all = false }, {
-  rand = Math.random, stamina = 0, fossilLeft = 0,
+  rand = Math.random, stamina = 0, fossilLeft = 0, tool = 'wood',
 } = {}) {
   if (badPlot(plot)) return bad('plot');
   const p = farm.plots[plot];
@@ -372,8 +384,10 @@ function clear(farm, today, { plot, cell = null, pos = null, all = false }, {
   const done = (extra) => {
     const xp = extra.xp ?? 0;
     const levelUp = gainXp(farm, xp, rand);
+    const compost = takeCompost(farm);
+    if (compost) loot.compost = (loot.compost ?? 0) + compost;
     return {
-      ok: true, loot, fossils, levelUp, ...extra, xp,
+      ok: true, loot, fossils, levelUp, compost, ...extra, xp,
     };
   };
 
@@ -419,8 +433,55 @@ function clear(farm, today, { plot, cell = null, pos = null, all = false }, {
   c.swings += 1;
   if (c.swings >= land.MAX_SWINGS) c.cracked = true;
   return done({
-    kind: 'boulder', used: 1, broke: false, hint: land.hintOf(c.grain, pos), swings: c.swings, cracked: c.cracked,
+    kind: 'boulder', used: 1, broke: false, hint: land.hintOf(c.grain, pos, { exact: land.exactHint(tool) }), swings: c.swings, cracked: c.cracked,
   });
+}
+
+// ---------------------------------------------------------------- 거름
+
+/** 오늘 그 밭에 넣은 거름 `{ fertilizer, compost }`. 날이 바뀌었으면 비어 있다. */
+const fertToday = (farm, today, plot) => (farm.fert?.day === today ? farm.fert.plots[plot] : null) ?? {};
+
+/**
+ * 거름을 넣는다 — 비료(+15)·퇴비(+5) 를 `count` 개. **밭마다 하루 한도**(`land.FERTS`).
+ * 아이템이 계정에 있는지는 컨트롤러가 본다. 여기서는 한도와 토질만.
+ */
+function fertilize(farm, today, { plot, item, count = 1 }) {
+  if (badPlot(plot)) return bad('plot');
+  const f = land.FERTS[item];
+  if (!f) return bad('item');
+  if (!Number.isInteger(count) || count < 1) return bad('count');
+  const p = farm.plots[plot];
+  if (!p.open) return { ok: false, reason: 'locked' };
+
+  const used = fertToday(farm, today, plot)[item] ?? 0;
+  const room = f.perDay - used;
+  if (room < 1) return { ok: false, reason: 'fertCap', item, perDay: f.perDay };
+  const n = Math.min(count, room);
+
+  const from = land.soilStar(p.soilXp);
+  p.soilXp += f.soil * n;
+  if (farm.fert?.day !== today) farm.fert = { day: today, plots: {} };
+  farm.fert.plots[plot] = { ...fertToday(farm, today, plot), [item]: used + n };
+  return {
+    ok: true, item, used: n, soil: f.soil * n, from, to: land.soilStar(p.soilXp), capped: n < count,
+  };
+}
+
+/**
+ * 미스릴 곡괭이의 결 후보 `{ 밭: { 칸: [a, b] } }`. **주인 자신의 조회**에만 싣는다 —
+ * 공개 화면에 두면 남도 결을 반쯤 안다.
+ */
+function candidates(farm) {
+  const out = {};
+  farm.plots.forEach((p, pi) => {
+    if (!p.open) return;
+    p.cells.forEach((c, i) => {
+      if (c.t !== 'boulder' || c.cracked) return;
+      (out[pi] ??= {})[i] = land.candidatesOf(farm.channelId, pi, i, c.grain);
+    });
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------- 보기
@@ -487,6 +548,7 @@ function view(farm, today) {
           ? Math.min(...growing.map((cell) => Math.max(0, Math.ceil(round((crop.days - cell.g) / rate)))))
           : null,
         swings,
+        fert: p.open ? fertToday(farm, today, farm.plots.indexOf(p)) : {},
       };
     }),
   };
@@ -495,5 +557,5 @@ function view(farm, today) {
 module.exports = {
   PLOTS, CELLS, START_PLOT, WITHER, DEATH, OVERRIPE_AFTER, ROT_AFTER, GRACE_MS, COOLDOWN_DAYS,
   dayNum, keyOf, addDays,
-  newFarm, upgrade, levelOf, gainXp, tick, water, plant, harvest, clear, view,
+  newFarm, upgrade, levelOf, gainXp, tick, water, plant, harvest, clear, fertilize, candidates, view,
 };

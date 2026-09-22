@@ -74,7 +74,10 @@ const groupAt = (item) => {
 export const groupOf = (item) => GROUPS[groupAt(item)] ?? null;
 
 /** 도감이 보여 주는 순서. 명부는 그대로 두고 여기서만 세운다. */
-export const ORDERED = [...ITEMS].sort((a, b) => groupAt(a) - groupAt(b)
+/**
+ * 목록에 보일 것 — 농장 ★ 변형은 빼고 원래 작물 카드에 같이 적는다(3b). 153개가 목록을 덮는다.
+ */
+export const ORDERED = ITEMS.filter((i) => !i.variantOf).sort((a, b) => groupAt(a) - groupAt(b)
   || a.name.localeCompare(b.name, 'ko'));
 const iconOf = (item) => KINDS.find((k) => k.key !== 'all' && k.of(item))?.icon ?? '🎒';
 
@@ -198,6 +201,11 @@ function itemPayload(key, kindKey = 'all', page = 0) {
     { name: '갈래', value: groupOf(item)?.label ?? item.kind, inline: true },
     { name: '값', value: item.price ? `${num(item.price)}골드` : '_없음_', inline: true },
   );
+  // 농장 작물이면 품질 ★ 변형의 값을 같이 적는다(변형은 목록에 안 보인다)
+  const stars = [1, 2, 3].map((n) => ITEM_BY_KEY[`${item.variantOf ?? item.key}S${n}`]).filter(Boolean);
+  if (stars.length) {
+    embed.addFields({ name: '🌾 밭에서 키우면', value: stars.map((v) => `${'★'.repeat(v.star)} ${num(v.price)}골드`).join(' · '), inline: false });
+  }
 
   return {
     embeds: [embed],

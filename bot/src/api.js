@@ -290,6 +290,8 @@ export const getPreview = (channelId, plot, crop = null) => request(
   `/api/farms/${encodeURIComponent(channelId)}/preview?plot=${plot}${crop ? `&crop=${encodeURIComponent(crop)}` : ''}`,
   { bot: true },
 );
+/** 도감(3b) — `{ book: { 작물: { n, best, giant } }, total }`. */
+export const getBook = (userId) => request(`/api/farms/book/${encodeURIComponent(userId)}`, { bot: true });
 /** 곡괭이 표 · 그 사람의 곡괭이 · 농장 레벨. */
 export const getTools = (userId) => request(`/api/farms/tools/${encodeURIComponent(userId)}`, { bot: true });
 
@@ -340,5 +342,5 @@ export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook,
 };

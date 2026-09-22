@@ -163,7 +163,11 @@ export function gradeOf(total, d, { poisoned = false } = {}) {
 export const FLAT_FULL = 3;
 
 /** 고정값을 얼마나 받는지. 0~1. */
-export const flatShare = (keys) => Math.min(1, new Set(keys).size / FLAT_FULL);
+/**
+ * 가짓수 몫. **농장 ★ 변형은 원래 작물로 센다**(3b) — 당근과 당근★ 을 두 가지로 치면
+ * 같은 채소로 가짓수 보너스를 부풀릴 수 있다.
+ */
+export const flatShare = (keys) => Math.min(1, new Set(keys.map((k) => ITEM_BY_KEY[k]?.variantOf ?? k)).size / FLAT_FULL);
 
 /** 재료값. 값이 0 인 것(젖은 이끼 같은)은 0 으로 센다. */
 export const worthOf = (keys) => keys.reduce((a, k) => a + (ITEM_BY_KEY[k]?.price ?? 0), 0);

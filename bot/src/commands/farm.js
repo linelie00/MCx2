@@ -31,7 +31,7 @@ import {
 } from 'discord.js';
 import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook,
 } from '../api.js';
 import { base, fail, trunc } from '../embeds.js';
 import { forget } from '../casino/alive.js';
@@ -152,6 +152,32 @@ const itemName = (crops, key) => crops?.find((c) => c.key === key)?.name ?? ITEM
 const itemsLine = (items, crops) => Object.entries(items ?? {})
   .map(([k, n]) => `${itemName(crops, k)} ×${n}`).join(' · ');
 
+const STARS = ['', '★', '★★', '★★★'];
+/**
+ * 수확물 한 줄(3b) — ★ 변형은 원래 작물로 묶는다. `당근 ×5 (★×2 · ★★×1) · 🏆 대왕 무`
+ * 대왕 작물은 따로 앞에, 품질 분포는 **개수**로 적는다(칸이 아니라 나온 것).
+ */
+function harvestLine(items, crops) {
+  const groups = new Map();
+  const giants = [];
+  const others = [];
+  for (const [k, n] of Object.entries(items ?? {})) {
+    const it = ITEM_BY_KEY[k];
+    if (it?.giantOf) { giants.push(`🏆 **${it.name}**${n > 1 ? ` ×${n}` : ''}`); continue; }
+    const base = it?.variantOf ?? k;
+    if (!it?.variantOf && !crops?.some((c) => c.key === k)) { others.push(`${itemName(crops, k)} ×${n}`); continue; }
+    const g = groups.get(base) ?? [0, 0, 0, 0];
+    g[it?.star ?? 0] += n;
+    groups.set(base, g);
+  }
+  const lines = [...groups.entries()].map(([base, g]) => {
+    const total = g.reduce((a, n) => a + n, 0);
+    const stars = g.map((n, s) => (s && n ? `${STARS[s]}×${n}` : null)).filter(Boolean);
+    return `${cropName(crops, base)} ×${total}${stars.length ? ` (${stars.join(' · ')})` : ''}`;
+  });
+  return [...giants, ...lines, ...others].join(' · ');
+}
+
 function waterNote(who, r) {
   const bits = [`<@${who}> 님이 **${r.watered}포기**에 물을 줬어요 · 체력 −${r.watered} (남은 체력 ${num(r.hp)})`];
   if (r.revived) bits.push(`🍂 ${r.revived}포기가 살아났어요`);
@@ -162,7 +188,7 @@ function waterNote(who, r) {
 
 function harvestNote(who, r, crops) {
   const bits = [];
-  if (r.harvested || r.weeds) bits.push(itemsLine(r.items, crops));
+  if (r.harvested || r.weeds) bits.push(harvestLine(r.items, crops));
   if (r.cleared) bits.push(`💀 ${r.cleared}칸을 치웠어요`);
   if (r.spread) bits.push(`🍀 박하가 ${r.spread}포기 번졌어요`);
   const lines = [`🧺 <@${who}> 님의 수확 — ${bits.join(' · ')}`];
@@ -184,6 +210,20 @@ async function screamBlocked(ch, me, plot = null) {
   const { farm } = await getFarm(ch);
   const hit = farm?.plots.some((p, i) => (plot == null || plot === i) && p.crop === 'screamRoot' && p.ripe > 0);
   return hit ? `${seatedMessage('그쪽', at)} — 비명 뿌리는 체력이 드는 수확이라 판을 마친 뒤에 거둬 주세요.` : null;
+}
+
+/** 대왕 작물 알림(3b). 채널에 공개로 — 모두가 볼 일이다. */
+async function announceGiant(interaction, r, crops) {
+  if (!r?.giants?.length) return;
+  const names = r.giants.map((g) => `🏆 **대왕 ${cropName(crops, g.crop)}**(${plotNo(g.plot)}번 밭)`).join(' · ');
+  await interaction.followUp({
+    embeds: [base({
+      title: '🏆 거대 작물이 자랐어요!',
+      description: `<@${interaction.user.id}> 님의 밭에서 아홉 포기가 하나로 뭉쳤어요 — ${names}`,
+      color: FARM_COLOR,
+    })],
+    allowedMentions: QUIET,
+  });
 }
 
 /** 레벨업 알림. 채널에 공개로 보낸다. */
@@ -648,6 +688,32 @@ async function openTools(interaction) {
   return interaction.editReply(toolsPayload({ owner: me, tools, account: accounts[me] }));
 }
 
+// ---------------------------------------------------------------- 도감 (3b)
+
+/**
+ * 도감 — 작물마다 거둔 포기 수 · 최고 ★ · 대왕 작물. 안 키워 본 것은 ❔.
+ * 레벨 순으로, 희귀는 맨 끝에. 51줄이라 임베드 하나(4096자)에 든다.
+ */
+function bookPayload({ who, book, crops }) {
+  const known = crops.filter((c) => book[c.key]?.n);
+  const pct = Math.round((known.length / crops.length) * 100);
+  const line = (c) => {
+    const b = book[c.key];
+    if (!b?.n) return `❔ ${c.seedOnly ? '_희귀 ???_' : `_??? (Lv.${c.lv})_`}`;
+    return `${c.emoji} **${c.name}** · ${num(b.n)}포기${b.best ? ` · 최고 ${STARS[b.best]}` : ''}${b.giant ? ` · 🏆×${b.giant}` : ''}`;
+  };
+  const ordered = [...crops].sort((a, b) => Number(Boolean(a.seedOnly)) - Number(Boolean(b.seedOnly)) || a.lv - b.lv);
+  return {
+    embeds: [base({
+      title: `📖 농장 도감 — ${known.length} / ${crops.length} (${pct}%)`,
+      description: [`<@${who}> 님이 키워 본 작물`, '', ...ordered.map(line)].join('\n'),
+      color: FARM_COLOR,
+      footer: '거둘 때마다 적혀요 · 최고 품질은 ★ · ★★ · ★★★ · 🏆 는 대왕 작물',
+    })],
+    allowedMentions: QUIET,
+  };
+}
+
 // ---------------------------------------------------------------- 명령
 
 const plotOption = (o, text) => o.setName('밭').setDescription(text).setMinValue(1).setMaxValue(9);
@@ -674,6 +740,7 @@ const data = new SlashCommandBuilder()
     .addStringOption((o) => o.setName('작물').setDescription('퇴비로 만들 작물').setAutocomplete(true).setRequired(true))
     .addIntegerOption((o) => o.setName('개수').setDescription('만들 퇴비 수 (기본 1)').setMinValue(1).setMaxValue(100)))
   .addSubcommand((s) => s.setName('곡괭이').setDescription('곡괭이를 봅니다 · 더 좋은 것으로 바꿉니다'))
+  .addSubcommand((s) => s.setName('도감').setDescription('키워 본 작물 · 최고 품질 · 대왕 작물을 봅니다'))
   .addSubcommand((s) => s.setName('폐농').setDescription('내 농장을 없앱니다 — 등록 24시간 안이면 무르기'));
 
 async function register(interaction) {
@@ -770,6 +837,7 @@ async function harvestCmd(interaction) {
   forgetBag(interaction.user.id);           // /요리 재료 자동완성이 거둔 것을 바로 보게
   if (r.hpLost) forget(interaction.user.id); // 비명으로 체력이 줄었다
   await interaction.editReply(viewPayload(interaction, r.farm, crops, harvestNote(interaction.user.id, r, crops)));
+  await announceGiant(interaction, r, crops);
   return announceLevel(interaction, r.levelUp, crops);
 }
 
@@ -801,6 +869,13 @@ _\`/농장 거름\` 으로 밭에 넣으세요 — 하나에 토질 경험 +${FE
       color: FARM_COLOR,
     })],
   });
+}
+
+async function bookCmd(interaction) {
+  await interaction.deferReply({ flags: EPH });
+  const me = interaction.user.id;
+  const [{ book }, crops] = await Promise.all([getBook(me), getFarmCrops()]);
+  return interaction.editReply(bookPayload({ who: me, book, crops }));
 }
 
 async function toolsCmd(interaction) {
@@ -849,6 +924,7 @@ const RUN = {
   거름: fertCmd,
   퇴비: compostCmd,
   곡괭이: toolsCmd,
+  도감: bookCmd,
   폐농: abandonCmd,
 };
 
@@ -912,6 +988,7 @@ async function viewButton(interaction, act, ch) {
     content: act === 'w' ? waterNote(me, r) : harvestNote(me, r, crops),
     allowedMentions: QUIET,
   });
+  if (act === 'h') await announceGiant(interaction, r, crops);
   return announceLevel(interaction, r.levelUp, crops);
 }
 
@@ -1115,8 +1192,8 @@ async function component(interaction) {
 
 /** 검사용(scripts/check-farm.mjs). 화면은 상태가 없어 그대로 불러 볼 수 있다. */
 export {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, harvestNote, why, cellsOf, maskOf, unlocked, modsLines,
-  PLANT_PAGE,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, swingNote, harvestNote, harvestLine, why,
+  cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 };
 
 export default {

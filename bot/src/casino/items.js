@@ -321,6 +321,73 @@ export const ITEMS = [
   { key: 'walkingCap',      name: '도망가는 버섯갓',          kind: '재료', cat: 'veg',   price:    8, sell: true,  heal: 5,              monster: true, desc: '제 발로 도망치던 버섯의 갓. 잡고 나니 얌전하다. 아직 조금 따뜻하다.' },
 ];
 
+// ---------------------------------------------------------------- 농장 품질 ★ · 대왕 작물 (3b)
+
+/**
+ * 농장 작물 — **서버 작물표(server/src/farm/crops.js)와 같아야 한다**(`check-farm` 이 본다).
+ * 이 목록으로 품질 ★ 변형과 대왕 작물을 **코드로** 만든다. 시트에 손으로 적지 않는다.
+ */
+export const FARM_CROPS = [
+  'potato', 'carrot', 'spinach', 'cucumber', 'radish', 'lettuce', 'wheat', 'soybean',
+  'onion', 'garlic', 'greenOnion', 'cabbage', 'tomato', 'perilla', 'pea',
+  'eggplant', 'sweetPotato', 'corn', 'chili', 'turnip', 'oats', 'barley', 'kidneyBean',
+  'napaCabbage', 'broccoli', 'paprika', 'beet', 'buckwheat', 'strawberry', 'rosemary', 'basil', 'mint',
+  'pumpkin', 'taro', 'sesame', 'raspberry', 'blueberry', 'rice', 'sunflower',
+  'asparagus', 'teaLeaf', 'ginger', 'lavender', 'koreanMelon', 'watermelon', 'melon',
+  'pineMushroom', 'saffron', 'screamRoot', 'walkingCap', 'keeperBerry',
+];
+/** 대왕 작물이 되는 작물. */
+export const GIANT_CROPS = ['radish', 'cabbage', 'napaCabbage', 'pumpkin', 'watermelon', 'melon'];
+
+/** 품질 ★ 변형의 파는 값 배수(올림). 서버 `STAR_MULT` 와 같다. */
+export const STAR_MULT = [1, 1.2, 1.5, 2];
+const STAR_LABEL = ['', '상품', '특품', '명품'];
+/** 변형 키 — `carrotS1` … `carrotS3`. **바꾸지 않는다** — 계정에 저장된다. */
+export const starKey = (key, star) => (star ? `${key}S${star}` : key);
+/** 대왕 작물 키 — `giantRadish` … 값은 파는 값 ×45. */
+export const giantKey = (key) => `giant${key[0].toUpperCase()}${key.slice(1)}`;
+const GIANT_MULT = 45;
+
+const BASE_BY_KEY = Object.fromEntries(ITEMS.map((i) => [i.key, i]));
+for (const key of FARM_CROPS) {
+  const b = BASE_BY_KEY[key];
+  if (!b) continue;                                     // 명부에 없으면 check-farm 이 잡는다
+  for (let star = 1; star <= 3; star += 1) {
+    ITEMS.push({
+      key: starKey(key, star),
+      name: `${b.name} ${'★'.repeat(star)}`,
+      kind: b.kind,
+      cat: b.cat,
+      price: Math.ceil(b.price * STAR_MULT[star]),
+      sell: true,
+      heal: b.heal,
+      ...(b.poison ? { poison: b.poison } : {}),
+      ...(b.monster ? { monster: true } : {}),
+      loot: false,
+      variantOf: key,
+      star,
+      desc: `${b.desc} — 밭에서 잘 키운 ${STAR_LABEL[star]}.`,
+    });
+  }
+}
+for (const key of GIANT_CROPS) {
+  const b = BASE_BY_KEY[key];
+  if (!b) continue;
+  const heal = Array.isArray(b.heal) ? b.heal.map((h) => h * 5) : b.heal * 5;
+  ITEMS.push({
+    key: giantKey(key),
+    name: `대왕 ${b.name}`,
+    kind: b.kind,
+    cat: b.cat,
+    price: b.price * GIANT_MULT,
+    sell: true,
+    heal,
+    loot: false,
+    giantOf: key,
+    desc: `아홉 포기가 하나로 뭉쳐 자란 ${b.name}. 혼자서는 들 수도 없다. 품평회에 내면 다들 모여든다.`,
+  });
+}
+
 export const ITEM_BY_KEY = Object.fromEntries(ITEMS.map((i) => [i.key, i]));
 
 /** 상점에 나오는 것. 값이 0 인 물건은 살 수도 팔 수도 없다. */
@@ -354,4 +421,6 @@ const NORMAL = (s) => String(s ?? '').replace(/\s+/g, '').toLowerCase();
 const BY_NAME = new Map(ITEMS.map((i) => [NORMAL(i.name), i]));
 export const findItem = (text) => ITEM_BY_KEY[text] ?? BY_NAME.get(NORMAL(text)) ?? null;
 
-export default { MAX_HP, ITEMS, ITEM_BY_KEY, forSale, buyPrice, healOf, findItem };
+export default {
+  MAX_HP, ITEMS, ITEM_BY_KEY, forSale, buyPrice, healOf, findItem, FARM_CROPS, GIANT_CROPS, starKey, giantKey,
+};

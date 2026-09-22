@@ -25,9 +25,11 @@ import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
 import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, swingNote, harvestNote, why, cellsOf, maskOf, unlocked, modsLines,
-  PLANT_PAGE,
+  plantPayload, clearPayload, boulderPayload, fertPayload, toolsPayload, bookPayload, swingNote, harvestNote, harvestLine, why,
+  cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 } from '../src/commands/farm.js';
+import { flatShare } from '../src/casino/crafts.js';
+import { FARM_CROPS } from '../src/casino/items.js';
 import { SHELVES } from '../src/commands/shop.js';
 
 const require = createRequire(import.meta.url);
@@ -221,6 +223,22 @@ eq('윤작(성장은 그대로)', modsBadge({ rate: 1, rotation: 'varied' }), '�
   eq('비명 — 체력', harvestNote('1', { harvested: 1, items: { screamRoot: 1 }, screams: 1, plugs: 0, hpLost: 5, hp: 85 }, crops).includes('체력 −5 (남은 체력 85)'), true);
   eq('퍼짐 문구', harvestNote('1', { harvested: 1, items: { mint: 1 }, spread: 1 }, crops).includes('🍀 박하가 1포기 번졌어요'), true);
   eq('씨앗을 주웠다', swingNote({ kind: 'boulder', broke: true, perfect: false, loot: {}, seeds: { walkingCap: 1 } }, crops).includes('🎒 **도망가는 버섯갓 씨앗**'), true);
+}
+
+// 3b — 품질 · 대왕 · 도감
+eq('봇의 작물 명부 = 서버 작물표', FARM_CROPS, CROPS.map((c) => c.key));
+eq('수확 문구 — ★ 변형은 원래 작물로 묶는다', harvestLine({ carrot: 2, carrotS1: 2, carrotS2: 1, dandelion: 1 }, crops), '당근 ×5 (★×2 · ★★×1) · 민들레 ×1');
+eq('수확 문구 — 대왕 작물은 앞에', harvestLine({ giantRadish: 1, lettuceS3: 2 }, crops), '🏆 **대왕 무** · 상추 ×2 (★★★×2)');
+eq('요리 가짓수 — 당근과 당근★ 은 한 가지', flatShare(['carrot', 'carrotS1', 'carrotS3']), flatShare(['carrot']));
+eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'potatoS1']) > flatShare(['carrot']), true);
+{
+  const bp = bookPayload({ who: OWNER, book: { carrot: { n: 12, best: 2, giant: 0 }, radish: { n: 18, best: 3, giant: 1 } }, crops });
+  const e = bp.embeds[0].toJSON();
+  eq('도감 수집률', e.title, `📖 농장 도감 — 2 / ${crops.length} (${Math.round(200 / crops.length)}%)`);
+  eq('도감 줄', [e.description.includes('🥕 **당근** · 12포기 · 최고 ★★'), e.description.includes('⚪ **무** · 18포기 · 최고 ★★★ · 🏆×1')], [true, true]);
+  eq('안 키운 것은 ❔', e.description.includes('❔ _??? (Lv.1)_'), true);
+  eq('희귀는 이름을 숨긴다', e.description.includes('❔ _희귀 ???_'), true);
+  eq('도감은 임베드 한도 안', e.description.length < 4096, true);
 }
 
 // ---------------------------------------------------------------- 5. 사유

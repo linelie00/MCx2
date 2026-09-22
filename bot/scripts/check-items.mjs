@@ -18,6 +18,7 @@ process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
 process.env.DISCORD_GUILD_ID ||= 'x';
 const cmd = (await import('../src/commands/items.js')).default;
+const { ORDERED, GROUPS, groupOf } = await import('../src/commands/items.js');
 const { SHELVES } = await import('../src/commands/shop.js');
 const { width } = await import('../src/text.js');
 
@@ -163,16 +164,19 @@ const read = (p) => {
   };
 };
 const lines = (body) => body.split(String.fromCharCode(10)).filter((l) => l && !l.startsWith('```'));
+/** 종류 머리줄(`── 과일 ───`)을 뺀 아이템 줄. */
+const itemLines = (body) => lines(body).filter((l) => !l.startsWith('──'));
 
 console.log('\n/아이템 — 목록');
 let c = read(await show(null));
 eq('전체 227종', c.fields[0], '종류=**227**');
 eq('열두 쪽', c.fields[1], '쪽=1 / 12');
-eq('한 쪽에 스무 줄', lines(c.body).length, 20);
+eq('한 쪽에 스무 줄(머리줄 빼고)', itemLines(c.body).length, 20);
+eq('첫 줄은 종류 머리줄', lines(c.body)[0].startsWith('── 소비'), true);
 eq('갈래 버튼 넷', c.labels.slice(0, 4), ['전체', '소비', '잡화', '재료']);
 eq('넘김 버튼', c.labels.slice(4), ['◀', '▶']);
 eq('셀렉트도 스물', c.options.length, 20);
-eq('셀렉트 값은 키', c.options[0], 'potionSmall');
+eq('셀렉트 값은 키 — 가나다순이라 고급 미끼가 먼저', c.options[0], 'fineBait');
 
 console.log('\n/아이템 — 갈래와 쪽');
 c = read(await click('item:list:use:0'));
@@ -181,9 +185,9 @@ eq('한 쪽뿐이면 넘김 버튼이 없다', c.labels, ['전체', '소비', '�
 eq('회복약이 보인다', /소형 회복약/.test(c.body), true);
 eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
 
-c = read(await click('item:list:misc:2'));
-eq('잡화 마지막 쪽', c.fields[1], '쪽=3 / 4');
-eq('마지막 것이 보인다', /훔-엘프의 피/.test(c.body), true);
+c = read(await click('item:list:misc:3'));
+eq('잡화 마지막 쪽', c.fields[1], '쪽=4 / 4');
+eq('마지막 것이 보인다', c.body.includes(ORDERED.filter((i) => i.kind === '잡화').at(-1).name), true);
 // 쪽을 넘길 때마다 표가 들썩이면 안 된다 — 줄의 **칸 수**가 어느 쪽에서나 같아야 한다.
 const widths = new Set([0, 1, 2, 3, 4].flatMap(
   (n) => lines(read(click2(`item:list:misc:${n}`)).body).map(width)));
@@ -216,10 +220,31 @@ eq('멀쩡한 것은 아무 표시 없다', /☠️|🪱/.test(read(await show('
 console.log('\n/아이템 — 재료');
 c = read(await click('item:list:food:0'));
 eq('재료 탭', [c.fields[0], c.fields[1]], ['종류=**157**', '쪽=1 / 8']);
-eq('재료가 보인다', /이쁘니 버섯/.test(c.body), true);
+eq('재료는 곡물부터', lines(c.body)[0].startsWith('── 곡물'), true);
 eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
 c = read(await show('honey'));
-eq('재료 한 장', [c.title, c.fields[0]], ['🧺 꿀 한 병', '갈래=재료']);
+eq('재료 한 장 — 갈래는 종류로', [c.title, c.fields[0]], ['🧺 꿀 한 병', '갈래=유제품·감미료']);
+
+console.log('\n/아이템 — 종류별 · 가나다순');
+{
+  // 명부 순서를 그대로 보여 주면 독 재료가 한 덩어리로 모였다(명부에 독 묶음이 있다).
+  // 이름만 봐도 "여기부터 독" 이 드러났다 — 종류로 나누고 가나다로 세워 흩는다.
+  const food = ORDERED.filter((i) => i.kind === '재료');
+  let run = 0; let worst = 0;
+  for (const i of food) { run = i.poison ? run + 1 : 0; worst = Math.max(worst, run); }
+  eq('독 재료가 셋 넘게 붙어 있지 않다', worst <= 3, true);
+  const sorted = GROUPS.every((g) => {
+    const names = ORDERED.filter((i) => groupOf(i) === g).map((i) => i.name);
+    return names.every((n, k) => k === 0 || names[k - 1].localeCompare(n, 'ko') <= 0);
+  });
+  eq('종류 안에서는 가나다순', sorted, true);
+  eq('종류 순서 — 과일은 채소 바로 다음, 물고기는 고기 다음',
+    ['meat', 'fish', 'veg', 'fruit'].map((k) => GROUPS.findIndex((g) => g.key === k)),
+    [3, 4, 5, 6]);
+  eq('모든 아이템이 어느 종류엔가 든다', ORDERED.every((i) => groupOf(i)), true);
+  eq('과일 진열대는 채소 바로 아래',
+    CATS.map((x) => x.key).indexOf('fruit') - CATS.map((x) => x.key).indexOf('veg'), 1);
+}
 
 console.log('\n/아이템 — 고르고 돌아오기');
 c = read(await click('item:pick:misc:2', ['ruby']));

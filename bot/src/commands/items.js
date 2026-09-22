@@ -19,7 +19,8 @@ import {
   SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
   StringSelectMenuBuilder,
 } from 'discord.js';
-import { ITEMS, ITEM_BY_KEY } from '../casino/items.js';
+import { ITEMS, ITEM_BY_KEY, CATS } from '../casino/items.js';
+import { isFish, isLegend } from '../casino/fish.js';
 import { base, trunc, THEME_COLOR } from '../embeds.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
 
@@ -42,6 +43,39 @@ const KINDS = [
   { key: 'food', label: '재료', icon: '🧺', of: (i) => i.kind === '재료' },
 ];
 const kindOf = (key) => KINDS.find((k) => k.key === key) ?? KINDS[0];
+
+/**
+ * **종류별로, 종류 안에서는 가나다순.**
+ *
+ * 명부 순서를 그대로 보여 주면 독 재료가 한 덩어리로 모여 보였다(명부에 독 묶음이 따로
+ * 있다). 도감은 독을 안 알려 주는데 "여기부터 여기까지가 독" 이 목록 모양만 보고도
+ * 드러났다. 종류로 나누고 이름순으로 세우면 독은 제 종류 안에 흩어진다.
+ *
+ * 재료는 상점 진열대(`CATS`)를 따르되 **물고기·바닷것을 고기에서 떼어 낸다** — 낚시로
+ * 쉰 가지가 넘게 늘어서, 고기 칸에 섞어 두면 돼지고기를 찾으려고 물고기를 한참 넘겨야 한다.
+ */
+const fishy = (i) => isFish(i.key) || isLegend(i.key);
+export const GROUPS = [
+  { key: 'use', label: '소비', of: (i) => i.kind === '소비' },
+  { key: 'misc', label: '잡화', of: (i) => i.kind === '잡화' },
+  ...CATS.flatMap((c) => {
+    const food = (i) => i.kind === '재료' && i.cat === c.key;
+    if (c.key !== 'meat') return [{ key: c.key, label: c.label, of: food }];
+    return [
+      { key: 'meat', label: '고기·알', of: (i) => food(i) && !fishy(i) },
+      { key: 'fish', label: '물고기·바닷것', of: (i) => food(i) && fishy(i) },
+    ];
+  }),
+];
+const groupAt = (item) => {
+  const at = GROUPS.findIndex((g) => g.of(item));
+  return at < 0 ? GROUPS.length : at;
+};
+export const groupOf = (item) => GROUPS[groupAt(item)] ?? null;
+
+/** 도감이 보여 주는 순서. 명부는 그대로 두고 여기서만 세운다. */
+export const ORDERED = [...ITEMS].sort((a, b) => groupAt(a) - groupAt(b)
+  || a.name.localeCompare(b.name, 'ko'));
 const iconOf = (item) => KINDS.find((k) => k.key !== 'all' && k.of(item))?.icon ?? '🎒';
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
@@ -81,7 +115,7 @@ const cid = (what, kind, page, key) =>
 
 function listPayload(kindKey, page) {
   const kind = kindOf(kindKey);
-  const all = ITEMS.filter(kind.of);
+  const all = ORDERED.filter(kind.of);
   const pages = Math.max(1, Math.ceil(all.length / PER_PAGE));
   const at = Math.min(Math.max(0, page), pages - 1);
   const slice = all.slice(at * PER_PAGE, (at + 1) * PER_PAGE);
@@ -89,8 +123,21 @@ function listPayload(kindKey, page) {
   // **이름 칸의 폭은 쪽마다 다르면 안 된다.** 그 쪽에 있는 것만 재면 넘길 때마다
   // 표가 들썩인다. 걸러 낸 목록 전체에서 재고, 폭은 칸 수로 잰다(한글은 두 칸).
   const w = Math.min(NAME_W, Math.max(...all.map((i) => width(i.name)), 1));
-  const rows = slice.map((i) => padEndW(clipW(i.name, w), w + 2)
-    + padStartW(i.price ? `${num(i.price)}골드` : '—', 10));
+  // 종류가 바뀌는 자리마다 머리줄을 끼운다. 쪽 첫 줄에도 — 넘겨 왔을 때 무엇을 보고
+  // 있는지 알아야 한다.
+  const rowW = w + 2 + 10;
+  const head = (label) => {
+    const text = `── ${label} `;
+    return text + '─'.repeat(Math.max(2, rowW - width(text)));
+  };
+  const rows = [];
+  let last = null;
+  for (const i of slice) {
+    const g = groupOf(i);
+    if (g !== last) { rows.push(head(g?.label ?? '기타')); last = g; }
+    rows.push(padEndW(clipW(i.name, w), w + 2)
+      + padStartW(i.price ? `${num(i.price)}골드` : '—', 10));
+  }
 
   const embed = base({
     title: `${kind.icon} 아이템 도감 — ${kind.label}`,
@@ -147,7 +194,7 @@ function itemPayload(key, kindKey = 'all', page = 0) {
     color: THEME_COLOR,
     footer: '먹으면 어떻게 될지는 먹어 봐야 알아요',
   }).addFields(
-    { name: '갈래', value: item.kind, inline: true },
+    { name: '갈래', value: groupOf(item)?.label ?? item.kind, inline: true },
     { name: '값', value: item.price ? `${num(item.price)}골드` : '_없음_', inline: true },
   );
 
@@ -179,7 +226,7 @@ const data = new SlashCommandBuilder()
  */
 async function autocomplete(interaction) {
   const typed = String(interaction.options.getFocused() || '').replace(/\s+/g, '').toLowerCase();
-  const hit = ITEMS.filter((i) => !typed
+  const hit = ORDERED.filter((i) => !typed
     || i.name.replace(/\s+/g, '').toLowerCase().includes(typed)
     || i.key.toLowerCase().includes(typed));
   await interaction.respond(hit.slice(0, 25).map((i) => ({

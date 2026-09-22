@@ -18,6 +18,8 @@
  *   +설비       이웃+먹으며에 더해, 골드가 넉넉하면(200 넘게) 설비를 산다(4b) — 빗물통 → 덮개 →
  *               지지대 → 배수로 → 스프링클러. 덮개·지지대는 내일 다칠 밭(경고 줄)에만 산다.
  *               설비값을 되찾는지는 "설비 빼고 번 것" 으로 본다. `EQUIP_ONLY=빗물통키` 로 하나만 볼 수 있다
+ *   +주문       이웃+먹으며에 더해, ★ 이상 작물을 쌓아 두고 개인 의뢰 · 게시판 주문을 채운다(5a).
+ *               주문에 안 쓰이는 것은 판다. 게시판은 `BOARD_SHARE`(기본 0.5)만큼만 먼저 가져간다고 친다
  *   +과수       이웃+먹으며에 더해, Lv5 부터 열리는 밭 `TREES`(기본 3) 곳에 지금 제철인 나무를 심는다(4c).
  *               나무 밭이 번 골드를 따로 센다 — 밭 하나 · 하루로 나눠 작물 밭과 견준다
  *
@@ -103,14 +105,17 @@ function breakBoulder(farm, today, plot, cell, st, rand, fossils) {
 const bestTree = (level, today) => CROPS.filter((c) => c.tree && c.lv <= level && weather.inSeason(c, today))
   .sort((a, b) => b.price / b.regrow - a.price / a.regrow)[0] ?? null;
 const TREE_KEYS = new Set(CROPS.filter((c) => c.tree).map((c) => c.key));
+const orders = require('../../server/src/farm/orders.js');
+const BOARD_SHARE = Number(process.env.BOARD_SHARE ?? 0.5);
 const TREES = Number(process.env.TREES) || 3;
 
-function play({ eat, neighbor, fert, compost, naive, equip, trees }, seed) {
+function play({ eat, neighbor, fert, compost, naive, equip, trees, order }, seed) {
   const rand = seeded(seed);
   const farm = rules.newFarm({ channelId: String(100000 + seed), guildId: '1', owner: 'me', today: D0, now: `${D0}T00:00:00.000Z`, rand });
   let hp = MAX_HP; let gold = 0; let seeds = 0; let loot = 0; let waterMissed = 0; let dead = 0;
   let fertSpent = 0; let compostHeld = 0; let cropBank = 0; let equipSpent = 0;
   let treeGold = 0; let treePlotDays = 0; let cropGold = 0; let cropPlotDays = 0;
+  const stock = {}; const taken = {}; let orderGold = 0; let orderXp = 0; let orderN = 0;
   const reached = {};
   let lowHpDays = 0;
 
@@ -146,10 +151,32 @@ function play({ eat, neighbor, fert, compost, naive, equip, trees }, seed) {
         while (eat && left > 0 && heal > 0 && hp < MAX_HP / 2) { hp = Math.min(MAX_HP, hp + heal); left -= 1; }
         if (compost && k !== 'dandelion' && k !== 'compost') { cropBank += left; left = 0; }
         if (k === 'compost') { compostHeld += left; left = 0; }
+        if (order && /S[123]$/.test(k)) { stock[k] = (stock[k] ?? 0) + left; left = 0; }   // 주문에 쓰려고 쌓는다
         gold += left * (ITEM_BY_KEY[k]?.price ?? 0);
         const base = k.replace(/S[123]$/, '');
         const worth = c * (ITEM_BY_KEY[k]?.price ?? 0);     // 먹은 것도 값으로 친다(밭끼리 견주려고)
         if (TREE_KEYS.has(base)) treeGold += worth; else if (k !== 'dandelion' && k !== 'compost') cropGold += worth;
+      }
+    }
+
+    // 주문 — 채울 수 있는 것부터 내고, 아무 주문에도 안 쓰일 ★ 작물은 판다
+    if (order) {
+      const open = [...(farm.requests ?? []), ...orders.activeBoard(today, taken)
+        .filter((o) => land.hashRand('share', seed, o.id) < BOARD_SHARE)];
+      for (const o of open) {
+        const { take } = orders.takeFor(o, stock);
+        if (!take) continue;
+        for (const [k, c] of Object.entries(take)) stock[k] -= c;
+        gold += o.gold; orderGold += o.gold; orderXp += o.xp; orderN += 1;
+        rules.gainXp(farm, o.xp, rand);
+        if (o.kind === 'board') taken[o.id] = { day: today };
+        else farm.requests = farm.requests.filter((x) => x.id !== o.id);
+      }
+      const want = new Set([...(farm.requests ?? []), ...orders.activeBoard(today, taken)].map((o) => o.crop));
+      for (const [k, c] of Object.entries(stock)) {
+        if (!c || want.has(k.replace(/S[123]$/, ''))) continue;
+        gold += c * (ITEM_BY_KEY[k]?.price ?? 0);
+        stock[k] = 0;
       }
     }
 
@@ -205,7 +232,13 @@ function play({ eat, neighbor, fert, compost, naive, equip, trees }, seed) {
         if (r.ok) { seeds += r.cost; gold -= r.cost; treeGold -= r.cost; }
         continue;
       }
-      const crop = p.crop ?? (naive ? bestCrop(level) : smartCrop(farm, pi, level, today)).key;
+      // 주문 — 아직 아무 밭에도 없는 주문 작물이 있으면 그것부터(나무 · 희귀는 빼고)
+      const growing = new Set(farm.plots.map((pp) => pp.crop).filter(Boolean));
+      const forOrder = order && process.env.ORDER_PLANT !== '0' && !p.crop
+        ? [...(farm.requests ?? []), ...orders.activeBoard(today, taken)].map((o) => CROP_BY_KEY[o.crop])
+          .find((c) => c && c.lv <= level && !c.tree && !c.seedOnly && !growing.has(c.key))
+        : null;
+      const crop = p.crop ?? forOrder?.key ?? (naive ? bestCrop(level) : smartCrop(farm, pi, level, today)).key;
       const r = rules.plant(farm, today, { plot: pi, cells: soil, crop });
       if (r.ok) { seeds += r.cost; gold -= r.cost; cropGold -= r.cost; }
     }
@@ -229,6 +262,7 @@ function play({ eat, neighbor, fert, compost, naive, equip, trees }, seed) {
   const soils = farm.plots.filter((p) => p.open).map((p) => land.soilStar(p.soilXp));
   return {
     reached, gold, seeds, loot, waterMissed, dead, lowHpDays, level: rules.levelOf(farm), cells, soils, fertSpent, equipSpent,
+    orderGold, orderXp, orderN,
     treeDay: treePlotDays ? treeGold / treePlotDays : null, cropDay: cropPlotDays ? cropGold / cropPlotDays : null,
   };
 }
@@ -243,6 +277,7 @@ const STRATS = [
   ['+퇴비', { eat: true, neighbor: true, compost: true }],
   ['+설비', { eat: true, neighbor: true, equip: true }],
   ['+과수', { eat: true, neighbor: true, trees: true }],
+  ['+주문', { eat: true, neighbor: true, order: true }],
 ];
 
 const avg = (xs) => xs.reduce((a, x) => a + x, 0) / xs.length;
@@ -264,6 +299,7 @@ for (const [name, s] of STRATS) {
     + ` · 체력 30 밑인 날 ${fmt(avg(res.map((r) => r.lowHpDays)))}일 · 마지막 날 심긴 칸 ${fmt(avg(res.map((r) => r.cells)))}`);
   console.log(`         토질 ★ 평균 ${avg(res.map((r) => avg(r.soils))).toFixed(2)} (★5 밭 ${avg(res.map((r) => r.soils.filter((x) => x === 5).length)).toFixed(1)}개)`
     + `${s.fert ? ` · 비료에 쓴 골드 ${fmt(avg(res.map((r) => r.fertSpent)))}` : ''}`
+    + `${s.order ? ` · 주문 ${fmt(avg(res.map((r) => r.orderN)))}건 · 보상 ${fmt(avg(res.map((r) => r.orderGold)))}골드 · 경험치 ${fmt(avg(res.map((r) => r.orderXp)))}` : ''}`
     + `${s.trees ? ` · 밭 하루당 — 나무 ${avg(res.map((r) => r.treeDay ?? 0)).toFixed(1)} · 작물 ${avg(res.map((r) => r.cropDay ?? 0)).toFixed(1)}골드어치` : ''}`
     + `${s.equip ? ` · 설비에 쓴 골드 ${fmt(avg(res.map((r) => r.equipSpent)))} (설비 빼고 번 것 ${fmt(avg(res.map((r) => r.gold + r.equipSpent)))})` : ''}`);
 }

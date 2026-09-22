@@ -14,7 +14,10 @@
  *   family  계열(docs/FARM.md §5). 이웃 궁합·윤작·연작(`affinity.js`)과 콩 토질(+10)이 읽는다
  *   days    기본 성장일. 물을 받을 때마다 토질 배율만큼 쌓여 이만큼이 되면 다 자란다
  *           (docs/FARM.md §4 — 기본가 구간 + 작물 성격 보정)
- *   regrow  재수확. 거둔 뒤 이만큼 뒤에 다시 다 자란다. 없으면 거두면 칸이 빈다
+ *   regrow  재수확. 거둔 뒤 이만큼 뒤에 다시 다 자란다. 없으면 거두면 칸이 빈다.
+ *           **처음 성장일은 재수확 간격의 두 배 이상**이다(3c) — 처음은 오래, 그다음은 빨리.
+ *           재수확은 두 번째부터 씨앗값이 없어 오래 두면 가장 좋은 선택이 된다(그래도 된다고
+ *           정했다). 대신 첫 수확까지 오래 걸리는 것으로 값을 치른다
  *   tall    키가 크다 — 이웃 밭에 그늘을 드리운다(버섯·잎 +10%, 열매·박 −5%, `affinity.js`)
  *
  * 특수 규칙(3c) — 규칙은 `rules.js`·`affinity.js` 가 이 표시만 보고 건다
@@ -36,21 +39,21 @@ const CROPS = [
   { key: 'potato',      name: '감자',     lv: 1, family: 'root',     price: 2, days: 2,            emoji: '🥔' },
   { key: 'carrot',      name: '당근',     lv: 1, family: 'root',     price: 2, days: 3,            emoji: '🥕' },
   { key: 'spinach',     name: '시금치',   lv: 1, family: 'leaf',     price: 3, days: 2,            emoji: '🥬' },
-  { key: 'cucumber',    name: '오이',     lv: 1, family: 'gourd',    price: 2, days: 2, regrow: 2, emoji: '🥒' },
+  { key: 'cucumber',    name: '오이',     lv: 1, family: 'gourd',    price: 2, days: 4, regrow: 2, emoji: '🥒' },
   { key: 'radish',      name: '무',       lv: 1, family: 'root',     price: 3, days: 3,            emoji: '⚪' },
-  { key: 'lettuce',     name: '상추',     lv: 1, family: 'leaf',     price: 2, days: 2, regrow: 2, emoji: '🥗' },
+  { key: 'lettuce',     name: '상추',     lv: 1, family: 'leaf',     price: 2, days: 4, regrow: 2, emoji: '🥗' },
   { key: 'wheat',       name: '밀 이삭',  lv: 1, family: 'grain',    price: 2, days: 3,            emoji: '🌾' },
   { key: 'soybean',     name: '콩',       lv: 1, family: 'legume',   price: 3, days: 3,            emoji: '🫘' },
   // ---- Lv2
   { key: 'onion',       name: '양파',     lv: 2, family: 'allium',   price: 2, days: 3,            emoji: '🧅' },
   { key: 'garlic',      name: '마늘',     lv: 2, family: 'allium',   price: 3, days: 4,            emoji: '🧄' },
-  { key: 'greenOnion',  name: '대파',     lv: 2, family: 'allium',   price: 3, days: 3, regrow: 2, emoji: '🎋' },
+  { key: 'greenOnion',  name: '대파',     lv: 2, family: 'allium',   price: 3, days: 4, regrow: 2, emoji: '🎋' },
   { key: 'cabbage',     name: '양배추',   lv: 2, family: 'leaf',     price: 3, days: 3,            emoji: '🥬' },
   { key: 'tomato',      name: '토마토',   lv: 2, family: 'fruitveg', price: 4, days: 4, regrow: 2, emoji: '🍅' },
   { key: 'perilla',     name: '깻잎',     lv: 2, family: 'herb',     price: 2, days: 2, regrow: 1, emoji: '🍃' },
   { key: 'pea',         name: '완두콩',   lv: 2, family: 'legume',   price: 3, days: 3,            emoji: '🫛' },
   // ---- Lv3
-  { key: 'eggplant',    name: '가지',     lv: 3, family: 'fruitveg', price: 3, days: 3, regrow: 2, emoji: '🍆' },
+  { key: 'eggplant',    name: '가지',     lv: 3, family: 'fruitveg', price: 3, days: 4, regrow: 2, emoji: '🍆' },
   { key: 'sweetPotato', name: '고구마',   lv: 3, family: 'root',     price: 3, days: 4,            emoji: '🍠' },
   { key: 'corn',        name: '옥수수',   lv: 3, family: 'grain',    price: 3, days: 4, tall: true, emoji: '🌽' },
   { key: 'chili',       name: '고추',     lv: 3, family: 'fruitveg', price: 4, days: 4, regrow: 2, emoji: '🌶️' },
@@ -61,26 +64,26 @@ const CROPS = [
   // ---- Lv4
   { key: 'napaCabbage', name: '배추',     lv: 4, family: 'leaf',     price: 3, days: 4,            emoji: '🥬' },
   { key: 'broccoli',    name: '브로콜리', lv: 4, family: 'leaf',     price: 4, days: 4,            emoji: '🥦' },
-  { key: 'paprika',     name: '파프리카', lv: 4, family: 'fruitveg', price: 5, days: 4, regrow: 3, emoji: '🫑' },
+  { key: 'paprika',     name: '파프리카', lv: 4, family: 'fruitveg', price: 5, days: 6, regrow: 3, emoji: '🫑' },
   { key: 'beet',        name: '비트',     lv: 4, family: 'root',     price: 4, days: 4,            emoji: '🔴' },
   { key: 'buckwheat',   name: '메밀',     lv: 4, family: 'grain',    price: 4, days: 3,            emoji: '🌾' },
   { key: 'strawberry',  name: '딸기',     lv: 4, family: 'berry',    price: 5, days: 4, regrow: 2, emoji: '🍓' },
-  { key: 'rosemary',    name: '로즈마리', lv: 4, family: 'herb',     price: 3, days: 3, regrow: 2, emoji: '🌲' },
-  { key: 'basil',       name: '바질',     lv: 4, family: 'herb',     price: 3, days: 3, regrow: 2, emoji: '☘️' },
+  { key: 'rosemary',    name: '로즈마리', lv: 4, family: 'herb',     price: 3, days: 4, regrow: 2, emoji: '🌲' },
+  { key: 'basil',       name: '바질',     lv: 4, family: 'herb',     price: 3, days: 4, regrow: 2, emoji: '☘️' },
   { key: 'mint',        name: '박하',     lv: 4, family: 'herb',     price: 3, days: 3, regrow: 1, spread: true, emoji: '🍀', note: '퍼짐 — 거둘 때 같은 밭 빈 흙에 한 포기가 저절로 번져요' },
   // ---- Lv5
   { key: 'pumpkin',     name: '늙은 호박', lv: 5, family: 'gourd',   price: 8, days: 6,            emoji: '🎃' },
   { key: 'taro',        name: '토란',     lv: 5, family: 'root',     price: 5, days: 5,            emoji: '🟤' },
   { key: 'sesame',      name: '참깨',     lv: 5, family: 'grain',    price: 4, days: 4,            emoji: '⚫' },
-  { key: 'raspberry',   name: '산딸기',   lv: 5, family: 'berry',    price: 2, days: 2, regrow: 2, emoji: '🍒' },
-  { key: 'blueberry',   name: '블루베리', lv: 5, family: 'berry',    price: 3, days: 3, regrow: 2, emoji: '🫐' },
+  { key: 'raspberry',   name: '산딸기',   lv: 5, family: 'berry',    price: 2, days: 4, regrow: 2, emoji: '🍒' },
+  { key: 'blueberry',   name: '블루베리', lv: 5, family: 'berry',    price: 3, days: 4, regrow: 2, emoji: '🫐' },
   { key: 'rice',        name: '쌀',       lv: 5, family: 'grain',    price: 6, days: 5, thirsty: true, emoji: '🍚', note: '물 욕심 — 하루만 굶어도 시들고, 사흘이면 죽어요' },
   { key: 'sunflower',   name: '해바라기', lv: 5, family: 'grain',    price: 4, days: 5, tall: true, emoji: '🌻', note: '키가 커서 이웃 밭에 그늘을 드리워요 — 버섯·잎 +10%, 열매·박 −5%' },
   // ---- Lv6
   { key: 'asparagus',   name: '아스파라거스', lv: 6, family: 'leaf', price: 6, days: 7, regrow: 3, perennial: true, emoji: '🎍', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
-  { key: 'teaLeaf',     name: '찻잎',     lv: 6, family: 'herb',     price: 6, days: 5, regrow: 3, perennial: true, emoji: '🍵', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
+  { key: 'teaLeaf',     name: '찻잎',     lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, emoji: '🍵', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
   { key: 'ginger',      name: '생강',     lv: 6, family: 'root',     price: 4, days: 5,            emoji: '🫚' },
-  { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 5, regrow: 3, perennial: true, aura: 5, emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
+  { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, aura: 5, emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
   { key: 'koreanMelon', name: '참외',     lv: 6, family: 'gourd',    price: 6, days: 5,            emoji: '🍈' },
   // ---- Lv7
   { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7,           emoji: '🍉' },

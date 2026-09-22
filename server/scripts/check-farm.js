@@ -45,7 +45,7 @@ eq('특수 규칙이 있으면 안내 문구가 있다', CROPS.filter((c) => (c.
 eq('다년생은 재수확 작물이다', CROPS.filter((c) => c.perennial && !c.regrow).map((c) => c.key), []);
 eq('Lv1 작물 여덟(희귀 빼고)', CROPS.filter((c) => c.lv === 1 && !c.seedOnly).length, 8);
 eq('키는 아이템 키 모양', CROPS.filter((c) => !/^[a-z][A-Za-z0-9]{0,39}$/.test(c.key)).map((c) => c.key), []);
-eq('재수확은 성장일 이하', CROPS.filter((c) => c.regrow && c.regrow > c.days).map((c) => c.key), []);
+eq('처음 성장일은 재수확 간격의 두 배 이상', CROPS.filter((c) => c.regrow && c.days < c.regrow * 2).map((c) => c.key), []);
 
 // ================================================================ 2. 땅 · 레벨
 
@@ -225,15 +225,18 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   const f = fresh();
   rules.plant(f, D0, { plot: P, cells: [0, 1, 2], crop: 'cucumber' });
   eq('익은 게 없으면 nothing', rules.harvest(f, D0).reason, 'nothing');
-  W(f, 0); at(f, 1); W(f, 1);
-  const h = rules.harvest(f, day(1), {}, { rand: ZERO });
+  // 오이 — 처음 4일, 그다음 2일마다(처음 성장일은 재수확 간격의 두 배 이상)
+  W(f, 0); for (let n = 1; n <= 2; n += 1) { at(f, n); W(f, n); }
+  eq('처음엔 물 세 번으론 안 익는다', rules.view(f, day(2)).plots[P].ripe, 0);
+  at(f, 3); W(f, 3);
+  const h = rules.harvest(f, day(3), {}, { rand: ZERO });
   eq('오이 셋 수확(★1 은 칸마다 1)', [h.items, h.harvested], [{ cucumber: 3 }, 3]);
   eq('경험치 = 칸 3 + 첫 작물 10', h.xp, 13);
   eq('토질 경험 +3', f.plots[P].soilXp, 3);
   eq('재수확 작물은 칸이 남는다', [cell(f).t, f.plots[P].crop], ['plant', 'cucumber']);
-  at(f, 2); W(f, 2); at(f, 3); W(f, 3);
-  eq('이틀 뒤 다시 익는다', rules.view(f, day(3)).plots[P].ripe, 3);
-  eq('두 번째부터는 첫 작물 보너스가 없다', rules.harvest(f, day(3), {}, { rand: ZERO }).xp, 3);
+  at(f, 4); W(f, 4); at(f, 5); W(f, 5);
+  eq('그다음엔 이틀 뒤 다시 익는다', rules.view(f, day(5)).plots[P].ripe, 3);
+  eq('두 번째부터는 첫 작물 보너스가 없다', rules.harvest(f, day(5), {}, { rand: ZERO }).xp, 3);
 }
 {
   const f = fresh();

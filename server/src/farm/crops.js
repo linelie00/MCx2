@@ -36,7 +36,13 @@
  *              향송이와 희귀 셋은 사계절
  *   heatLove   폭염인 날 성장 ×2(용의 고추) · rainLove 비 오는 날 ×1.2(쌀) · clearOnly 맑은 날에만 자람(월광초)
  *
- * 과수(한 그루가 밭 하나, 4c) · 인삼(6단계) · 황금 밀(5단계)은 그 규칙이 들어오는 단계에서 넣는다.
+ * 과수(4c) — `tree`
+ *   한 그루가 **밭 하나를 통째로** 쓴다(가운데 칸이 나무, 둘레 여덟 칸은 그늘 `canopy`). 묘목값은
+ *   밭에 한 번 `파는 값 × 2`. 한 번 거두면 **제철이 아니면 휴면** — 물이 필요 없고 자라지 않는다.
+ *   거둘 때 토질 ★ 에 따라 `TREE_YIELD` 개. 키가 커서 이웃에 그늘을 주지만(`tall`) 폭풍엔 안 쓰러진다.
+ *   다년생이라 윤작·연작을 따지지 않는다. `treeName` 은 화면용 이름(사과 아이템 이름이 "새빨간 사과"다).
+ *
+ * 인삼(6단계) · 황금 밀(5단계)은 그 규칙이 들어오는 단계에서 넣는다.
  */
 const CROPS = [
   // ---- Lv1
@@ -83,15 +89,20 @@ const CROPS = [
   { key: 'blueberry',   name: '블루베리', lv: 5, family: 'berry',    price: 3, days: 4, regrow: 2, seasons: ['summer'], emoji: '🫐' },
   { key: 'rice',        name: '쌀',       lv: 5, family: 'grain',    price: 6, days: 5, thirsty: true, rainLove: true, seasons: ['summer'], emoji: '🍚', note: '물 욕심 — 하루만 굶어도 시들고, 사흘이면 죽어요. 비 오는 날엔 더 잘 자라요' },
   { key: 'sunflower',   name: '해바라기', lv: 5, family: 'grain',    price: 4, days: 5, tall: true, seasons: ['summer'], emoji: '🌻', note: '키가 커서 이웃 밭에 그늘을 드리워요 — 버섯·잎 +10%, 열매·박 −5%' },
+  { key: 'lemon',       name: '레몬',     lv: 5, family: 'tree',     price: 4, days: 10, regrow: 3, tree: true, tall: true, perennial: true, treeName: '레몬나무', seasons: ['winter', 'spring'], emoji: '🍋', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
+  { key: 'redApple',    name: '새빨간 사과', lv: 5, family: 'tree',  price: 5, days: 10, regrow: 3, tree: true, tall: true, perennial: true, treeName: '사과나무', seasons: ['autumn', 'winter'], emoji: '🍎', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
   // ---- Lv6
   { key: 'asparagus',   name: '아스파라거스', lv: 6, family: 'leaf', price: 6, days: 7, regrow: 3, perennial: true, seasons: ['spring'], emoji: '🎍', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
   { key: 'teaLeaf',     name: '찻잎',     lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, seasons: ['spring'], emoji: '🍵', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
   { key: 'ginger',      name: '생강',     lv: 6, family: 'root',     price: 4, days: 5,            seasons: ['autumn'], emoji: '🫚' },
   { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 6, regrow: 3, perennial: true, aura: 5, seasons: ['summer'], emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
   { key: 'koreanMelon', name: '참외',     lv: 6, family: 'gourd',    price: 6, days: 5,            seasons: ['summer'], emoji: '🍈' },
+  { key: 'grape',       name: '포도',     lv: 6, family: 'tree',     price: 4, days: 8, regrow: 3, tree: true, tall: true, perennial: true, treeName: '포도나무', seasons: ['summer', 'autumn'], emoji: '🍇', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
+  { key: 'peach',       name: '복숭아',   lv: 6, family: 'tree',     price: 6, days: 12, regrow: 4, tree: true, tall: true, perennial: true, treeName: '복숭아나무', seasons: ['spring', 'summer'], emoji: '🍑', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
   // ---- Lv7
   { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7, giant: true, seasons: ['summer'], emoji: '🍉' },
   { key: 'melon',       name: '멜론',     lv: 7, family: 'gourd',    price: 14, days: 7, giant: true, seasons: ['summer'], emoji: '🍈' },
+  { key: 'pear',        name: '배',       lv: 7, family: 'tree',     price: 7, days: 12, regrow: 4, tree: true, tall: true, perennial: true, treeName: '배나무', seasons: ['autumn'], emoji: '🍐', note: '과수 — 밭 하나를 통째로 써요. 한 번 거두면 제철이 아닐 땐 쉬어요(물이 필요 없어요)' },
   // ---- Lv8
   { key: 'pineMushroom', name: '향송이',  lv: 8, family: 'fungus',   price: 25, days: 10, shadeNeed: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🍄', note: '그늘이 필요해요 — 옥수수·해바라기 옆이 아니면 절반만 자라요' },
   { key: 'saffron',     name: '사프란',   lv: 8, family: 'herb',     price: 60, days: 14,          seasons: ['autumn'], emoji: '🌸', note: '귀한 향신료 — 오래 걸리고 한 칸에서 많이 안 나와요' },
@@ -107,18 +118,33 @@ const CROPS = [
 const CROP_BY_KEY = Object.fromEntries(CROPS.map((c) => [c.key, c]));
 
 /**
+ * 나무 한 번 거둘 때의 열매 수 `[토질 ★1 … ★5]` 마다 `[최소, 최대]`(4c). 밭 하나에서 나온다.
+ * 최소가 묘목값(`파는 값 × 2`)을 넘어 **첫 수확에서 이미 남는다.** (simulate-farm 으로 맞춘다)
+ */
+const TREE_YIELD = [[3, 4], [4, 5], [5, 6], [6, 8], [7, 9]];
+/** 묘목값 — 밭에 한 번. */
+const SAPLING_MULT = 2;
+const sapling = (c) => c.price * SAPLING_MULT;
+
+/**
  * 보장 이익 — 수확만 하면 칸마다 **반드시** 남는 골드.
  *
  * 가격이 아니라 **성장일**로 정한다(docs/FARM.md §4). 비싼 작물이라고 더 남으면 모두가
  * 비싼 것만 심는다. 파는 값을 넘을 수는 없으므로 `price − 1` 에서 자른다.
  */
-const guaranteed = (c) => Math.max(1, Math.min(Math.ceil(c.days / 2), c.price - 1));
+const guaranteed = (c) => (c.tree
+  ? TREE_YIELD[0][0] * c.price - sapling(c)                 // 나무 — 첫 수확 최소 개수에서 묘목값을 뺀 것(밭 하나)
+  : Math.max(1, Math.min(Math.ceil(c.days / 2), c.price - 1)));
 
 /**
  * 칸 하나의 씨앗값. 수확이 최소 1개라 `price − 씨앗값 = 보장 이익` 이 남는다.
  * 희귀 작물(`seedOnly`)은 골드가 아니라 주머니 씨앗을 쓴다 — 0.
  */
-const seedPrice = (c) => (c.seedOnly ? 0 : c.price - guaranteed(c));
+const seedPrice = (c) => {
+  if (c.seedOnly) return 0;
+  if (c.tree) return sapling(c);
+  return c.price - guaranteed(c);
+};
 
 /**
  * 작물 등급 — 비쌀수록 까다롭다(docs/FARM.md §4). 한 칸에서 덜 나온다.
@@ -156,5 +182,5 @@ const publicCrop = (c) => ({
 });
 
 module.exports = {
-  CROPS, CROP_BY_KEY, guaranteed, seedPrice, gradeOf, YIELD, publicCrop, STAR_MULT, starKey, giantKey, GIANT_MULT,
+  CROPS, CROP_BY_KEY, guaranteed, seedPrice, gradeOf, YIELD, TREE_YIELD, SAPLING_MULT, publicCrop, STAR_MULT, starKey, giantKey, GIANT_MULT,
 };

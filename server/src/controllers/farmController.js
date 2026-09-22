@@ -67,6 +67,7 @@ const BAD = {
   item: '거름은 fertilizer 나 compost 여야 합니다',
   count: '개수는 1 이상의 정수여야 합니다',
   equip: '모르는 설비입니다',
+  uproot: "uproot 는 'cell' 이나 'plot' 이어야 합니다",
   plots: '밭은 0~8 의 겹치지 않는 번호 배열이어야 합니다',
 };
 
@@ -447,7 +448,9 @@ exports.harvest = (req, res) => {
 };
 
 /**
- * POST /api/farms/clear — `{ channelId, userId, plot, cell?, pos?, all? }`. 주인만.
+ * POST /api/farms/clear — `{ channelId, userId, plot, cell?, pos?, all?, uproot? }`. 주인만.
+ *
+ * `uproot: 'cell' | 'plot'` 이면 작물을 뽑는다(4c) — 기력 · 전리품 없이 칸만 비운다. 나무는 밭 전체.
  *
  * 돌은 기력 1, 바위는 휘두를 때마다 1, 잡초는 공짜(§9). 기력과 화석 상한은 **계정 기준**
  * (`daily`) — 농장 파일에 같이 적으므로 한 번의 쓰기로 나간다. 전리품은 계정으로.
@@ -457,7 +460,9 @@ exports.clear = (req, res) => {
   const got = ids(req.body, ['channelId', 'userId']);
   if (typeof got === 'string') return res.status(400).json({ error: got });
   const { channelId, userId } = got;
-  const { plot, cell = null, pos = null, all = false } = req.body;
+  const {
+    plot, cell = null, pos = null, all = false, uproot = null,
+  } = req.body;
 
   const data = readFarms(res);
   if (!data) return undefined;
@@ -471,7 +476,9 @@ exports.clear = (req, res) => {
 
   const daily = dailyOf(data, userId, today);
   const stamina = staminaFor(data, farm, userId, today);
-  const r = rules.clear(farm, today, { plot, cell, pos, all: all === true }, {
+  const r = rules.clear(farm, today, {
+    plot, cell, pos, all: all === true, uproot,
+  }, {
     stamina: stamina.left,
     fossilLeft: land.FOSSIL_PER_DAY - daily.fossils,
     seedLeft: land.SEED_PER_DAY - daily.seeds,

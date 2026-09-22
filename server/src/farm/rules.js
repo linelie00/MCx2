@@ -35,9 +35,16 @@
  *       wet      마지막으로 물을 받은 날
  *       regrows  재수확으로 다시 자란 횟수 — 재수확으로 거둔 칸은 농장 경험치가 절반이다(3c)
  *   { t: 'dead', why: 'dry' | 'rot' }               죽음. 치우면 빈 흙
+ *   { t: 'canopy' }                                 나무 그늘(4c) — 나무가 있는 밭의 둘레 여덟 칸. 못 심는다
+ *
+ * **과수**(4c, `crop.tree`)는 밭 가운데 칸(`TREE_CELL`) 하나에 사는 작물이다 — 물 · 시듦 · 재수확은
+ * 그 칸 하나로 센다. 한 번 거둔 나무(`regrows`)는 **제철이 아니면 휴면**이다(`dormant`) — 물이
+ * 필요 없고, 목마르지 않고, 자라지 않는다. 익은 채 두면 열매만 떨어지고 나무는 산다.
+ *
+ * **뽑기**(4c, `clear` 의 `uproot`)는 자라는 작물을 거두지 않고 없앤다 — 씨앗값은 안 돌려준다.
  */
 const {
-  CROPS, CROP_BY_KEY, seedPrice, gradeOf, YIELD, starKey, giantKey,
+  CROPS, CROP_BY_KEY, seedPrice, gradeOf, YIELD, TREE_YIELD, starKey, giantKey,
 } = require('./crops');
 const land = require('./land');
 const affinity = require('./affinity');
@@ -54,8 +61,23 @@ const START_PLOT = land.PLOT_ORDER[0];
 /** thirst 가 이만큼이면 🍂 시듦, 이만큼이면 💀. 물 욕심 작물(`thirsty`, 3c)은 하루씩 빠르다. */
 const WITHER = 2;
 const DEATH = 4;
-const witherAt = (crop) => (crop?.thirsty ? WITHER - 1 : WITHER);
-const deathAt = (crop) => (crop?.thirsty ? DEATH - 1 : DEATH);
+/** 나무는 더 오래 버틴다(4c) — 사흘에 시들고 이레에 죽는다. */
+const TREE_WITHER = 3;
+const TREE_DEATH = 7;
+const witherAt = (crop) => {
+  if (crop?.tree) return TREE_WITHER;
+  return crop?.thirsty ? WITHER - 1 : WITHER;
+};
+const deathAt = (crop) => {
+  if (crop?.tree) return TREE_DEATH;
+  return crop?.thirsty ? DEATH - 1 : DEATH;
+};
+/** 나무가 서는 칸 — 밭 가운데(키패드 5). */
+const TREE_CELL = 4;
+/** 한 번 거둔 나무가 제철이 아닌 날 — 휴면(4c). */
+const dormant = (crop, cell, day) => Boolean(crop?.tree && cell.regrows && !cell.ripeDay && !weather.inSeason(crop, day));
+/** 그날 물이 필요한(자라는) 칸 — 익었거나 휴면이면 아니다. */
+const growingCell = (crop, cell, day) => cell.t === 'plant' && !cell.ripeDay && !dormant(crop, cell, day);
 /** 다 자란 날로부터 이만큼 지나면 과숙, 이만큼 지나면 썩는다. */
 const OVERRIPE_AFTER = 3;
 const ROT_AFTER = 6;
@@ -132,7 +154,7 @@ function upgrade(farm) {
     if (!Number.isFinite(p.streak)) p.streak = 0;      // 3a — 비우지 않고 이어 거둔 칸 수
     if (!Array.isArray(p.cells)) p.cells = [];
     // 2a 버그로 작물에 묶인 밭 — 작물 칸이 없는데 `crop` 이 남아 있으면 푼다
-    if (p.crop && p.cells.length && !holdsCrop(p)) { p.crop = null; p.streak = 0; }
+    if (p.crop && p.cells.length && !holdsCrop(p)) freePlot(p);
     for (const c of p.cells) {
       if (c.t === 'plant' && c.wet === undefined) c.wet = farm.water.day ?? null;
     }
@@ -201,9 +223,10 @@ function wetCell(farm, pi, cell, day) {
 function wetAll(farm, day) {
   let n = 0;
   farm.plots.forEach((p, pi) => {
-    if (!p.open || !CROP_BY_KEY[p.crop]) return;
+    const crop = CROP_BY_KEY[p.crop];
+    if (!p.open || !crop) return;
     for (const cell of p.cells) {
-      if (cell.t === 'plant' && !cell.ripeDay && cell.wet !== day) { wetCell(farm, pi, cell, day); n += 1; }
+      if (growingCell(crop, cell, day) && cell.wet !== day) { wetCell(farm, pi, cell, day); n += 1; }
     }
   });
   return n;
@@ -236,6 +259,13 @@ const loseSoil = (plot, n) => { plot.soilXp = Math.max(0, (plot.soilXp ?? 0) - n
  * 다 거둔 밭이 작물에 묶여 다른 것을 못 심는다(2a 의 버그 — simulate-farm 이 잡았다).
  */
 const holdsCrop = (plot) => plot.cells.some((c) => c.t === 'plant' || c.t === 'dead');
+
+/** 작물이 끝난 밭을 푼다 — 작물을 비우고, 나무 그늘(4c)은 빈 흙으로. */
+function freePlot(plot) {
+  plot.crop = null;
+  plot.streak = 0;
+  plot.cells = plot.cells.map((c) => (c.t === 'canopy' ? soil() : c));
+}
 
 /** 퇴비 조각을 퇴비로 바꾼다. 바꾼 개수(계정에 넣을 것)를 돌려준다. 수확·개간이 부른다. */
 function takeCompost(farm) {
@@ -271,6 +301,16 @@ function tick(farm, today) {
           return;
         }
         if (cell.t !== 'plant') return;
+        if (cell.ripeDay && crop?.tree) {
+          // 나무(4c) — 오래 두면 열매만 떨어진다. 나무는 살아서 다음 열매를 맺는다(휴면일 수도 있다).
+          if (d - dayNum(cell.ripeDay) + 1 >= ROT_AFTER) {
+            Object.assign(cell, {
+              g: round(crop.days - crop.regrow), thirst: 0, ripeDay: null, regrows: (cell.regrows ?? 0) + 1, wet: null,
+            });
+          }
+          return;
+        }
+        if (dormant(crop, cell, key)) return;              // 휴면 — 목마르지도, 서리도 안 탄다
         if (cell.ripeDay) {
           // 도망(3c) — 익은 날 밤까지 안 거두면 같은 밭 빈 흙으로 옮겨 가 이튿날 하루 더 익어 있다.
           // 옮길 자리는 해시로 — 몇 번을 다시 셈해도 같은 칸으로 간다. 빈 흙이 없으면 사라진다.
@@ -294,7 +334,7 @@ function tick(farm, today) {
         // 서리 — 제철이 아닌 칸이 한 단계 상한다(4b 덮개가 막는다)
         if (sky.key === 'frost' && !weather.inSeason(crop, key) && !plot.cover) cell.thirst += 1;
         // 폭풍 — 키 큰 작물 칸의 30% 가 쓰러져 시든다(4b 지지대가 막는다)
-        if (sky.key === 'storm' && crop?.tall && !plot.stakes && land.hashRand(farm.channelId, key, pi, i, 'storm') < weather.STORM_FALL) {
+        if (sky.key === 'storm' && crop?.tall && !crop.tree && !plot.stakes && land.hashRand(farm.channelId, key, pi, i, 'storm') < weather.STORM_FALL) {
           cell.thirst = Math.max(cell.thirst, witherAt(crop));
           cell.scar = true;
         }
@@ -318,9 +358,10 @@ function thirstyCells(farm, today, plot = null) {
   land.PLOT_ORDER.forEach((pi, order) => {
     if (plot !== null && pi !== plot) return;
     const p = farm.plots[pi];
-    if (!p.open || !CROP_BY_KEY[p.crop]) return;
+    const crop = CROP_BY_KEY[p.crop];
+    if (!p.open || !crop) return;
     p.cells.forEach((cell, i) => {
-      if (cell.t === 'plant' && !cell.ripeDay && cell.wet !== today) out.push({ pi, i, order, thirst: cell.thirst });
+      if (growingCell(crop, cell, today) && cell.wet !== today) out.push({ pi, i, order, thirst: cell.thirst });
     });
   });
   return out.sort((a, b) => b.thirst - a.thirst || a.order - b.order || a.i - b.i);
@@ -339,7 +380,7 @@ function water(farm, today, userId, { budget = Infinity, plot = null, rand = Mat
   if (weather.weatherOf(today).water) return { ok: false, reason: 'rain', weather: weather.weatherOf(today).key };
   const need = thirstyCells(farm, today, plot);
   if (!need.length) {
-    const any = farm.plots.some((p) => p.cells.some((c) => c.t === 'plant' && !c.ripeDay));
+    const any = farm.plots.some((p) => p.cells.some((c) => growingCell(CROP_BY_KEY[p.crop], c, today)));
     return { ok: false, reason: any ? 'already' : 'noPlants', by: farm.water?.day === today ? farm.water.by : [] };
   }
   if (budget < 1) return { ok: false, reason: 'tired', need: need.length };
@@ -393,6 +434,17 @@ function plant(farm, today, { plot, cells, crop }, { pouch = 0 } = {}) {
   if (!c.seedOnly && c.lv > levelOf(farm)) return { ok: false, reason: 'level', need: c.lv, crop };
   if (c.seedOnly && pouch < cells.length) return { ok: false, reason: 'noSeed', crop, have: pouch, need: cells.length };
   if (p.crop && p.crop !== crop) return { ok: false, reason: 'otherCrop', crop: p.crop };
+  if (c.tree) {
+    // 나무(4c) — 밭 하나를 통째로. 아홉 칸이 다 빈 흙이어야 하고, 묘목값은 밭에 한 번.
+    if (p.crop) return { ok: false, reason: 'otherCrop', crop: p.crop };
+    if (p.cells.some((x) => x.t !== 'soil')) return { ok: false, reason: 'needClear', crop };
+    p.cells = p.cells.map((_, i) => (i === TREE_CELL
+      ? { t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: today, wet: null }
+      : { t: 'canopy' }));
+    p.crop = crop;
+    p.streak = 0;
+    return { ok: true, cost: seedPrice(c), count: 1, crop, seeds: 0, tree: true };
+  }
   if (cells.some((i) => p.cells[i].t !== 'soil')) return { ok: false, reason: 'occupied' };
 
   for (const i of cells) {
@@ -438,7 +490,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
     const pi = farm.plots.indexOf(p);
     const crop = CROP_BY_KEY[p.crop];
     const star = land.soilStar(p.soilXp);
-    const [lo, hi] = crop ? YIELD[gradeOf(crop)][star - 1] : [0, 0];
+    const [lo, hi] = crop ? (crop.tree ? TREE_YIELD : YIELD[gradeOf(crop)])[star - 1] : [0, 0];
     // 궁합은 **거두기 전** 밭 모양으로 셈한다 — 거두다 이웃이 비면 값이 흔들린다.
     const mods = crop ? affinity.modsFor(farm, pi) : null;
     let here = 0; let again = 0; let bonus = 0;
@@ -462,14 +514,26 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
       if (cell.t !== 'plant' || !cell.ripeDay || !crop) return;
       const n = land.between(rand, lo, hi);
       const overripe = dayNum(today) - dayNum(cell.ripeDay) >= OVERRIPE_AFTER;
-      const q = quality.rollQuality({
+      const roll = () => quality.rollQuality({
         crop, soilStar: star, cell, mods, overripe, bonus, season: weather.qualityOf(crop, today, { drain: farm.equip?.drain }), rand,
       });
-      add(starKey(crop.key, q.star), n);
-      (grades[crop.key] ??= [0, 0, 0, 0])[q.star] += 1;
-      xp += quality.STAR_XP[q.star];
-      here += 1;
-      if (cell.regrows) again += 1;
+      if (crop.tree) {
+        // 나무(4c) — 열매마다 품질을 굴린다. 열매 하나가 한 칸처럼 센다(경험치 · 토질 · 도감).
+        for (let k = 0; k < n; k += 1) {
+          const q = roll();
+          add(starKey(crop.key, q.star), 1);
+          (grades[crop.key] ??= [0, 0, 0, 0])[q.star] += 1;
+        }
+        here += n;
+        if (cell.regrows) again += n;
+      } else {
+        const q = roll();
+        add(starKey(crop.key, q.star), n);
+        (grades[crop.key] ??= [0, 0, 0, 0])[q.star] += 1;
+        xp += quality.STAR_XP[q.star];
+        here += 1;
+        if (cell.regrows) again += 1;
+      }
       if (crop.regrow) {
         // 새 한 철이다. 시든 흔적도 지운다.
         Object.assign(cell, {
@@ -502,8 +566,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
     }
     if (p.crop && !holdsCrop(p)) {
       if (crop && !crop.perennial) p.history = [...(p.history ?? []), crop.family].slice(-3);
-      p.crop = null;
-      p.streak = 0;
+      freePlot(p);
     }
   }
   if (!harvested && !cleared && !weeds) return { ok: false, reason: 'nothing' };
@@ -531,8 +594,15 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
  * 돌려주는 `used` 만큼 컨트롤러가 기력을 깎고, `fossils`·`found` 만큼 화석·희귀 씨앗 상한을 쓴다.
  * 희귀 씨앗은 `loot` 이 아니라 `seeds` 로 온다 — 계정 아이템이 아니라 주머니로 간다.
  * `tool` 은 곡괭이(`land.PICKAXES`). 철부터는 빗나간 힌트에 거리(`dist`)가 붙는다.
+ *
+ * **뽑기**(4c) `{ plot, cell, uproot: 'cell' | 'plot' }` — 작물을 거두지 않고 없앤다. 기력은 안 든다.
+ * `cell` 은 그 칸만, `plot` 은 그 밭의 작물 칸 전부(죽은 칸 포함). 나무는 어느 쪽이든 **밭 전체**다.
+ * 씨앗값은 돌려주지 않고, 퇴비 조각도 없다(싼 씨앗을 뽑아 퇴비를 찍어 내지 못하게).
+ * 윤작 기록(`history`)에도 안 적는다 — 거둔 것이 아니다.
  */
-function clear(farm, today, { plot, cell = null, pos = null, all = false }, {
+function clear(farm, today, {
+  plot, cell = null, pos = null, all = false, uproot = null,
+}, {
   rand = Math.random, stamina = 0, fossilLeft = 0, seedLeft = 0, tool = 'wood',
 } = {}) {
   if (badPlot(plot)) return bad('plot');
@@ -580,6 +650,24 @@ function clear(farm, today, { plot, cell = null, pos = null, all = false }, {
 
   if (!Number.isInteger(cell) || cell < 0 || cell >= CELLS) return bad('cell');
   const c = p.cells[cell];
+
+  if (uproot !== null) {
+    if (uproot !== 'cell' && uproot !== 'plot') return bad('uproot');
+    const crop = CROP_BY_KEY[p.crop];
+    const isCrop = (x) => x.t === 'plant' || x.t === 'dead';
+    if (!isCrop(c) && !(crop?.tree && c.t === 'canopy')) return { ok: false, reason: 'notPlant' };
+    const whole = uproot === 'plot' || crop?.tree;
+    let removed = 0;
+    p.cells.forEach((x, i) => {
+      if ((whole || i === cell) && isCrop(x)) { p.cells[i] = soil(); removed += 1; }
+    });
+    const freed = !holdsCrop(p);
+    const was = p.crop;
+    if (freed) freePlot(p);
+    return {
+      ok: true, kind: 'uproot', used: 0, removed, crop: was, freed, tree: Boolean(crop?.tree), loot: {}, seeds: {}, found: 0, fossils: 0, xp: 0, levelUp: null, compost: 0,
+    };
+  }
 
   if (c.t === 'weed') {
     p.cells[cell] = soil();
@@ -688,9 +776,9 @@ function riskOf(farm, today) {
   const plots = [];
   farm.plots.forEach((p, pi) => {
     const crop = CROP_BY_KEY[p.crop];
-    if (!p.open || !crop || !p.cells.some((c) => c.t === 'plant' && !c.ripeDay)) return;
+    if (!p.open || !crop || !p.cells.some((c) => growingCell(crop, c, day))) return;
     if (sky === 'frost' && !p.cover && !weather.inSeason(crop, day)) plots.push(pi);
-    if (sky === 'storm' && !p.stakes && crop.tall) plots.push(pi);
+    if (sky === 'storm' && !p.stakes && crop.tall && !crop.tree) plots.push(pi);
   });
   return plots.length ? { weather: sky, plots } : null;
 }
@@ -717,7 +805,8 @@ function candidates(farm) {
 function cellState(cell, crop, today) {
   if (!cell) return 'locked';
   if (cell.t === 'boulder') return cell.cracked ? 'crack' : 'boulder';
-  if (['soil', 'rock', 'weed', 'dead'].includes(cell.t)) return cell.t;
+  if (['soil', 'rock', 'weed', 'dead', 'canopy'].includes(cell.t)) return cell.t;
+  if (dormant(crop, cell, today)) return 'dormant';
   if (cell.ripeDay) return dayNum(today) - dayNum(cell.ripeDay) >= OVERRIPE_AFTER ? 'over' : 'ripe';
   if (cell.thirst >= witherAt(crop)) return 'dry';
   return crop && cell.g / crop.days >= 0.5 ? 'grow' : 'seed';
@@ -764,7 +853,7 @@ function view(farm, today) {
     plots: farm.plots.map((p) => {
       const crop = CROP_BY_KEY[p.crop] ?? null;
       const cells = p.open ? p.cells.map((cell) => cellState(cell, crop, today)) : Array(CELLS).fill('locked');
-      const growing = p.cells.filter((cell) => cell.t === 'plant' && !cell.ripeDay);
+      const growing = p.cells.filter((cell) => growingCell(crop, cell, today));
       const dry = growing.filter((cell) => cell.wet !== today);
       const star = land.soilStar(p.soilXp);
       const pi = farm.plots.indexOf(p);
@@ -790,6 +879,9 @@ function view(farm, today) {
         swings,
         fert: p.open ? fertToday(farm, today, pi) : {},
         history: p.history ?? [],
+        tree: crop?.tree && p.open
+          ? { dormant: p.cells.some((cell) => cell.t === 'plant' && dormant(crop, cell, today)), fruited: p.cells.some((cell) => cell.regrows) }
+          : null,
         cover: !!p.cover,
         stakes: !!p.stakes,
         inSeason: crop ? weather.inSeason(crop, today) : null,
@@ -800,7 +892,7 @@ function view(farm, today) {
 }
 
 module.exports = {
-  PLOTS, CELLS, START_PLOT, WITHER, DEATH, OVERRIPE_AFTER, ROT_AFTER, GRACE_MS, COOLDOWN_DAYS,
+  PLOTS, CELLS, START_PLOT, WITHER, DEATH, TREE_CELL, TREE_WITHER, TREE_DEATH, OVERRIPE_AFTER, ROT_AFTER, GRACE_MS, COOLDOWN_DAYS,
   dayNum, keyOf, addDays,
   newFarm, upgrade, levelOf, gainXp, tick, water, plant, harvest, clear, fertilize, candidates, view,
   buyEquip, equipCount, hpCostOf,

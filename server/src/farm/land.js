@@ -150,26 +150,32 @@ const MAX_SWINGS = 3;
 const ROCK_LOOT = 0.3;
 
 /**
- * 전리품 표(§9). 가중치는 %. **희귀 씨앗(2%·5%)은 3단계까지 화석으로 돌린다** — 특수 규칙이
- * 없으면 심을 수 없는 작물이라 주머니에 쌓여만 있게 된다.
+ * 전리품 표(§9). 가중치는 %. `seed` 는 희귀 씨앗(`RARE_SEEDS` 가운데 하나) — 아이템이 아니라
+ * **주머니**로 간다(3c). 2a~3a 동안 화석으로 돌려 두었던 몫을 되돌렸다.
  * 키는 봇 명부에 있어야 한다(`bot/scripts/check-farm.mjs` 가 본다).
  */
 const ORES = ['oreBlue', 'oreRed', 'oreGold', 'oreGreen', 'oreBlack', 'oreWhite'];
 const LOOT = {
   normal: [
     ['crackleStone', 40], ['twig', 15], ['earthworm', 15], ['brokenArrowhead', 10],
-    ['ore', 8], ['ironLump', 5], ['oldCoin', 4], ['oddFossil', 3],
+    ['ore', 8], ['ironLump', 5], ['oldCoin', 4], ['seed', 2], ['oddFossil', 1],
   ],
   perfect: [
     ['crackleStone', 25], ['twig', 10], ['earthworm', 15], ['brokenArrowhead', 10],
-    ['ore', 15], ['ironLump', 8], ['oldCoin', 8], ['oddFossil', 9],
+    ['ore', 15], ['ironLump', 8], ['oldCoin', 8], ['seed', 5], ['oddFossil', 4],
   ],
 };
 /** 계정마다 하루에 나올 수 있는 화석 수. 넘으면 파삭돌로 바꾼다. */
 const FOSSIL_PER_DAY = 1;
+/** 희귀 씨앗 — 개간 전리품에서 나와 주머니로 간다(3c). 계정마다 하루 이만큼. */
+const RARE_SEEDS = ['screamRoot', 'walkingCap', 'keeperBerry'];
+const SEED_PER_DAY = 1;
 
-/** 표에서 하나 뽑는다. 화석이 막혔으면 파삭돌. */
-function rollLoot(table, rand, { fossilLeft = 0 } = {}) {
+/**
+ * 표에서 하나 뽑는다. 화석·씨앗이 하루 상한에 막혔으면 파삭돌.
+ * 희귀 씨앗은 `seed:<작물>` 로 돌려준다 — 부르는 쪽이 아이템과 갈라 주머니에 넣는다.
+ */
+function rollLoot(table, rand, { fossilLeft = 0, seedLeft = 0 } = {}) {
   const rows = LOOT[table];
   const total = rows.reduce((a, [, w]) => a + w, 0);
   let x = rand() * total;
@@ -180,6 +186,7 @@ function rollLoot(table, rand, { fossilLeft = 0 } = {}) {
   }
   if (key === 'ore') return ORES[Math.floor(rand() * ORES.length)];
   if (key === 'oddFossil' && fossilLeft <= 0) return 'crackleStone';
+  if (key === 'seed') return seedLeft > 0 ? `seed:${RARE_SEEDS[Math.floor(rand() * RARE_SEEDS.length)]}` : 'crackleStone';
   return key;
 }
 
@@ -242,7 +249,7 @@ module.exports = {
   SOIL_XP, SOIL_SPEED, soilStar, WEED_SLOW, WEED_CHANCE, DEATH_SOIL, LEGUME_SOIL,
   LEVEL_XP, MAX_LEVEL, PLOT_ORDER, levelOf, nextLevelXp, signOf, XP,
   GRAIN_SPOTS, makePlot,
-  staminaOf, MAX_SWINGS, ROCK_LOOT, ORES, LOOT, FOSSIL_PER_DAY, rollLoot, hintOf,
+  staminaOf, MAX_SWINGS, ROCK_LOOT, ORES, LOOT, FOSSIL_PER_DAY, RARE_SEEDS, SEED_PER_DAY, rollLoot, hintOf,
   PICKAXES, pickaxeOf, nextPickaxe, exactHint, candidatesOf,
   FERTS, COMPOST_BITS, COMPOST_CROPS,
 };

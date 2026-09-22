@@ -27,6 +27,11 @@
  *
  * **개간 기력은 계정 기준이다**(`daily`, farms.json). 농장 기준이면 폐농 무르기 → 재등록으로
  * 돌을 새로 깔아 전리품을 되풀이해 캘 수 있다.
+ *
+ * **희귀 씨앗 주머니**(`pouches`, 3c)도 계정 기준이다. 주머니와 농장이 **같은 파일**이라, 씨앗을
+ * 줍거나(개간) 쓰는(심기) 것은 칸 바꾸기와 한 번의 쓰기로 나간다 — 반쪽 상태가 없다.
+ *
+ * **비명 뿌리**(3c)를 거두면 한 번마다 귀마개 하나를 쓰고, 없으면 체력 −5(1 은 남긴다).
  */
 const farmStore = require('../services/farmStore');
 const accountStore = require('../services/accountStore');
@@ -59,24 +64,37 @@ const BAD = {
 
 /** 물을 줘도 남겨 두는 체력. 0 이면 쓰러진다. */
 const KEEP_HP = 1;
+/** 비명 뿌리를 귀마개 없이 거두면 깎이는 체력(3c). */
+const SCREAM_HP = 5;
 
 /** 오늘의 개간 기력 장부(계정 기준). 날이 바뀌었으면 새로 연다. */
 function dailyOf(data, userId, today) {
   const d = data.daily[userId];
-  return d && d.day === today ? d : { day: today, used: 0, fossils: 0 };
+  return d && d.day === today ? { seeds: 0, ...d } : { day: today, used: 0, fossils: 0, seeds: 0 };
 }
 
 /** 그 사람의 곡괭이 키. */
 const toolOf = (data, userId) => land.pickaxeOf(data.tools[userId]).key;
 
-/** 주인에게만 주는 것 — 기력 · 곡괭이 · (미스릴이면) 결 후보. */
+/** 주인에게만 주는 것 — 기력 · 곡괭이 · (미스릴이면) 결 후보 · 희귀 씨앗 주머니. */
 function meFor(data, farm, userId, today) {
   const tool = toolOf(data, userId);
   return {
     stamina: staminaFor(data, farm, userId, today),
     pickaxe: tool,
     candidates: tool === 'mithril' ? rules.candidates(farm) : null,
+    pouch: { ...(data.pouches[userId] ?? {}) },
   };
+}
+
+/** 주머니에 씨앗을 넣고 뺀다. 0 이 된 칸은 지운다. */
+function pouchAdd(data, userId, moves) {
+  const bag = { ...(data.pouches[userId] ?? {}) };
+  for (const [k, n] of Object.entries(moves)) {
+    bag[k] = (bag[k] ?? 0) + n;
+    if (bag[k] <= 0) delete bag[k];
+  }
+  data.pouches[userId] = bag;
 }
 
 /** 주인의 오늘 기력 `{ left, max }`. */
@@ -336,9 +354,10 @@ exports.plant = (req, res) => {
   if (!farm) return undefined;
   if (farm.owner !== userId) return res.json({ ok: false, reason: 'notOwner', owner: farm.owner, today });
 
-  const r = rules.plant(farm, today, { plot, cells, crop });
+  const r = rules.plant(farm, today, { plot, cells, crop }, { pouch: data.pouches[userId]?.[crop] ?? 0 });
   if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
   if (!r.ok) return res.json({ ...r, farm: rules.view(farm, today), today });
+  if (r.seeds) pouchAdd(data, userId, { [crop]: -r.seeds });   // 칸과 같은 파일 · 같은 쓰기
 
   const have = load(acctData, userId, today).gold;
   if (have < r.cost) return res.json({ ok: false, reason: 'gold', need: r.cost, gold: have, today });
@@ -349,13 +368,16 @@ exports.plant = (req, res) => {
   data.farms[channelId] = farm;
   if (!save(farmStore, data, res, '농장')) return undefined;
 
-  return res.json({ ...r, account: publicView(acct), farm: rules.view(farm, today), today });
+  return res.json({
+    ...r, account: publicView(acct), me: meFor(data, farm, userId, today), farm: rules.view(farm, today), today,
+  });
 };
 
 /**
  * POST /api/farms/harvest — `{ channelId, userId, plot? }`. 주인만. `plot` 이 없으면 전부.
  *
  * 다 자란 칸을 거둬 아이템으로 넣고, 죽은 칸을 치운다. 전적 `farmHarvest` 는 거둔 칸 수.
+ * 비명 뿌리를 거뒀으면(`screams`) 귀마개를 쓰고, 모자란 만큼 체력 −5(1 은 남긴다).
  */
 exports.harvest = (req, res) => {
   const got = ids(req.body, ['channelId', 'userId']);
@@ -380,13 +402,22 @@ exports.harvest = (req, res) => {
   // 농장 먼저(§ 머리말 2). 계정 쓰기가 실패하면 이 수확은 잃는다 — 두 번 거두는 것보다 낫다.
   data.farms[channelId] = farm;
   if (!save(farmStore, data, res, '농장')) return undefined;
+  let plugs = 0; let hpLost = 0;
   const acct = touch(acctData, userId, today, (a) => {
     for (const [key, n] of Object.entries(r.items)) a.items[key] = (a.items[key] ?? 0) + n;
     if (r.harvested) bump(a, 'farmHarvest', r.harvested);
+    if (r.screams) {
+      plugs = Math.min(r.screams, a.items.earPlug ?? 0);
+      if (plugs) { a.items.earPlug -= plugs; if (!a.items.earPlug) delete a.items.earPlug; }
+      hpLost = Math.min((r.screams - plugs) * SCREAM_HP, Math.max(0, a.hp - KEEP_HP));
+      a.hp -= hpLost;
+    }
   });
   if (!save(accountStore, acctData, res, '계정')) return undefined;
 
-  return res.json({ ...r, account: publicView(acct), farm: rules.view(farm, today), today });
+  return res.json({
+    ...r, plugs, hpLost, hp: acct.hp, account: publicView(acct), farm: rules.view(farm, today), today,
+  });
 };
 
 /**
@@ -415,12 +446,18 @@ exports.clear = (req, res) => {
   const daily = dailyOf(data, userId, today);
   const stamina = staminaFor(data, farm, userId, today);
   const r = rules.clear(farm, today, { plot, cell, pos, all: all === true }, {
-    stamina: stamina.left, fossilLeft: land.FOSSIL_PER_DAY - daily.fossils, tool: toolOf(data, userId),
+    stamina: stamina.left,
+    fossilLeft: land.FOSSIL_PER_DAY - daily.fossils,
+    seedLeft: land.SEED_PER_DAY - daily.seeds,
+    tool: toolOf(data, userId),
   });
   if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
   if (!r.ok) return res.json({ ...r, stamina, farm: rules.view(farm, today), today });
 
-  data.daily[userId] = { ...daily, used: daily.used + r.used, fossils: daily.fossils + r.fossils };
+  data.daily[userId] = {
+    ...daily, used: daily.used + r.used, fossils: daily.fossils + r.fossils, seeds: daily.seeds + r.found,
+  };
+  if (r.found) pouchAdd(data, userId, r.seeds);        // 주머니 — 농장과 같은 파일 · 같은 쓰기
   data.farms[channelId] = farm;
   if (!save(farmStore, data, res, '농장')) return undefined;
 

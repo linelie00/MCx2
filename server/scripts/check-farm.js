@@ -29,15 +29,21 @@ const eq = (name, got, want) => {
   if (same) { ok += 1; } else { bad += 1; console.log(`  ✗ ${name}\n     받음: ${JSON.stringify(got)}\n     기대: ${JSON.stringify(want)}`); }
 };
 
+/** 정해진 수열을 되풀이하는 난수. */
+const seq = (...xs) => { let i = 0; return () => xs[i++ % xs.length]; };
 const ZERO = () => 0;
 
 // ================================================================ 1. 작물표
 
-eq('씨앗값은 파는 값보다 싸다 (수확하면 반드시 남는다)', CROPS.filter((c) => !(seedPrice(c) >= 1 && seedPrice(c) < c.price)).map((c) => c.key), []);
+eq('씨앗값은 파는 값보다 싸다 (수확하면 반드시 남는다)', CROPS.filter((c) => !c.seedOnly && !(seedPrice(c) >= 1 && seedPrice(c) < c.price)).map((c) => c.key), []);
+eq('희귀 작물은 씨앗값이 없다(주머니 씨앗)', CROPS.filter((c) => c.seedOnly && seedPrice(c) !== 0).map((c) => c.key), []);
+eq('희귀 씨앗 목록 = seedOnly 작물', [...land.RARE_SEEDS].sort(), CROPS.filter((c) => c.seedOnly).map((c) => c.key).sort());
 eq('보장 이익은 성장일의 절반(올림)', CROPS.filter((c) => guaranteed(c) !== Math.min(Math.ceil(c.days / 2), c.price - 1)).map((c) => c.key), []);
 eq('키가 안 겹친다', new Set(CROPS.map((c) => c.key)).size, CROPS.length);
-eq('레벨은 1~5', CROPS.filter((c) => !(c.lv >= 1 && c.lv <= 5)).map((c) => c.key), []);
-eq('Lv1 작물 여덟', CROPS.filter((c) => c.lv === 1).length, 8);
+eq('레벨은 1~8', CROPS.filter((c) => !(c.lv >= 1 && c.lv <= 8)).map((c) => c.key), []);
+eq('특수 규칙이 있으면 안내 문구가 있다', CROPS.filter((c) => (c.thirsty || c.spread || c.flee || c.scream || c.shadeNeed || c.perennial || c.seedOnly) && !c.note).map((c) => c.key), []);
+eq('다년생은 재수확 작물이다', CROPS.filter((c) => c.perennial && !c.regrow).map((c) => c.key), []);
+eq('Lv1 작물 여덟(희귀 빼고)', CROPS.filter((c) => c.lv === 1 && !c.seedOnly).length, 8);
 eq('키는 아이템 키 모양', CROPS.filter((c) => !/^[a-z][A-Za-z0-9]{0,39}$/.test(c.key)).map((c) => c.key), []);
 eq('재수확은 성장일 이하', CROPS.filter((c) => c.regrow && c.regrow > c.days).map((c) => c.key), []);
 
@@ -109,7 +115,7 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
 // --- 심기
 {
   const f = fresh();
-  eq('당근 3칸 심기', rules.plant(f, D0, { plot: P, cells: [0, 1, 2], crop: 'carrot' }), { ok: true, cost: 3, count: 3, crop: 'carrot' });
+  eq('당근 3칸 심기', rules.plant(f, D0, { plot: P, cells: [0, 1, 2], crop: 'carrot' }), { ok: true, cost: 3, count: 3, crop: 'carrot', seeds: 0 });
   eq('다른 작물은 같은 밭에 못 심는다', rules.plant(f, D0, { plot: P, cells: [3], crop: 'potato' }).reason, 'otherCrop');
   eq('레벨이 모자란 작물', rules.plant(fresh(), D0, { plot: P, cells: [3], crop: 'tomato' }), { ok: false, reason: 'level', need: 2, crop: 'tomato' });
   eq('심은 칸에 또 못 심는다', rules.plant(f, D0, { plot: P, cells: [0], crop: 'carrot' }).reason, 'occupied');
@@ -435,6 +441,83 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('곡괭이 차례', [land.nextPickaxe('wood').key, land.nextPickaxe('iron').key, land.nextPickaxe('mithril')], ['iron', 'mithril', null]);
 }
 
+// --- 3c: 특수 작물 · 희귀 씨앗
+{
+  const lv = (f, n) => { f.xp = land.LEVEL_XP[n - 1]; return f; };
+  // 물 욕심 — 쌀은 하루 굶으면 시들고 사흘이면 죽는다
+  const r = lv(fresh(), 5);
+  rules.plant(r, D0, { plot: P, cells: [0], crop: 'rice' });
+  W(r, 0);
+  at(r, 2);                                 // 1일째 굶김
+  eq('쌀 — 하루 굶으면 🍂', state(r, 2), 'dry');
+  eq('쌀 — 오늘 못 받으면 시든다(목마름 표시)', rules.view(r, day(2)).plots[P].thirsty, 0);
+  at(r, 4);                                 // 2·3일째도 굶김 → thirst 3
+  eq('쌀 — 사흘 굶으면 💀', cell(r), { t: 'dead', why: 'dry' });
+  const c = fresh();
+  rules.plant(c, D0, { plot: P, cells: [0], crop: 'carrot' });
+  W(c, 0); at(c, 2);
+  eq('보통 작물은 하루 굶어도 멀쩡', state(c, 2), 'seed');
+
+  // 퍼짐 — 박하
+  const m = lv(fresh(), 4);
+  rules.plant(m, D0, { plot: P, cells: [0], crop: 'mint' });
+  W(m, 0); at(m, 1); W(m, 1); at(m, 2); W(m, 2);
+  const hm = rules.harvest(m, day(2), {}, { rand: ZERO });
+  eq('박하를 거두면 한 포기 번진다', [hm.spread, m.plots[P].cells.filter((x) => x.t === 'plant').length], [1, 2]);
+
+  // 비명 — 밭 한 번 거둘 때 한 번
+  const s1 = fresh();
+  rules.plant(s1, D0, { plot: P, cells: [0, 1], crop: 'screamRoot' }, { pouch: 2 });
+  for (const x of s1.plots[P].cells.slice(0, 2)) Object.assign(x, { g: 7, ripeDay: D0 });
+  eq('비명 뿌리 두 칸을 거둬도 비명은 한 번', rules.harvest(s1, D0, {}, { rand: ZERO }).screams, 1);
+
+  // 희귀 — 주머니 씨앗 · 레벨 제한 없음
+  const p1 = fresh();
+  eq('씨앗이 모자라면 못 심는다', rules.plant(p1, D0, { plot: P, cells: [0, 1], crop: 'keeperBerry' }, { pouch: 1 }), { ok: false, reason: 'noSeed', crop: 'keeperBerry', have: 1, need: 2 });
+  eq('Lv1 이어도 희귀는 심는다 · 골드 0 · 씨앗 둘', rules.plant(p1, D0, { plot: P, cells: [0, 1], crop: 'keeperBerry' }, { pouch: 5 }), { ok: true, cost: 0, count: 2, crop: 'keeperBerry', seeds: 2 });
+  eq('레벨 올라도 희귀는 해금 목록에 없다', rules.gainXp(fresh(), 5000, Math.random).crops.some((k) => CROPS.find((x) => x.key === k).seedOnly), false);
+
+  // 도망 — 익은 날 안 거두면 옆 빈 흙으로, 다시 셈해도 같은 칸
+  const w1 = fresh();
+  rules.plant(w1, D0, { plot: P, cells: [0], crop: 'walkingCap' }, { pouch: 1 });
+  Object.assign(cell(w1), { g: 5, ripeDay: D0 });
+  const w2 = structuredClone(w1);
+  at(w1, 1); rules.tick(w2, day(1));
+  const where = (f) => f.plots[P].cells.findIndex((x) => x.t === 'plant');
+  eq('버섯갓이 도망갔다', [cell(w1).t, where(w1) > 0, w1.plots[P].cells[where(w1)].ripeDay], ['soil', true, day(1)]);
+  eq('다시 셈해도 같은 칸으로', where(w1), where(w2));
+  const w3 = fresh();
+  rules.plant(w3, D0, { plot: P, cells: [0], crop: 'walkingCap' }, { pouch: 1 });
+  Object.assign(cell(w3), { g: 5, ripeDay: D0 });
+  for (let i = 1; i < 9; i += 1) w3.plots[P].cells[i] = { t: 'rock' };
+  rules.tick(w3, day(1));
+  eq('빈 흙이 없으면 사라진다', [cell(w3).t, w3.plots[P].crop], ['soil', 'walkingCap']);
+
+  // 그늘 · 다년생
+  const sh = lv(fresh(), 8);
+  rules.plant(sh, D0, { plot: P, cells: [0], crop: 'pineMushroom' });
+  eq('향송이 — 그늘이 없으면 절반', affinity.modsFor(sh, P).rate, 0.5);
+  sh.plots[1] = { open: true, crop: 'sunflower', soilXp: 0, history: [], streak: 0, cells: Array.from({ length: 9 }, () => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: D0, wet: null })) };
+  eq('해바라기 그늘이면 +10%', affinity.modsFor(sh, P).rate, 1.1);
+  const pe = lv(fresh(), 6);
+  pe.plots[P].history = ['leaf'];
+  rules.plant(pe, D0, { plot: P, cells: [0], crop: 'asparagus' });
+  eq('다년생은 연작을 안 따진다', affinity.modsFor(pe, P).rotation, null);
+
+  // 희귀 씨앗 전리품 — 하루 상한
+  const rolls = Array.from({ length: 400 }, () => land.rollLoot('perfect', Math.random, { seedLeft: 0 }));
+  eq('상한이 막히면 씨앗이 안 나온다', rolls.some((k) => k.startsWith('seed:')), false);
+  const b = fresh();
+  b.plots[P].cells[0] = { t: 'boulder', grain: 2, swings: 0, cracked: false };
+  let found = null;
+  for (let n = 0; n < 200 && !found; n += 1) {
+    const f = structuredClone(b);
+    const r2 = rules.clear(f, D0, { plot: P, cell: 0, pos: 2 }, { stamina: 5, seedLeft: 1 });
+    if (r2.found) found = r2;
+  }
+  eq('희귀 씨앗은 주머니로(아이템이 아니라)', [found?.found, Object.keys(found?.seeds ?? {}).every((k) => land.RARE_SEEDS.includes(k)), Object.keys(found?.loot ?? {}).some((k) => k.startsWith('seed'))], [1, true, false]);
+}
+
 // --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
 {
   // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
@@ -496,7 +579,7 @@ const server = app.listen(0, async () => {
     eq('남의 땅', (await post('/farms/register', { channelId: CH, guildId: G, userId: V })).body.reason, 'taken');
     eq('한 사람에 하나', (await post('/farms/register', { channelId: CH2, guildId: G, userId: U })).body.reason, 'hasFarm');
     eq('NPC 는 못 연다', (await post('/farms/register', { channelId: CH2, guildId: G, userId: 'npc:migel' })).status, 400);
-    eq('주인에게는 기력·곡괭이를 준다', (await hit(`/farms/${CH}?user=${U}`)).body.me, { stamina: { left: 5, max: 5 }, pickaxe: 'wood', candidates: null });
+    eq('주인에게는 기력·곡괭이를 준다', (await hit(`/farms/${CH}?user=${U}`)).body.me, { stamina: { left: 5, max: 5 }, pickaxe: 'wood', candidates: null, pouch: {} });
     eq('남에게는 안 준다', (await hit(`/farms/${CH}?user=${V}`)).body.me, null);
 
     // 가운데 밭을 알려진 모양으로 — 빈 흙 여섯 · 돌 둘 · 바위 하나(결 3)
@@ -616,6 +699,43 @@ const server = app.listen(0, async () => {
     eq('미리보기 — 밭 번호 400', (await hit(`/farms/${CH2}/preview?plot=9&crop=carrot`)).status, 400);
     eq('미리보기 — 없는 농장', (await hit(`/farms/2999999/preview?plot=4&crop=carrot`)).body.mods, null);
     eq('보기에 궁합이 실린다', 'mods' in (await hit(`/farms/${CH2}`)).body.farm.plots[4], true);
+
+    // --- 3c: 희귀 씨앗 주머니 · 비명과 귀마개 (W2 의 CH2 농장)
+    const d8 = readFile();
+    d8.pouches = { [W2]: { screamRoot: 1 } };
+    d8.farms[CH2].plots[4].cells = d8.farms[CH2].plots[4].cells.map(() => ({ t: 'soil' }));
+    d8.farms[CH2].plots[4].crop = null;
+    writeFile(d8);
+    eq('씨앗이 모자라면', (await post('/farms/plant', { channelId: CH2, userId: W2, plot: 4, cells: [0, 1], crop: 'screamRoot' })).body.reason, 'noSeed');
+    const gp = (await acct(W2)).gold;
+    const sp = (await post('/farms/plant', { channelId: CH2, userId: W2, plot: 4, cells: [0], crop: 'screamRoot' })).body;
+    eq('주머니 씨앗으로 심는다 — 골드 그대로 · 주머니 비움', [sp.ok, sp.cost, sp.account.gold, sp.me.pouch], [true, 0, gp, {}]);
+    eq('파일의 주머니도 비었다', readFile().pouches[W2], {});
+    const d9 = readFile();
+    Object.assign(d9.farms[CH2].plots[4].cells[0], { g: 7, ripeDay: dayKey() });
+    writeFile(d9);
+    await post('/accounts/deltas', { hp: { [W2]: 100 } });
+    const hs = (await post('/farms/harvest', { channelId: CH2, userId: W2 })).body;
+    eq('귀마개 없이 비명 — 체력 −5', [hs.screams, hs.plugs, hs.hpLost, hs.hp], [1, 0, 5, 95]);
+    await post('/accounts/deltas', { items: { [W2]: { earPlug: 1 } } });
+    const d10 = readFile();
+    d10.pouches[W2] = { screamRoot: 1 };
+    writeFile(d10);
+    await post('/farms/plant', { channelId: CH2, userId: W2, plot: 4, cells: [0], crop: 'screamRoot' });
+    const d11 = readFile();
+    Object.assign(d11.farms[CH2].plots[4].cells[0], { g: 7, ripeDay: dayKey() });
+    writeFile(d11);
+    const hs2 = (await post('/farms/harvest', { channelId: CH2, userId: W2 })).body;
+    eq('귀마개가 막는다', [hs2.plugs, hs2.hpLost, hs2.account.items.earPlug ?? 0], [1, 0, 0]);
+    await post('/accounts/deltas', { hp: { [W2]: -93 } });      // 체력 2
+    const d12 = readFile();
+    d12.pouches[W2] = { screamRoot: 1 };
+    writeFile(d12);
+    await post('/farms/plant', { channelId: CH2, userId: W2, plot: 4, cells: [0], crop: 'screamRoot' });
+    const d13 = readFile();
+    Object.assign(d13.farms[CH2].plots[4].cells[0], { g: 7, ripeDay: dayKey() });
+    writeFile(d13);
+    eq('비명도 체력 1 은 남긴다', (await post('/farms/harvest', { channelId: CH2, userId: W2 })).body.hp, 1);
 
     // --- 1단계에 연 농장이 파일에 있을 때
     const d5 = readFile();

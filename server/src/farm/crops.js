@@ -17,8 +17,19 @@
  *   regrow  재수확. 거둔 뒤 이만큼 뒤에 다시 다 자란다. 없으면 거두면 칸이 빈다
  *   tall    키가 크다 — 이웃 밭에 그늘을 드리운다(버섯·잎 +10%, 열매·박 −5%, `affinity.js`)
  *
- * 특수 규칙이 있는 작물(박하 퍼짐 · 쌀 물 욕심 · 해바라기·옥수수 그늘 · 과수)은 그 규칙이
- * 들어오는 단계에서 넣는다.
+ * 특수 규칙(3c) — 규칙은 `rules.js`·`affinity.js` 가 이 표시만 보고 건다
+ *   thirsty    물 욕심 — 하루 굶으면 시들고 사흘이면 죽는다(보통은 이틀 · 나흘)
+ *   shadeNeed  그늘이 필요하다 — 키 큰 이웃이 없으면 성장 ×0.5
+ *   perennial  다년생 — 재수확이 끝나지 않고 윤작·연작을 따지지 않는다
+ *   aura       이웃 밭 품질 +n(3b 가 읽는다)
+ *   spread     퍼짐 — 거둘 때 같은 밭 빈 흙에 한 포기가 저절로 번진다
+ *   scream     비명 — 이웃 성장 −10%, 거둘 때 귀마개가 없으면 거둔 사람 HP −5
+ *   flee       도망 — 익은 날 안 거두면 같은 밭 빈 흙으로 옮겨 간다. 빈 흙이 없으면 사라진다
+ *   seedOnly   희귀 — 씨앗을 살 수 없다. 개간에서 주운 **주머니 씨앗**으로만 심는다(레벨 제한 없음)
+ *   note       심기 창에 적을 규칙 한 줄
+ *
+ * 과수(한 그루가 밭 하나) · 날씨를 타는 작물(용의 고추 · 월광초) · 인삼 · 황금 밀은 그 규칙이
+ * 들어오는 단계(4~6)에서 넣는다.
  */
 const CROPS = [
   // ---- Lv1
@@ -56,12 +67,31 @@ const CROPS = [
   { key: 'strawberry',  name: '딸기',     lv: 4, family: 'berry',    price: 5, days: 4, regrow: 2, emoji: '🍓' },
   { key: 'rosemary',    name: '로즈마리', lv: 4, family: 'herb',     price: 3, days: 3, regrow: 2, emoji: '🌲' },
   { key: 'basil',       name: '바질',     lv: 4, family: 'herb',     price: 3, days: 3, regrow: 2, emoji: '☘️' },
+  { key: 'mint',        name: '박하',     lv: 4, family: 'herb',     price: 3, days: 3, regrow: 1, spread: true, emoji: '🍀', note: '퍼짐 — 거둘 때 같은 밭 빈 흙에 한 포기가 저절로 번져요' },
   // ---- Lv5
   { key: 'pumpkin',     name: '늙은 호박', lv: 5, family: 'gourd',   price: 8, days: 6,            emoji: '🎃' },
   { key: 'taro',        name: '토란',     lv: 5, family: 'root',     price: 5, days: 5,            emoji: '🟤' },
   { key: 'sesame',      name: '참깨',     lv: 5, family: 'grain',    price: 4, days: 4,            emoji: '⚫' },
   { key: 'raspberry',   name: '산딸기',   lv: 5, family: 'berry',    price: 2, days: 2, regrow: 2, emoji: '🍒' },
   { key: 'blueberry',   name: '블루베리', lv: 5, family: 'berry',    price: 3, days: 3, regrow: 2, emoji: '🫐' },
+  { key: 'rice',        name: '쌀',       lv: 5, family: 'grain',    price: 6, days: 5, thirsty: true, emoji: '🍚', note: '물 욕심 — 하루만 굶어도 시들고, 사흘이면 죽어요' },
+  { key: 'sunflower',   name: '해바라기', lv: 5, family: 'grain',    price: 4, days: 5, tall: true, emoji: '🌻', note: '키가 커서 이웃 밭에 그늘을 드리워요 — 버섯·잎 +10%, 열매·박 −5%' },
+  // ---- Lv6
+  { key: 'asparagus',   name: '아스파라거스', lv: 6, family: 'leaf', price: 6, days: 7, regrow: 3, perennial: true, emoji: '🎍', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
+  { key: 'teaLeaf',     name: '찻잎',     lv: 6, family: 'herb',     price: 6, days: 5, regrow: 3, perennial: true, emoji: '🍵', note: '다년생 — 한 번 심으면 계속 거두고, 윤작·연작을 따지지 않아요' },
+  { key: 'ginger',      name: '생강',     lv: 6, family: 'root',     price: 4, days: 5,            emoji: '🫚' },
+  { key: 'lavender',    name: '라벤더',   lv: 6, family: 'herb',     price: 6, days: 5, regrow: 3, perennial: true, aura: 5, emoji: '💜', note: '다년생 · 향기 — 이웃 밭 작물의 품질이 올라가요' },
+  { key: 'koreanMelon', name: '참외',     lv: 6, family: 'gourd',    price: 6, days: 5,            emoji: '🍈' },
+  // ---- Lv7
+  { key: 'watermelon',  name: '수박',     lv: 7, family: 'gourd',    price: 12, days: 7,           emoji: '🍉' },
+  { key: 'melon',       name: '멜론',     lv: 7, family: 'gourd',    price: 14, days: 7,           emoji: '🍈' },
+  // ---- Lv8
+  { key: 'pineMushroom', name: '향송이',  lv: 8, family: 'fungus',   price: 25, days: 10, shadeNeed: true, emoji: '🍄', note: '그늘이 필요해요 — 옥수수·해바라기 옆이 아니면 절반만 자라요' },
+  { key: 'saffron',     name: '사프란',   lv: 8, family: 'herb',     price: 60, days: 14,          emoji: '🌸', note: '귀한 향신료 — 오래 걸리고 한 칸에서 많이 안 나와요' },
+  // ---- 희귀 — 개간에서 주운 주머니 씨앗으로만(레벨 제한 없음)
+  { key: 'screamRoot',  name: '비명 뿌리', lv: 1, family: 'monster', price: 14, days: 7, seedOnly: true, scream: true, emoji: '😱', note: '비명 — 이웃 성장 −10%, 거둘 때 귀마개가 없으면 체력 −5' },
+  { key: 'walkingCap',  name: '도망가는 버섯갓', lv: 1, family: 'monster', price: 8, days: 5, seedOnly: true, flee: true, emoji: '🏃', note: '도망 — 익은 날 안 거두면 옆 빈 흙으로 옮겨 가요. 빈 흙이 없으면 사라져요' },
+  { key: 'keeperBerry', name: '파수꾼 베리', lv: 1, family: 'berry', price: 30, days: 10, regrow: 3, seedOnly: true, emoji: '🛡️', note: '희귀 — 한 번 심으면 계속 거둬요' },
 ];
 
 const CROP_BY_KEY = Object.fromEntries(CROPS.map((c) => [c.key, c]));
@@ -74,8 +104,11 @@ const CROP_BY_KEY = Object.fromEntries(CROPS.map((c) => [c.key, c]));
  */
 const guaranteed = (c) => Math.max(1, Math.min(Math.ceil(c.days / 2), c.price - 1));
 
-/** 칸 하나의 씨앗값. 수확이 최소 1개라 `price − 씨앗값 = 보장 이익` 이 남는다. */
-const seedPrice = (c) => c.price - guaranteed(c);
+/**
+ * 칸 하나의 씨앗값. 수확이 최소 1개라 `price − 씨앗값 = 보장 이익` 이 남는다.
+ * 희귀 작물(`seedOnly`)은 골드가 아니라 주머니 씨앗을 쓴다 — 0.
+ */
+const seedPrice = (c) => (c.seedOnly ? 0 : c.price - guaranteed(c));
 
 /**
  * 작물 등급 — 비쌀수록 까다롭다(docs/FARM.md §4). 한 칸에서 덜 나온다.
@@ -99,7 +132,7 @@ const YIELD = {
 
 /** 봇에 주는 모양. 씨앗값까지 셈해서 준다 — 봇이 공식을 다시 갖지 않게. */
 const publicCrop = (c) => ({
-  ...c, regrow: c.regrow ?? null, seed: seedPrice(c), profit: guaranteed(c), grade: gradeOf(c),
+  ...c, regrow: c.regrow ?? null, seed: seedPrice(c), profit: c.seedOnly ? c.price : guaranteed(c), grade: gradeOf(c),
 });
 
 module.exports = {

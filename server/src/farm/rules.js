@@ -41,9 +41,11 @@ const CELLS = 9;
 /** 처음부터 열려 있는 밭 — 키패드 5번(가운데)의 index. */
 const START_PLOT = land.PLOT_ORDER[0];
 
-/** thirst 가 이만큼이면 🍂 시듦, 이만큼이면 💀. */
+/** thirst 가 이만큼이면 🍂 시듦, 이만큼이면 💀. 물 욕심 작물(`thirsty`, 3c)은 하루씩 빠르다. */
 const WITHER = 2;
 const DEATH = 4;
+const witherAt = (crop) => (crop?.thirsty ? WITHER - 1 : WITHER);
+const deathAt = (crop) => (crop?.thirsty ? DEATH - 1 : DEATH);
 /** 다 자란 날로부터 이만큼 지나면 과숙, 이만큼 지나면 썩는다. */
 const OVERRIPE_AFTER = 3;
 const ROT_AFTER = 6;
@@ -144,7 +146,7 @@ function gainXp(farm, n, rand) {
     farm.plots[i] = land.makePlot(rand);
     opened.push(i);
   }
-  const crops = CROPS.filter((c) => c.lv > from && c.lv <= to).map((c) => c.key);
+  const crops = CROPS.filter((c) => !c.seedOnly && c.lv > from && c.lv <= to).map((c) => c.key);
   return { from, to, opened, crops };
 }
 
@@ -189,6 +191,7 @@ function tick(farm, today) {
     const key = keyOf(d);
     farm.plots.forEach((plot, pi) => {
       if (!plot.open) return;
+      const crop = CROP_BY_KEY[plot.crop];
       plot.cells.forEach((cell, i) => {
         if (cell.t === 'soil') {
           if (land.hashRand(farm.channelId, key, pi, i) < land.WEED_CHANCE) plot.cells[i] = { t: 'weed' };
@@ -196,6 +199,17 @@ function tick(farm, today) {
         }
         if (cell.t !== 'plant') return;
         if (cell.ripeDay) {
+          // 도망(3c) — 익은 날 밤까지 안 거두면 같은 밭 빈 흙으로 옮겨 가 이튿날 하루 더 익어 있다.
+          // 옮길 자리는 해시로 — 몇 번을 다시 셈해도 같은 칸으로 간다. 빈 흙이 없으면 사라진다.
+          if (crop?.flee && d === dayNum(cell.ripeDay)) {
+            const room = plot.cells.map((c, j) => (c.t === 'soil' ? j : -1)).filter((j) => j >= 0);
+            plot.cells[i] = soil();
+            if (room.length) {
+              const to = room[Math.floor(land.hashRand(farm.channelId, key, pi, i, 'flee') * room.length)];
+              plot.cells[to] = { ...cell, ripeDay: keyOf(d + 1), fled: (cell.fled ?? 0) + 1 };
+            }
+            return;
+          }
           // 이날이 끝나면 다 자란 지 (d − R + 1)일. 그게 ROT_AFTER 가 되는 밤에 썩는다.
           if (d - dayNum(cell.ripeDay) + 1 >= ROT_AFTER) {
             plot.cells[i] = { t: 'dead', why: 'rot' };
@@ -205,7 +219,7 @@ function tick(farm, today) {
         }
         if (cell.wet === key) return;
         cell.thirst += 1;
-        if (cell.thirst >= DEATH) {
+        if (cell.thirst >= deathAt(crop)) {
           plot.cells[i] = { t: 'dead', why: 'dry' };
           loseSoil(plot, land.DEATH_SOIL);
         }
@@ -255,7 +269,7 @@ function water(farm, today, userId, { budget = Infinity, plot = null, rand = Mat
     const p = farm.plots[pi];
     const crop = CROP_BY_KEY[p.crop];
     const cell = p.cells[i];
-    if (cell.thirst >= WITHER) { revived += 1; cell.scar = true; }
+    if (cell.thirst >= witherAt(crop)) { revived += 1; cell.scar = true; }
     cell.thirst = 0;
     cell.wet = today;
     cell.g = round(cell.g + rateOf(farm, pi));
@@ -287,8 +301,10 @@ const badPlot = (plot) => !Number.isInteger(plot) || plot < 0 || plot >= PLOTS;
  *
  * 한 밭에는 **작물 한 종류.** 빈 흙에만 심는다 — 돌·바위·잡초가 있는 칸은 먼저 치운다.
  * 레벨이 모자란 작물은 못 심는다. 골드는 여기서 안 본다(`cost` 만 셈해 돌려준다).
+ * 희귀 작물(`seedOnly`)은 레벨을 안 보고, 골드 대신 **주머니 씨앗**을 칸마다 하나 쓴다 —
+ * 가진 씨앗(`pouch`)보다 많이 심지 못한다. 쓴 수는 `seeds` 로 돌려준다.
  */
-function plant(farm, today, { plot, cells, crop }) {
+function plant(farm, today, { plot, cells, crop }, { pouch = 0 } = {}) {
   if (badPlot(plot)) return bad('plot');
   const c = CROP_BY_KEY[crop];
   if (!c) return bad('crop');
@@ -298,7 +314,8 @@ function plant(farm, today, { plot, cells, crop }) {
 
   const p = farm.plots[plot];
   if (!p.open) return { ok: false, reason: 'locked' };
-  if (c.lv > levelOf(farm)) return { ok: false, reason: 'level', need: c.lv, crop };
+  if (!c.seedOnly && c.lv > levelOf(farm)) return { ok: false, reason: 'level', need: c.lv, crop };
+  if (c.seedOnly && pouch < cells.length) return { ok: false, reason: 'noSeed', crop, have: pouch, need: cells.length };
   if (p.crop && p.crop !== crop) return { ok: false, reason: 'otherCrop', crop: p.crop };
   if (cells.some((i) => p.cells[i].t !== 'soil')) return { ok: false, reason: 'occupied' };
 
@@ -309,7 +326,9 @@ function plant(farm, today, { plot, cells, crop }) {
   }
   if (p.crop !== crop) p.streak = 0;
   p.crop = crop;
-  return { ok: true, cost: seedPrice(c) * cells.length, count: cells.length, crop };
+  return {
+    ok: true, cost: seedPrice(c) * cells.length, count: cells.length, crop, seeds: c.seedOnly ? cells.length : 0,
+  };
 }
 
 // ---------------------------------------------------------------- 수확
@@ -332,7 +351,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
 
   const items = {};
   const add = (key, n) => { items[key] = (items[key] ?? 0) + n; };
-  let harvested = 0; let cleared = 0; let weeds = 0; let xp = 0;
+  let harvested = 0; let cleared = 0; let weeds = 0; let xp = 0; let screams = 0; let spread = 0;
   for (const p of targets) {
     const crop = CROP_BY_KEY[p.crop];
     const [lo, hi] = crop ? YIELD[gradeOf(crop)][land.soilStar(p.soilXp) - 1] : [0, 0];
@@ -352,6 +371,18 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
         p.cells[i] = soil();
       }
     });
+    // 퍼짐(3c) — 거둔 밭의 빈 흙 한 칸에 한 포기가 저절로 번진다. 씨앗값은 없다.
+    if (here && crop.spread) {
+      const room = p.cells.map((c, j) => (c.t === 'soil' ? j : -1)).filter((j) => j >= 0);
+      if (room.length) {
+        p.cells[room[Math.floor(rand() * room.length)]] = {
+          t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: today, wet: null,
+        };
+        spread += 1;
+      }
+    }
+    // 비명(3c) — 밭을 한 번 거둘 때마다 한 번. 귀마개·체력은 컨트롤러가 계정에서 셈한다.
+    if (here && crop.scream) screams += 1;
     if (here) {
       const base = here + (crop.family === 'legume' ? land.LEGUME_SOIL : 0);
       p.soilXp += Math.round(base * (mods?.soil ?? 1));
@@ -371,7 +402,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
   const compost = takeCompost(farm);
   if (compost) add('compost', compost);
   return {
-    ok: true, items, harvested, cleared, weeds, xp, levelUp, compost,
+    ok: true, items, harvested, cleared, weeds, xp, levelUp, compost, screams, spread,
   };
 }
 
@@ -388,21 +419,29 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
  * 빗나가면 방향 힌트를 주고, `MAX_SWINGS` 번 다 빗나가면 금이 간다 — 다음엔 어디를 쳐도 깨진다.
  * 결 자리와 휘두른 횟수는 칸에 저장된다. 창을 닫았다 열어도 다시 굴려지지 않는다.
  *
- * 돌려주는 `used` 만큼 컨트롤러가 기력을 깎고, `fossils` 만큼 화석 상한을 쓴다.
+ * 돌려주는 `used` 만큼 컨트롤러가 기력을 깎고, `fossils`·`found` 만큼 화석·희귀 씨앗 상한을 쓴다.
+ * 희귀 씨앗은 `loot` 이 아니라 `seeds` 로 온다 — 계정 아이템이 아니라 주머니로 간다.
  * `tool` 은 곡괭이(`land.PICKAXES`). 철부터는 빗나간 힌트에 거리(`dist`)가 붙는다.
  */
 function clear(farm, today, { plot, cell = null, pos = null, all = false }, {
-  rand = Math.random, stamina = 0, fossilLeft = 0, tool = 'wood',
+  rand = Math.random, stamina = 0, fossilLeft = 0, seedLeft = 0, tool = 'wood',
 } = {}) {
   if (badPlot(plot)) return bad('plot');
   const p = farm.plots[plot];
   if (!p.open) return { ok: false, reason: 'locked' };
 
   const loot = {};
-  let fossils = 0;
+  const seeds = {};
+  let fossils = 0; let found = 0;
   const roll = (table) => {
-    const key = land.rollLoot(table, rand, { fossilLeft: fossilLeft - fossils });
+    const key = land.rollLoot(table, rand, { fossilLeft: fossilLeft - fossils, seedLeft: seedLeft - found });
     if (key === 'oddFossil') fossils += 1;
+    if (key.startsWith('seed:')) {
+      const crop = key.slice(5);
+      seeds[crop] = (seeds[crop] ?? 0) + 1;
+      found += 1;
+      return;
+    }
     loot[key] = (loot[key] ?? 0) + 1;
   };
   const rockOut = (i) => {
@@ -415,7 +454,7 @@ function clear(farm, today, { plot, cell = null, pos = null, all = false }, {
     const compost = takeCompost(farm);
     if (compost) loot.compost = (loot.compost ?? 0) + compost;
     return {
-      ok: true, loot, fossils, levelUp, compost, ...extra, xp,
+      ok: true, loot, seeds, found, fossils, levelUp, compost, ...extra, xp,
     };
   };
 
@@ -523,7 +562,7 @@ function cellState(cell, crop, today) {
   if (cell.t === 'boulder') return cell.cracked ? 'crack' : 'boulder';
   if (['soil', 'rock', 'weed', 'dead'].includes(cell.t)) return cell.t;
   if (cell.ripeDay) return dayNum(today) - dayNum(cell.ripeDay) >= OVERRIPE_AFTER ? 'over' : 'ripe';
-  if (cell.thirst >= WITHER) return 'dry';
+  if (cell.thirst >= witherAt(crop)) return 'dry';
   return crop && cell.g / crop.days >= 0.5 ? 'grow' : 'seed';
 }
 
@@ -576,7 +615,7 @@ function view(farm, today) {
         dead: cells.filter((s) => s === 'dead').length,
         growing: growing.length,
         need: dry.length,
-        thirsty: dry.filter((cell) => cell.thirst === WITHER - 1).length,
+        thirsty: dry.filter((cell) => cell.thirst === witherAt(crop) - 1).length,
         left: crop && growing.length
           ? Math.min(...growing.map((cell) => Math.max(0, Math.ceil(round((crop.days - cell.g) / rate)))))
           : null,

@@ -894,9 +894,13 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('작물 2~3종 · 겹치지 않는다 · 지금 제철', rq.every((o) => o.parts.length >= 2 && o.parts.length <= 3
     && new Set(o.parts.map((x) => x.crop)).size === o.parts.length
     && o.parts.every((x) => weather.inSeason(CROP_BY_KEY[x.crop], o.day))), true);
-  eq('과수 · 희귀는 안 나온다', rq.some((o) => o.parts.some((x) => CROP_BY_KEY[x.crop].tree || CROP_BY_KEY[x.crop].seedOnly)), false);
+  eq('희귀는 안 나온다', rq.some((o) => o.parts.some((x) => CROP_BY_KEY[x.crop].seedOnly)), false);
   eq('기한 — 그 주 일요일부터 두 주 안', rq.every((o) => o.due >= rules.addDays(o.day, orders.REQUEST_DUE_MIN) && o.due <= rules.addDays(o.day, orders.REQUEST_DUE_MAX)), true);
-  eq('성장이 너무 긴 작물은 안 나온다', rq.every((o) => o.parts.every((x) => CROP_BY_KEY[x.crop].days <= orders.REQUEST_MAX_DAYS)), true);
+  eq('오래 걸리는 작물(사프란 · 과수)은 한 의뢰에 하나까지', rq.every((o) => o.parts.filter((x) => orders.isSlow(CROP_BY_KEY[x.crop])).length <= 1), true);
+  eq('오래 걸리는 작물은 수량도 적게', rq.flatMap((o) => o.parts).filter((x) => orders.isSlow(CROP_BY_KEY[x.crop]))
+    .every((x) => x.qty <= (CROP_BY_KEY[x.crop].tree ? orders.TREE_QTY[1] : orders.SLOW_QTY[1])), true);
+  const many = days.flatMap((d) => [1, 2, 3, 4, 5].map((ch) => orders.requestOf(`99${ch}`, d, 10)).filter(Boolean));
+  eq('사프란도 과수도 나온다', [many.some((o) => o.parts.some((x) => x.crop === 'saffron')), many.some((o) => o.parts.some((x) => CROP_BY_KEY[x.crop].tree))], [true, true]);
   eq('경험치 = 10 + 가짓수 × 5', rq.every((o) => o.xp === 10 + 5 * o.parts.length), true);
   eq('Lv10 — 세 종 · 가끔 ★★', [rq.every((o) => o.parts.length === 3), new Set(rq.map((o) => o.minStar)).size], [true, 2]);
   const low = days.map((d) => orders.requestOf('111111', d, 2)).filter(Boolean);

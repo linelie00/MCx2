@@ -50,8 +50,15 @@ const BOARD_START = '2026-09-21';
 const REQUEST_DAYS = [0];
 const REQUEST_DUE_MIN = 6;
 const REQUEST_DUE_MAX = 13;
-/** 큰 의뢰에 나올 수 있는 성장일의 한도 — 기한 안에 한 번은 거둘 수 있어야 한다. */
-const REQUEST_MAX_DAYS = 10;
+/**
+ * 오래 걸리는 작물(성장 10일 초과 · 과수)은 **한 의뢰에 하나까지**, 수량도 조금만 — 기한(두 주) 안에
+ * 처음부터 키워 내긴 어렵지만, 나무가 서 있거나 창고에 몇 개 있으면 낼 수 있는 정도로 둔다.
+ * 빼 버리면 사프란 · 과수가 주문에 영영 안 나온다.
+ */
+const SLOW_DAYS = 10;
+const isSlow = (c) => c.tree || c.days > SLOW_DAYS;
+const SLOW_QTY = [1, 2];
+const TREE_QTY = [3, 6];
 /**
  * 개인 의뢰의 난이도 — 농장 레벨에 따라. 가짓수 · 수량 배수 · ★★ 를 요구할 확률.
  * Lv1~3 은 밭이 한둘이고 토질 ★1 이라 ★★ 가 안 나온다(★1 토질 ★★ 0%) — 거기에 맞춘다.
@@ -177,20 +184,32 @@ function requestOf(channelId, day, level) {
   const id = `r:${channelId}:${day}`;
   let n = 0;
   const rand = () => hashRand('request', id, n++);
-  const pool = CROPS.filter((c) => !c.seedOnly && !c.tree && c.lv <= level && c.days <= REQUEST_MAX_DAYS);
+  const pool = CROPS.filter((c) => !c.seedOnly && c.lv <= level);
   const now = pool.filter((c) => weather.inSeason(c, day));
   const from = [...(now.length >= 2 ? now : pool)];
   const tier = requestTier(level);
   const kinds = Math.min(from.length, tier.kinds[Math.floor(rand() * tier.kinds.length)]);
   const chosen = [];
-  for (let k = 0; k < kinds; k += 1) chosen.push(...from.splice(Math.floor(rand() * from.length), 1));
+  for (let k = 0; k < kinds; k += 1) {
+    // 오래 걸리는 작물은 한 의뢰에 하나까지 — 이미 하나 골랐으면 나머지는 빠른 것에서
+    const room = chosen.some(isSlow) ? from.filter((c) => !isSlow(c)) : from;
+    if (!room.length) break;
+    const c = room[Math.floor(rand() * room.length)];
+    chosen.push(c);
+    from.splice(from.indexOf(c), 1);
+  }
   const minStar = rand() < tier.twoStar ? 2 : 1;
-  const parts = chosen.map((c) => ({ crop: c.key, qty: qtyOf(c, rand, tier.mult) }));
+  const parts = chosen.map((c) => ({
+    crop: c.key,
+    qty: isSlow(c) ? between(rand, ...(c.tree ? TREE_QTY : SLOW_QTY)) : qtyOf(c, rand, tier.mult),
+  }));
   const gold = parts.reduce((a, p) => {
     const c = CROP[p.crop];
     return a + Math.ceil(c.price * p.qty * STAR_MULT[minStar] * REQUEST_GOLD) + c.days * REQUEST_DAY_GOLD;
   }, 0);
-  const longest = Math.max(...chosen.map((c) => c.days));
+  // 기한은 **빨리 크는 작물**로 잰다 — 오래 걸리는 것은 이미 있는 것으로 낸다고 본다
+  const quick = chosen.filter((c) => !isSlow(c));
+  const longest = Math.max(0, ...(quick.length ? quick : chosen).map((c) => c.days));
   const bonus = {};
   if (level >= 4 && rand() < GOLD_FERT_CHANCE) bonus.goldFert = 1;
   if (minStar >= 2) bonus.mt = 1;
@@ -254,7 +273,7 @@ function takeFor(order, items = {}) {
 const pruneTaken = (taken) => ({ ...(taken ?? {}) });
 
 module.exports = {
-  BOARD_DAYS, BOARD_PER_POST, BOARD_START, REQUEST_DAYS, REQUEST_DUE_MIN, REQUEST_DUE_MAX, REQUEST_MAX_DAYS, REQUEST_TIERS, requestTier, DUE_EXTRA, RESERVE_FROM,
+  BOARD_DAYS, BOARD_PER_POST, BOARD_START, REQUEST_DAYS, REQUEST_DUE_MIN, REQUEST_DUE_MAX, SLOW_DAYS, isSlow, SLOW_QTY, TREE_QTY, REQUEST_TIERS, requestTier, DUE_EXTRA, RESERVE_FROM,
   BOARD_GOLD, REQUEST_GOLD, BOARD_DAY_GOLD, REQUEST_DAY_GOLD, BOARD_XP, REQUEST_XP, REQUEST_XP_PER_KIND,
   SEED_CHANCE, SEED_CROP, GOLD_FERT_CHANCE, weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor, pruneTaken,
 };

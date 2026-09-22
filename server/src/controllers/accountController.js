@@ -302,6 +302,7 @@ exports.list = (req, res) => {
 
 /** 카운터 이름. 여기 없는 키는 안 받는다 — 오타 하나로 전적이 둘로 갈리면 못 고친다. */
 const BUMP_KEYS = new Set([
+  'farmHansel',                                     // 농장 주문 — 헨젤의 의뢰를 채운 수(의뢰인은 봇만 안다, 5b)
   'hands', 'won', 'earned', 'lost',                 // 공통
   'holdemHands', 'holdemWon', 'blackjackHands', 'blackjackWon', 'blackjacks',
   'allInWon', 'allInLost', 'allInHigh',             // 올인 — 칭호가 읽는다

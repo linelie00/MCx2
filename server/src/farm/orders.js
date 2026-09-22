@@ -27,6 +27,8 @@ const { CROPS, STAR_MULT } = require('./crops');
 const { hashRand, between } = require('./land');
 const weather = require('./weather');
 
+/** 그날이 몇째 주인가 — MT 주간 상한(5b)이 쓴다. `weather.weekOf` 와 같은 기준(월요일). */
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const dayNum = (key) => {
   const [y, m, d] = String(key).split('-').map(Number);
@@ -75,6 +77,15 @@ const REQUEST_XP = 10;
 const REQUEST_XP_PER_KIND = 5;
 /** 게시판이 ★★ 를 요구할 확률. */
 const BOARD_TWO_STAR = 0.25;
+/**
+ * 덤 보상(5b) — 주문마다 해시로 정해 둔다. 창에 미리 보이므로 "이건 황금 밀이 붙은 주문" 하고 노릴 수 있다.
+ *   🥇 황금 밀 씨앗   Lv7+ 작물 주문에 30% · 한두 개 (주머니로)
+ *   ✨ 황금 비료      큰 의뢰(Lv4+ 농장)에 50% · 하나
+ *   🪙 MT            ★★ 큰 의뢰면 하나 — 계정당 **주 1개**(컨트롤러가 막는다)
+ */
+const SEED_CHANCE = 0.3;
+const SEED_CROP = 'goldenWheat';
+const GOLD_FERT_CHANCE = 0.5;
 
 /** 작물 급 — 0 · 1 · 2. */
 const tierOf = (crop) => (crop.lv <= 3 ? 0 : crop.lv <= 6 ? 1 : 2);
@@ -128,6 +139,7 @@ function boardOf(day) {
       day,
       due: keyOf(dayNum(from) + crop.days + DUE_EXTRA),
       ...(isReserve ? { reserve: weather.seasonOf(next).key } : {}),
+      ...(k === 2 && rand() < SEED_CHANCE ? { bonus: { seeds: { [SEED_CROP]: rand() < 0.5 ? 2 : 1 } } } : {}),
       seed: seedOf(id),
     };
   });
@@ -173,6 +185,10 @@ function requestOf(channelId, day, level) {
     return a + Math.ceil(c.price * p.qty * STAR_MULT[minStar] * REQUEST_GOLD) + c.days * REQUEST_DAY_GOLD;
   }, 0);
   const longest = Math.max(...chosen.map((c) => c.days));
+  const bonus = {};
+  if (level >= 4 && rand() < GOLD_FERT_CHANCE) bonus.goldFert = 1;
+  if (minStar >= 2) bonus.mt = 1;
+  if (level >= 7 && rand() < SEED_CHANCE) bonus.seeds = { [SEED_CROP]: 1 };
   return {
     id,
     kind: 'mine',
@@ -182,6 +198,7 @@ function requestOf(channelId, day, level) {
     xp: REQUEST_XP + REQUEST_XP_PER_KIND * parts.length,
     day,
     due: keyOf(dayNum(day) + Math.max(6, longest + DUE_EXTRA)),       // 적어도 그 주 일요일까지
+    ...(Object.keys(bonus).length ? { bonus } : {}),
     seed: seedOf(id),
   };
 }
@@ -233,5 +250,5 @@ const pruneTaken = (taken) => ({ ...(taken ?? {}) });
 module.exports = {
   BOARD_DAYS, BOARD_PER_POST, BOARD_START, REQUEST_DAYS, REQUEST_MAX, REQUEST_TIERS, requestTier, DUE_EXTRA, RESERVE_FROM,
   BOARD_GOLD, REQUEST_GOLD, BOARD_DAY_GOLD, REQUEST_DAY_GOLD, BOARD_XP, REQUEST_XP, REQUEST_XP_PER_KIND,
-  weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor, pruneTaken,
+  SEED_CHANCE, SEED_CROP, GOLD_FERT_CHANCE, weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor, pruneTaken,
 };

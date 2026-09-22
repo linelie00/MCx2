@@ -8,7 +8,8 @@
  *     tools: { "<userId>": "wood" | "iron" | "mithril" },   곡괭이(계정 기준 — 폐농해도 남는다)
  *     pouches: { "<userId>": { "<작물>": n } },           희귀 씨앗 주머니(계정 기준, 3c)
  *     book: { "<userId>": { "<작물>": { n, best, giant } } },  도감 — 거둔 칸 수 · 최고 ★ · 대왕(3b)
- *     board: { "<주문 id>": { by, channelId, day } } }       게시판 주문을 가져간 기록(5a, `farm/orders.js`)
+ *     board: { "<주문 id>": { by, channelId, day } },      게시판 주문을 가져간 기록(5a, `farm/orders.js`)
+ *     mtWeek: { "<userId>": 주 번호 } }                     그 주에 주문으로 MT 를 받았나(5b — 계정당 주 1개)
  * farm 의 모양은 `farm/rules.js` 머리말에 있다.
  *
  * `accountStore` 와 **같은 규약**이다. 이 파일도 유일본이기 때문이다(시드가 없다).
@@ -30,7 +31,7 @@ const TMP = `${FILE}.tmp`;
 
 function read() {
   // 파일이 없는 것은 손상이 아니다 — 아직 아무도 등록 안 한 것뿐이다.
-  if (!fs.existsSync(FILE)) return { farms: {}, cooldowns: {}, daily: {}, tools: {}, pouches: {}, book: {}, board: {} };
+  if (!fs.existsSync(FILE)) return { farms: {}, cooldowns: {}, daily: {}, tools: {}, pouches: {}, book: {}, board: {}, mtWeek: {} };
 
   const data = JSON.parse(fs.readFileSync(FILE, 'utf-8'));
   if (!data || typeof data.farms !== 'object' || data.farms === null) {
@@ -38,7 +39,7 @@ function read() {
   }
   return {
     farms: data.farms, cooldowns: data.cooldowns ?? {}, daily: data.daily ?? {}, tools: data.tools ?? {},
-    pouches: data.pouches ?? {}, book: data.book ?? {}, board: data.board ?? {},
+    pouches: data.pouches ?? {}, book: data.book ?? {}, board: data.board ?? {}, mtWeek: data.mtWeek ?? {},
   };
 }
 

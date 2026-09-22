@@ -50,7 +50,8 @@ eq('과수 다섯 · 모두 다년생 · 키 큼 · 제철 둘 이하', CROPS.fi
   [['lemon', true], ['redApple', true], ['grape', true], ['peach', true], ['pear', true]]);
 eq('계절마다 제철 나무가 있다', weather.SEASONS.map((x) => CROPS.filter((c) => c.tree && c.seasons.includes(x.key)).length > 0), [true, true, true, true]);
 eq('희귀 작물은 씨앗값이 없다(주머니 씨앗)', CROPS.filter((c) => c.seedOnly && seedPrice(c) !== 0).map((c) => c.key), []);
-eq('희귀 씨앗 목록 = seedOnly 작물', [...land.RARE_SEEDS].sort(), CROPS.filter((c) => c.seedOnly).map((c) => c.key).sort());
+eq('개간 희귀 씨앗은 seedOnly 작물', land.RARE_SEEDS.filter((k) => !CROPS.find((c) => c.key === k)?.seedOnly), []);
+eq('황금 밀은 개간에서 안 나온다 — 주문 보상 전용(5b)', land.RARE_SEEDS.includes('goldenWheat'), false);
 eq('보장 이익은 성장일의 절반(올림)', CROPS.filter((c) => !c.tree && guaranteed(c) !== Math.min(Math.ceil(c.days / 2), c.price - 1)).map((c) => c.key), []);
 eq('키가 안 겹친다', new Set(CROPS.map((c) => c.key)).size, CROPS.length);
 eq('레벨은 1~10', CROPS.filter((c) => !(c.lv >= 1 && c.lv <= 10)).map((c) => c.key), []);
@@ -931,6 +932,54 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   weather.pin(NEUTRAL);
 }
 
+// --- 5b: 황금 밀 · 황금 비료 · 덤 보상
+{
+  const orders = require('../src/farm/orders');
+  const { CROP_BY_KEY } = require('../src/farm/crops');
+  weather.pin(NEUTRAL);
+  const gw = CROP_BY_KEY.goldenWheat;
+  eq('황금 밀 — 희귀 · 여름·가을 · 값 18', [gw.seedOnly, gw.seasons, gw.price, gw.days], [true, ['summer', 'autumn'], 18, 10]);
+
+  // ✨ 황금 비료 — 토질이 아니라 그 작물의 품질
+  const f1 = fresh();
+  eq('작물이 없으면 못 넣는다', rules.fertilize(f1, D0, { plot: P, item: 'goldFertilizer' }).reason, 'noCrop');
+  rules.plant(f1, D0, { plot: P, cells: [0, 1], crop: 'carrot' });
+  const g1 = rules.fertilize(f1, D0, { plot: P, item: 'goldFertilizer' });
+  eq('황금 비료 — 품질 +15 · 토질은 그대로', [g1.ok, g1.gold, f1.plots[P].soilXp, f1.plots[P].goldBoost], [true, 15, 0, true]);
+  eq('밭 하나에 하나', rules.fertilize(f1, D0, { plot: P, item: 'goldFertilizer' }).reason, 'goldFertCap');
+  eq('보기에 표시', rules.view(f1, D0).plots[P].goldBoost, true);
+  // 품질 — 같은 무작위로 굴려 ★ 가 더 잘 나온다
+  const stars = (farm) => {
+    const c = structuredClone(farm);
+    c.plots[P].cells.forEach((x) => { if (x.t === 'plant') Object.assign(x, { g: 3, ripeDay: D0 }); });
+    return rules.harvest(c, D0, { plot: P }, { rand: seq(0.9) }).grades.carrot;
+  };
+  const plain = structuredClone(f1);
+  delete plain.plots[P].goldBoost;
+  eq('황금 비료를 넣으면 품질이 오른다', stars(f1).findLastIndex((n) => n > 0) > stars(plain).findLastIndex((n) => n > 0), true);
+  rules.harvest(f1, D0, { plot: P }, { rand: ZERO });
+  const f2 = structuredClone(f1);
+  f2.plots[P].cells = f2.plots[P].cells.map(() => ({ t: 'soil' }));
+  rules.harvest(f2, D0, { plot: P }, { rand: ZERO });
+  eq('밭이 비면 황금 비료도 사라진다', f2.plots[P].goldBoost, undefined);
+
+  // 덤 보상 — 주문마다 해시로 정해져 있다
+  const days = Array.from({ length: 224 }, (_, n) => rules.addDays('2026-09-21', n));
+  weather.pin(null);
+  const board = days.flatMap(orders.boardOf);
+  const withSeed = board.filter((o) => o.bonus?.seeds);
+  eq('게시판 — Lv7+ 주문에만 황금 밀 씨앗', [withSeed.length > 0, withSeed.every((o) => orders.tierOf(CROP_BY_KEY[o.parts[0].crop]) === 2 && o.bonus.seeds.goldenWheat >= 1)], [true, true]);
+  eq('덤은 늘 같다', JSON.stringify(orders.boardOf(days[0])) === JSON.stringify(orders.boardOf(days[0])), true);
+  const low = days.map((d) => orders.requestOf('1', d, 2)).filter(Boolean);
+  const mid = days.map((d) => orders.requestOf('1', d, 5)).filter(Boolean);
+  const high = days.map((d) => orders.requestOf('1', d, 8)).filter(Boolean);
+  eq('Lv1~3 의뢰엔 덤이 없다', low.some((o) => o.bonus), false);
+  eq('Lv4+ 의뢰엔 황금 비료가 가끔', [mid.some((o) => o.bonus?.goldFert), mid.every((o) => !o.bonus?.seeds)], [true, true]);
+  eq('★★ 의뢰엔 MT', mid.every((o) => (o.minStar === 2) === Boolean(o.bonus?.mt)), true);
+  eq('Lv7+ 의뢰엔 황금 밀도 가끔', high.some((o) => o.bonus?.seeds?.goldenWheat), true);
+  weather.pin(NEUTRAL);
+}
+
 // --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
 {
   // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
@@ -1258,6 +1307,31 @@ const server = app.listen(0, async () => {
       eq('개인 의뢰 납품 — 작물 둘 · 의뢰가 빠진다', [dm.ok, dm.took, dm.account.gold, dm.farm.requests.some((o) => o.id === mo.id)], [true, { carrotS3: 3, potatoS1: 2 }, g1 + 100, false]);
       eq('끝난 의뢰는 다시 못 한다', (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: mo.id })).body.reason, 'orderExpired');
       eq('주문 전적', (await acct(W2)).stats.farmOrders >= 1, true);
+      // 5b — 덤 보상
+      const d41 = readFile();
+      const mo2 = {
+        id: `r:${CH2}:x2`, kind: 'mine', parts: [{ crop: 'carrot', qty: 1 }], minStar: 1, gold: 10, xp: 5, day: dayKey(), due: rules.addDays(dayKey(), 6), seed: 2,
+        bonus: { seeds: { goldenWheat: 2 }, goldFert: 1, mt: 1 },
+      };
+      d41.farms[CH2].requests = [mo2, { ...mo2, id: `r:${CH2}:x3` }];
+      writeFile(d41);
+      await post('/accounts/deltas', { items: { [W2]: { carrotS1: 2 } } });
+      const mt0 = (await acct(W2)).mt;
+      const bn = (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: mo2.id })).body;
+      eq('덤 — 씨앗 주머니 · 황금 비료 · MT', [bn.got.seeds, bn.got.goldFert, bn.got.mt, bn.account.mt, bn.account.items.goldFertilizer], [{ goldenWheat: 2 }, 1, 1, mt0 + 1, 1]);
+      eq('씨앗은 주머니로', readFile().pouches[W2].goldenWheat, 2);
+      const bn2 = (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: `r:${CH2}:x3` })).body;
+      eq('MT 는 계정당 주 1개 — 대신 골드', [bn2.got.mt, bn2.got.mtCapped, bn2.account.mt], [0, true, mt0 + 1]);
+      eq('큰 의뢰 전적', (await acct(W2)).stats.farmRequest, 2);
+      // ✨ 황금 비료를 밭에 넣는다
+      const d42 = readFile();
+      d42.farms[CH2].plots[4].crop = 'carrot';
+      d42.farms[CH2].plots[4].cells = d42.farms[CH2].plots[4].cells.map(() => ({ t: 'plant', g: 0, thirst: 0, scar: false, ripeDay: null, planted: dayKey(), wet: null }));
+      writeFile(d42);
+      const gf = (await post('/farms/fertilize', { channelId: CH2, userId: W2, plot: 4, item: 'goldFertilizer' })).body;
+      eq('황금 비료 — 밭에 · 계정에서 하나', [gf.ok, gf.farm.plots[4].goldBoost, gf.account.items.goldFertilizer ?? 0], [true, true, 0]);
+      eq('없으면 못 넣는다', (await post('/farms/fertilize', { channelId: CH2, userId: W2, plot: 4, item: 'goldFertilizer' })).body.reason, 'noItem');
+
       weather.pin(NEUTRAL);
     }
 

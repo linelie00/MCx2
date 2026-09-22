@@ -172,6 +172,7 @@ const LOOT = {
 /** 계정마다 하루에 나올 수 있는 화석 수. 넘으면 파삭돌로 바꾼다. */
 const FOSSIL_PER_DAY = 1;
 /** 희귀 씨앗 — 개간 전리품에서 나와 주머니로 간다(3c). 계정마다 하루 이만큼. */
+// 개간에서 나오는 희귀 씨앗. 황금 밀은 여기 없다 — 주문 보상으로만 얻는다(5b).
 const RARE_SEEDS = ['screamRoot', 'walkingCap', 'keeperBerry'];
 const SEED_PER_DAY = 1;
 
@@ -243,6 +244,12 @@ const FERTS = {
   fertilizer: { soil: 15, perDay: 1 },
   compost: { soil: 5, perDay: 3 },
 };
+/**
+ * ✨ 황금 비료(5b) — 토질이 아니라 **지금 그 밭에서 자라는 작물의 품질**을 올린다. 밭이 비면 사라진다.
+ * 상점에 없다. 주문 보상으로만 얻는다.
+ */
+const GOLD_FERT = 'goldFertilizer';
+const GOLD_FERT_QUALITY = 15;
 /** 퇴비 조각(잡초·죽은 칸) 이만큼이면 퇴비 하나. */
 const COMPOST_BITS = 3;
 /** 거둔 작물 이만큼이면 퇴비 하나(`/농장 퇴비`). 남는 싼 작물을 토질로 바꾸는 길이다. */
@@ -255,5 +262,5 @@ module.exports = {
   GRAIN_SPOTS, makePlot,
   staminaOf, MAX_SWINGS, ROCK_LOOT, ORES, LOOT, FOSSIL_PER_DAY, RARE_SEEDS, SEED_PER_DAY, rollLoot, hintOf,
   PICKAXES, pickaxeOf, nextPickaxe, exactHint, candidatesOf,
-  FERTS, COMPOST_BITS, COMPOST_CROPS,
+  FERTS, GOLD_FERT, GOLD_FERT_QUALITY, COMPOST_BITS, COMPOST_CROPS,
 };

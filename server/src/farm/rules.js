@@ -265,6 +265,7 @@ const holdsCrop = (plot) => plot.cells.some((c) => c.t === 'plant' || c.t === 'd
 function freePlot(plot) {
   plot.crop = null;
   plot.streak = 0;
+  delete plot.goldBoost;                     // ✨ 황금 비료는 그 작물까지만(5b)
   plot.cells = plot.cells.map((c) => (c.t === 'canopy' ? soil() : c));
 }
 
@@ -518,7 +519,14 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
       const n = land.between(rand, lo, hi);
       const overripe = dayNum(today) - dayNum(cell.ripeDay) >= OVERRIPE_AFTER;
       const roll = () => quality.rollQuality({
-        crop, soilStar: star, cell, mods, overripe, bonus, season: weather.qualityOf(crop, today, { drain: farm.equip?.drain }), rand,
+        crop,
+        soilStar: star,
+        cell,
+        mods,
+        overripe,
+        bonus: bonus + (p.goldBoost ? land.GOLD_FERT_QUALITY : 0),      // ✨ 황금 비료(5b)
+        season: weather.qualityOf(crop, today, { drain: farm.equip?.drain }),
+        rand,
       });
       if (crop.tree) {
         // 나무(4c) — 열매마다 품질을 굴린다(도감도 열매마다). 경험치 · 토질은 **밭 한 판(아홉 칸)**
@@ -717,6 +725,17 @@ const fertToday = (farm, today, plot) => (farm.fert?.day === today ? farm.fert.p
  */
 function fertilize(farm, today, { plot, item, count = 1 }) {
   if (badPlot(plot)) return bad('plot');
+  // ✨ 황금 비료(5b) — 토질이 아니라 지금 그 밭 작물의 품질(+15). 밭 하나에 하나, 작물이 있어야 한다.
+  if (item === land.GOLD_FERT) {
+    const p0 = farm.plots[plot];
+    if (!p0.open) return { ok: false, reason: 'locked' };
+    if (!p0.crop) return { ok: false, reason: 'noCrop' };
+    if (p0.goldBoost) return { ok: false, reason: 'goldFertCap' };
+    p0.goldBoost = true;
+    return {
+      ok: true, item, used: 1, gold: land.GOLD_FERT_QUALITY, crop: p0.crop,
+    };
+  }
   const f = land.FERTS[item];
   if (!f) return bad('item');
   if (!Number.isInteger(count) || count < 1) return bad('count');
@@ -883,6 +902,7 @@ function view(farm, today) {
           : null,
         swings,
         fert: p.open ? fertToday(farm, today, pi) : {},
+        goldBoost: !!p.goldBoost,
         history: p.history ?? [],
         tree: crop?.tree && p.open
           ? { dormant: p.cells.some((cell) => cell.t === 'plant' && dormant(crop, cell, today)), fruited: p.cells.some((cell) => cell.regrows) }

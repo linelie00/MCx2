@@ -28,7 +28,8 @@
  *   spread     퍼짐 — 거둘 때 같은 밭 빈 흙에 한 포기가 저절로 번진다
  *   scream     비명 — 이웃 성장 −10%, 거둘 때 귀마개가 없으면 거둔 사람 HP −5
  *   flee       도망 — 익은 날 안 거두면 같은 밭 빈 흙으로 옮겨 간다. 빈 흙이 없으면 사라진다
- *   seedOnly   희귀 — 씨앗을 살 수 없다. 개간에서 주운 **주머니 씨앗**으로만 심는다(레벨 제한 없음)
+ *   seedOnly   희귀 — 씨앗을 살 수 없다. **주머니 씨앗**으로만 심는다(레벨 제한 없음).
+ *              개간에서 나오는 것은 `land.RARE_SEEDS` 뿐이고, 황금 밀은 **주문 보상 전용**이다(5b)
  *   note       심기 창에 적을 규칙 한 줄
  *   giant      거대 작물이 될 수 있다(3b) — 한 밭 아홉 칸이 다 익으면 대왕 작물 하나로 합쳐질 수 있다
  *   seasons    제철(4a) — `spring · summer · autumn · winter`. 제철이 아니면 성장 ×0.7 · 품질 −15(`weather.js`).
@@ -110,6 +111,7 @@ const CROPS = [
   { key: 'dragonChili', name: '용의 고추', lv: 9, family: 'fruitveg', price: 15, days: 10, regrow: 4, heatLove: true, seasons: ['summer'], emoji: '🔥', note: '폭염을 좋아해요 — 폭염인 날엔 두 배로 자라요. 날로 먹으면 아파요' },
   { key: 'moonHerb',    name: '월광초',   lv: 10, family: 'herb',    price: 20, days: 10, clearOnly: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🌙', note: '맑은 날에만 자라요 — 흐리거나 비 오는 날엔 물을 받아도 그대로예요' },
   // ---- 희귀 — 개간에서 주운 주머니 씨앗으로만(레벨 제한 없음)
+  { key: 'goldenWheat', name: '황금 밀',  lv: 1, family: 'grain',   price: 18, days: 10, seedOnly: true, seasons: ['summer', 'autumn'], emoji: '🥇', note: '주문 보상으로만 얻는 씨앗 — 개간에서는 안 나와요' },
   { key: 'screamRoot',  name: '비명 뿌리', lv: 1, family: 'monster', price: 14, days: 7, seedOnly: true, scream: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '😱', note: '비명 — 이웃 성장 −10%, 거둘 때 귀마개가 없으면 체력 −5' },
   { key: 'walkingCap',  name: '도망가는 버섯갓', lv: 1, family: 'monster', price: 8, days: 5, seedOnly: true, flee: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🏃', note: '도망 — 익은 날 안 거두면 옆 빈 흙으로 옮겨 가요. 빈 흙이 없으면 사라져요' },
   { key: 'keeperBerry', name: '파수꾼 베리', lv: 1, family: 'berry', price: 30, days: 10, regrow: 3, seedOnly: true, seasons: ['spring', 'summer', 'autumn', 'winter'], emoji: '🛡️', note: '희귀 — 한 번 심으면 계속 거둬요' },

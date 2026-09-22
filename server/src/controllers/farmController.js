@@ -68,7 +68,7 @@ const BAD = {
   cell: '칸 번호는 0~8 이어야 합니다',
   pos: '휘두를 자리는 1~5 여야 합니다',
   crop: '모르는 작물입니다',
-  item: '거름은 fertilizer 나 compost 여야 합니다',
+  item: '거름은 fertilizer · compost · goldFertilizer 여야 합니다',
   count: '개수는 1 이상의 정수여야 합니다',
   equip: '모르는 설비입니다',
   uproot: "uproot 는 'cell' 이나 'plot' 이어야 합니다",
@@ -79,6 +79,8 @@ const BAD = {
 const KEEP_HP = 1;
 /** 비명 뿌리를 귀마개 없이 거두면 깎이는 체력(3c). */
 const SCREAM_HP = 5;
+/** 이번 주 MT 를 이미 받았을 때 대신 주는 골드(5b). */
+const MT_INSTEAD = 50;
 
 /** 오늘의 개간 기력 장부(계정 기준). 날이 바뀌었으면 새로 연다. */
 function dailyOf(data, userId, today) {
@@ -196,6 +198,7 @@ function farmMarks(acct, farm, book) {
   if (farm) maxStat(acct, 'farmLevel', rules.levelOf(farm));
   if (book) {
     const rows = Object.values(book);
+    maxStat(acct, 'farmGoldenWheat', book.goldenWheat?.n ?? 0);
     maxStat(acct, 'farmBookKinds', rows.filter((b) => b.n > 0).length);
     maxStat(acct, 'farmStar3Kinds', rows.filter((b) => b.best >= 3).length);
     maxStat(acct, 'farmGiant', rows.reduce((a, b) => a + (b.giant ?? 0), 0));
@@ -544,7 +547,8 @@ exports.clear = (req, res) => {
 /**
  * POST /api/farms/fertilize — `{ channelId, userId, plot, item, count? }`. 주인만.
  *
- * 계정의 비료·퇴비를 빼고 밭 토질 경험을 올린다. 밭마다 하루 한도(`land.FERTS`)를 넘는 몫과
+ * 계정의 비료·퇴비를 빼고 밭 토질 경험을 올린다. ✨ 황금 비료(5b)는 토질이 아니라 그 밭 작물의 품질(+15)이다.
+ * 밭마다 하루 한도(`land.FERTS`)를 넘는 몫과
  * 가진 것보다 많은 몫은 안 넣고 안 뺀다(`capped`). 계정 먼저, 농장 나중 — 사이에 죽으면
  * 거름만 잃는다.
  */
@@ -554,7 +558,7 @@ exports.fertilize = (req, res) => {
   const { channelId, userId } = got;
   const { plot, item } = req.body;
   const count = req.body.count ?? 1;
-  if (!land.FERTS[item]) return res.status(400).json({ error: BAD.item });
+  if (!land.FERTS[item] && item !== land.GOLD_FERT) return res.status(400).json({ error: BAD.item });
   if (!Number.isInteger(count) || count < 1) return res.status(400).json({ error: BAD.count });
 
   const data = readFarms(res);
@@ -832,6 +836,19 @@ exports.deliver = (req, res) => {
     farm.requests = farm.requests.filter((o) => o.id !== orderId);
   }
   const levelUp = rules.gainXp(farm, order.xp, Math.random);
+  // 덤 보상(5b) — 씨앗은 주머니(같은 파일), MT 는 계정당 주 1개
+  const bonus = order.bonus ?? {};
+  const extra = { seeds: null, goldFert: 0, mt: 0, mtCapped: false };
+  if (bonus.seeds) {
+    pouchAdd(data, userId, bonus.seeds);
+    extra.seeds = bonus.seeds;
+  }
+  if (bonus.goldFert) extra.goldFert = bonus.goldFert;
+  if (bonus.mt) {
+    const week = weather.weekOf(today);
+    if (data.mtWeek[userId] === week) extra.mtCapped = true;
+    else { data.mtWeek[userId] = week; extra.mt = bonus.mt; }
+  }
   data.farms[channelId] = farm;
   if (!save(farmStore, data, res, '농장')) return undefined;
 
@@ -840,14 +857,16 @@ exports.deliver = (req, res) => {
       a.items[k] -= n;
       if (!a.items[k]) delete a.items[k];
     }
-    a.gold += order.gold;
+    a.gold += order.gold + (extra.mtCapped ? MT_INSTEAD : 0);   // 이번 주 MT 를 이미 받았으면 골드로
+    if (extra.goldFert) a.items[land.GOLD_FERT] = (a.items[land.GOLD_FERT] ?? 0) + extra.goldFert;
+    if (extra.mt) a.mt += extra.mt;
     bump(a, 'farmOrders');
-    if (order.kind === 'board') bump(a, 'farmBoard');
-    farmMarks(a, farm, null);
+    bump(a, order.kind === 'board' ? 'farmBoard' : 'farmRequest');
+    farmMarks(a, farm, data.book[userId]);
   });
   if (!save(accountStore, acctData, res, '계정')) return undefined;
 
   return res.json({
-    ok: true, order, took: take, levelUp, xp: order.xp, account: publicView(acct), farm: rules.view(farm, today), today,
+    ok: true, order, took: take, got: extra, levelUp, xp: order.xp, account: publicView(acct), farm: rules.view(farm, today), today,
   });
 };

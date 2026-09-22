@@ -444,6 +444,7 @@ const fertToday = (farm, today, plot) => (farm.fert?.day === today ? farm.fert.p
 
 /**
  * 거름을 넣는다 — 비료(+15)·퇴비(+5) 를 `count` 개. **밭마다 하루 한도**(`land.FERTS`).
+ * 이미 ★5 인 밭엔 안 넣는다(`soilMax`).
  * 아이템이 계정에 있는지는 컨트롤러가 본다. 여기서는 한도와 토질만.
  */
 function fertilize(farm, today, { plot, item, count = 1 }) {
@@ -453,6 +454,8 @@ function fertilize(farm, today, { plot, item, count = 1 }) {
   if (!Number.isInteger(count) || count < 1) return bad('count');
   const p = farm.plots[plot];
   if (!p.open) return { ok: false, reason: 'locked' };
+  // ★5 를 넘는 경험은 아무 데도 안 쓰인다 — 거름만 버리게 두지 않는다.
+  if (land.soilStar(p.soilXp) >= land.SOIL_XP.length) return { ok: false, reason: 'soilMax' };
 
   const used = fertToday(farm, today, plot)[item] ?? 0;
   const room = f.perDay - used;

@@ -317,6 +317,8 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('다음 날 보기엔 그날 것만', rules.view(f, day(1)).plots[P].fert, { fertilizer: 1 });
   eq('모르는 거름은 모양 오류', rules.fertilize(f, D0, { plot: P, item: 'dirt' }).bad, true);
   eq('잠긴 밭엔 못 넣는다', rules.fertilize(f, D0, { plot: 0, item: 'compost' }).reason, 'locked');
+  f.plots[P].soilXp = 300;
+  eq('★5 밭엔 안 넣는다', rules.fertilize(f, day(2), { plot: P, item: 'fertilizer' }).reason, 'soilMax');
 }
 {
   const f = fresh();

@@ -783,7 +783,8 @@ exports.board = (req, res) => {
  * POST /api/farms/deliver — `{ channelId, userId, orderId }`. 주인만.
  *
  * 게시판 주문이면 아직 아무도 안 가져갔고 기한이 남아야 한다(`taken` · `expired`). 개인 의뢰면 그 농장의
- * 의뢰여야 한다. 계정에서 요구 ★ 이상의 작물을 **낮은 ★ 부터** 뺀다(`noItem` — 가진 수 · 필요 수).
+ * 의뢰여야 한다. 계정에서 작물마다 요구 ★ 이상을 **낮은 ★ 부터** 뺀다 — 하나라도 모자라면 `noItem`
+ * (모자란 첫 작물의 가진 수 · 필요 수, 전체는 `haves`).
  * 보상은 골드(새로 만든다) · 농장 경험치.
  */
 exports.deliver = (req, res) => {
@@ -816,7 +817,13 @@ exports.deliver = (req, res) => {
 
   const acct0 = load(acctData, userId, today);
   const { take, have } = orders.takeFor(order, acct0.items);
-  if (!take) return res.json({ ok: false, reason: 'noItem', item: order.crop, minStar: order.minStar, have, need: order.qty, today });
+  if (!take) {
+    // 모자란 첫 작물로 말한다 — 봇의 noItem 문구를 그대로 쓴다. 전체는 `parts` · `haves`.
+    const short = order.parts.find((p) => have[p.crop] < p.qty);
+    return res.json({
+      ok: false, reason: 'noItem', item: short.crop, minStar: order.minStar, have: have[short.crop], need: short.qty, parts: order.parts, haves: have, today,
+    });
+  }
 
   // 농장 먼저 — 주문 완료 · 경험치
   if (order.kind === 'board') {

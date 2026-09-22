@@ -193,6 +193,11 @@ export const TITLES = [
   { key: 'wellEquipped', name: '장비빨', tier: 2, cond: '설비 10개 놓기', group: '농장', desc: '농사는 장비가 반이다.', when: (s) => n(s, 'farmEquip') >= 10 },
   { key: 'earRinging', name: '맨드레이크', tier: 1, cond: '귀마개 없이 비명 뿌리를 거두면', group: '농장', desc: '한동안 아무 소리도 안 들렸다.', when: (s) => n(s, 'farmScream') >= 1 },
   { key: 'changeOfHeart', name: '변덕', tier: 1, cond: '자라는 작물을 뽑으면', group: '농장', desc: '심었다가 뽑았다. 다시 심을지도 모른다.', when: (s) => n(s, 'farmUproot') >= 1 },
+  { key: 'errandRunner', name: '심부름꾼', tier: 1, cond: '주문 처음 채우기', group: '농장', desc: '마을 게시판에 처음으로 이름을 올렸다.', when: (s) => n(s, 'farmOrders') >= 1 },
+  { key: 'villageFixer', name: '마을의 해결사', tier: 2, cond: '게시판 주문 10건', group: '농장', desc: '급하면 이 사람부터 찾는다.', when: (s) => n(s, 'farmBoard') >= 10 },
+  { key: 'trustedFarmer', name: '믿음직한 농부', tier: 2, cond: '큰 의뢰 5건', group: '농장', desc: '한 주가 걸리는 일도 맡길 만하다.', when: (s) => n(s, 'farmRequest') >= 5 },
+  { key: 'goldenField', name: '황금 들판', tier: 3, cond: '황금 밀 거두기', group: '농장', desc: '금빛으로 여문 이삭을 제 손으로 베었다.', when: (s) => n(s, 'farmGoldenWheat') >= 1 },
+  { key: 'witchsHand', name: '마녀의 하수인', tier: 2, cond: '헨젤의 주문 5건', group: '농장', desc: '두꺼비가 되지 않으려면 사과를 제때 가져다줘야 한다.', when: (s) => n(s, 'farmHansel') >= 5 },
   { key: 'woodcutter', name: '나무꾼', tier: 1, cond: '과수를 베면', group: '농장', desc: '금도끼 은도끼는 안 나왔다.', when: (s) => n(s, 'farmChop') >= 1 },
 
   // ---- MT 상점 — 전적이 아니라 **산 것**이다. `shop.mt` 가 값, `shop.stat` 이 산 기록

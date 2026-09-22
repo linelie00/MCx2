@@ -86,6 +86,7 @@ export const ITEMS = [
   { key: 'oldCoin',         name: '옛 동전',                  kind: '잡화', price:   50, sell: true,  heal: -5,  loot: false, desc: '밭을 갈다 나온 동전. 새겨진 얼굴은 닳아서 누군지 모르겠다. 상인은 그래도 값을 쳐 준다.' },
   // ---- 농장 거름(docs/FARM.md §8.1). 먹는 게 아니라 밭에 넣는 것이다 — `/농장 거름`. 먹으면 아프다.
   { key: 'compost',         name: '퇴비',                     kind: '잡화', price:    3, sell: true,  heal: -5,  loot: false, desc: '잡초와 시든 잎, 남은 채소를 푹 썩힌 것. 밭에 넣으면 흙이 살아난다. 먹을 생각은 하지 말자.' },
+  { key: 'goldFertilizer',  name: '황금 비료',                kind: '잡화', price:   80, sell: false, heal: -20, loot: false, desc: '금빛 알갱이가 섞인 거름. 지금 그 밭에 자라는 것이 유난히 잘 여문다. 마을 주문을 잘 채우면 드물게 받는다.' },
   { key: 'fertilizer',      name: '비료',                     kind: '잡화', price:   30, sell: false, heal: -20, loot: false, desc: '가게에서 파는 알갱이 비료. 한 포대면 밭 한 뙈기의 흙이 몰라보게 달라진다. 하루에 한 밭 한 포대까지.' },
   { key: 'earPlug',         name: '귀마개',                   kind: '잡화', price:   50, sell: true,  heal: -3,  loot: false, desc: '비명 뿌리를 뽑을 때 쓰는 두툼한 귀마개. 한 번 쓰면 흙투성이가 되어 버린다.' },
   { key: 'glowingStone',    name: '붉게 빛나는 돌 조각',      kind: '잡화', price:   15, sell: true,  heal: 5,          desc: '손에 쥐면 약간 따뜻한 느낌이 드는 돌 조각.' },
@@ -320,6 +321,7 @@ export const ITEMS = [
   { key: 'squishPouch',     name: '말랑 주머니',              kind: '재료', cat: 'spice', price:   15, sell: true,  heal: -40, poison: 2, monster: true, desc: '마물 몸속에 있던 작은 주머니. 누르면 톡 쏘는 향이 올라온다. 향신료로 쓴다는 사람이 있다.' },
   { key: 'scaleFlake',      name: '비늘 부스러기',            kind: '재료', cat: 'spice', price:    5, sell: true,  heal: 0,              monster: true, desc: '먼지가 되지 않고 남은 단단한 비늘 조각. 갈면 은빛 가루가 된다.' },
   { key: 'spiderLeg',       name: '털북숭이 다리',            kind: '재료', cat: 'meat',  price:    9, sell: true,  heal: -6,             monster: true, desc: '털이 숭숭 난 기다란 다리. 속살은 게살 맛이 난다는데 확인한 사람은 드물다.' },
+  { key: 'goldenWheat',     name: '황금 밀',                  kind: '재료', cat: 'grain',  price:   18, sell: true,  heal: 8,   loot: false, desc: '이삭이 금빛으로 여문다. 씨앗은 팔지 않는다 — 마을 주문을 채운 사람에게만 돌아간다.' },
   { key: 'screamRoot',      name: '비명 뿌리',                kind: '재료', cat: 'veg',   price:   14, sell: true,  heal: [-12, 12], poison: 1, monster: true, desc: '뽑을 때 작은 비명을 지르는 뿌리. 먹으면 기운이 난다는 말도, 그 반대라는 말도 있다.' },
   { key: 'walkingCap',      name: '도망가는 버섯갓',          kind: '재료', cat: 'veg',   price:    8, sell: true,  heal: 5,              monster: true, desc: '제 발로 도망치던 버섯의 갓. 잡고 나니 얌전하다. 아직 조금 따뜻하다.' },
 ];
@@ -337,7 +339,7 @@ export const FARM_CROPS = [
   'napaCabbage', 'broccoli', 'paprika', 'beet', 'buckwheat', 'strawberry', 'rosemary', 'basil', 'mint',
   'pumpkin', 'taro', 'sesame', 'raspberry', 'blueberry', 'rice', 'sunflower', 'lemon', 'redApple',
   'asparagus', 'teaLeaf', 'ginger', 'lavender', 'koreanMelon', 'grape', 'peach', 'watermelon', 'melon', 'pear',
-  'pineMushroom', 'saffron', 'dragonChili', 'moonHerb', 'screamRoot', 'walkingCap', 'keeperBerry',
+  'pineMushroom', 'saffron', 'dragonChili', 'moonHerb', 'goldenWheat', 'screamRoot', 'walkingCap', 'keeperBerry',
 ];
 /** 대왕 작물이 되는 작물. */
 export const GIANT_CROPS = ['radish', 'cabbage', 'napaCabbage', 'pumpkin', 'watermelon', 'melon'];

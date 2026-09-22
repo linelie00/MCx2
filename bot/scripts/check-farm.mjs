@@ -254,12 +254,14 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
 {
   const { TITLES, earned, FARM_TOTAL } = await import('../src/casino/titles.js');
   const farmT = TITLES.filter((t) => t.group === '농장');
-  eq('농장 칭호 열여섯', farmT.length, 16);
+  eq('농장 칭호 스물하나', farmT.length, 21);
   eq('칭호 키가 안 겹친다', new Set(TITLES.map((t) => t.key)).size, TITLES.length);
   eq('식물도감 분모 = 서버 작물표', FARM_TOTAL, CROPS.length);
   eq('새 계정엔 농장 칭호 없음', earned({ stats: {} }).filter((t) => t.group === '농장').length, 0);
-  const big = earned({ stats: { farmHarvest: 1000, farmLevel: 10, farmBookKinds: CROPS.length, farmGiant: 1, farmChop: 1 } }).filter((t) => t.group === '농장').map((t) => t.key);
-  eq('전적을 채우면 칭호', ['sprout', 'goodHarvest', 'villageFarmer', 'greatFarmer', 'botanist', 'herbarium', 'giantGrower', 'woodcutter'].every((k) => big.includes(k)), true);
+  const big = earned({ stats: { farmHarvest: 1000, farmLevel: 10, farmBookKinds: CROPS.length, farmGiant: 1, farmChop: 1, farmOrders: 20, farmBoard: 10, farmRequest: 5, farmGoldenWheat: 1, farmHansel: 5 } }).filter((t) => t.group === '농장').map((t) => t.key);
+  eq('전적을 채우면 칭호', ['sprout', 'goodHarvest', 'villageFarmer', 'greatFarmer', 'botanist', 'herbarium', 'giantGrower', 'woodcutter',
+    'errandRunner', 'villageFixer', 'trustedFarmer', 'goldenField', 'witchsHand'].every((k) => big.includes(k)), true);
+  eq('마녀의 하수인', TITLES.find((t) => t.key === 'witchsHand').name, '마녀의 하수인');
 }
 
 // 4a — 날씨 · 제철
@@ -430,6 +432,23 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   }
   const empty = ordersPayload({ owner: OWNER, board: [], mine: [], crops, items: {}, today: '2026-10-01' });
   eq('빈 주문 창 — 새로고침만', [empty.components.length, empty.embeds.length, empty.embeds[0].toJSON().fields[1].value.includes('와 있는 의뢰가 없어요')], [1, 1, true]);
+  // 5b — 덤 보상 · 감사 한마디 · 황금 비료
+  const { thanksOf, THANKS_DEFAULT } = await import('../src/farm/requesters.js');
+  const bonusOrder = { ...board[0], bonus: { seeds: { goldenWheat: 2 }, goldFert: 1, mt: 1 } };
+  const bj = ordersPayload({ owner: OWNER, board: [bonusOrder], mine: [], crops, items: {}, today: '2026-10-01' }).embeds[0].toJSON();
+  eq('덤 보상은 보상 칸에', bj.fields[4].value.includes('🎁 🌱 황금 밀 씨앗 ×2 · ✨ 황금 비료 · 🪙 MT 1'), true);
+  eq('덤이 없으면 안 적는다', ordersPayload({ owner: OWNER, board: [board[0]], mine: [], crops, items: {}, today: '2026-10-01' }).embeds[0].toJSON().fields[4].value.includes('🎁'), false);
+  eq('의뢰인마다 감사 한마디', REQUESTERS.filter((r) => !r.thanks?.length).map((r) => r.key), []);
+  eq('같은 주문엔 같은 감사', [thanksOf(board[0], REQUESTERS[0]) === thanksOf(board[0], REQUESTERS[0]), thanksOf(board[0], {}) === THANKS_DEFAULT], [true, true]);
+
+  const fp = (farmView, items) => fertPayload({ ch: CH, plot: 4, owner: OWNER, farm: farmView, items }).components[0].toJSON().components.find((c) => c.custom_id.startsWith('farm:fg:'));
+  const gfarm = rules.view(farm, D);
+  eq('황금 비료 버튼 — 작물이 있고 가진 게 있어야', [fp(gfarm, {}).disabled, fp(gfarm, { goldFertilizer: 1 }).disabled], [true, false]);
+  const boosted = { ...gfarm, plots: gfarm.plots.map((pp, i) => (i === 4 ? { ...pp, goldBoost: true } : pp)) };
+  eq('이미 뿌린 밭엔 다시 못 뿌린다', fp(boosted, { goldFertilizer: 1 }).disabled, true);
+  eq('밭 줄에 ✨', plotLines(boosted, crops).includes('✨'), true);
+  eq('사유 — 황금 비료', [why({ reason: 'noCrop' }, crops).includes('자라는 작물'), why({ reason: 'goldFertCap' }, crops).includes('하나')], [true, true]);
+
   eq('사유 — 늦음 · 끝남', [why({ reason: 'orderTaken', by: '1' }, crops).startsWith('한발 늦었어요'), why({ reason: 'orderExpired' }, crops).startsWith('기한이')], [true, true]);
   eq('noItem 에 ★', why({ reason: 'noItem', item: 'carrot', minStar: 1, have: 2, need: 5 }, crops), '**당근 ★ 이상** 이(가) 모자라요 — 가진 것 2 / 필요 5.');
 }
@@ -438,7 +457,7 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
 
 const REASONS = ['none', 'notOwner', 'already', 'noPlants', 'tired', 'locked', 'level', 'otherCrop', 'occupied', 'gold',
   'nothing', 'noRocks', 'notStone', 'taken', 'mine', 'hasFarm', 'cooldown',
-  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain', 'owned', 'equipLevel', 'noPlot', 'needClear', 'notPlant', 'orderTaken', 'orderExpired'];
+  'fertCap', 'soilMax', 'noItem', 'noFarm', 'maxTool', 'toolLevel', 'noSeed', 'rain', 'owned', 'equipLevel', 'noPlot', 'needClear', 'notPlant', 'orderTaken', 'orderExpired', 'noCrop', 'goldFertCap'];
 const sample = { owner: '1', by: ['1'], crop: 'carrot', need: 1, gold: 0, channelId: '1', until: D, hp: 1, item: 'compost', have: 0, perDay: 3 };
 eq('사유마다 문장이 있다', REASONS.filter((r) => why({ ...sample, reason: r }, crops).startsWith('하지 못했어요')), []);
 eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 }, crops) !== why({ reason: 'tired', stamina: st }, crops), true);

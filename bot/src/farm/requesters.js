@@ -10,6 +10,7 @@
  *   liked  좋아하는 작물일 때의 한마디
  *   basket 작물이 여럿인 주문(개인 의뢰)의 한마디. `({ list })` — `당근 12개, 감자 8개`
  *   rare   가끔(`chance`) 나오는 한마디 `{ chance, lines, basket }` — 테자트가 본색을 드러낼 때
+ *   thanks 납품했을 때 한마디(5b). 없으면 `THANKS_DEFAULT`
  */
 
 /** 받침이 있으면 앞, 없으면 뒤 — `을/를` · `이/가`. 한글이 아니면 뒤. */
@@ -32,6 +33,7 @@ export const REQUESTERS = [
       ({ list }) => `이번 주 가게 장부야. ${list}. 한 번에 가져오면 한 잔 살게.`,
       ({ list }) => `축제 준비가 만만치 않네. ${list}만 채워 줄래?`,
     ],
+    thanks: ['고맙다! 오늘 한 잔은 내가 낸다.', '역시 너뿐이야. 가게가 산다.'],
   },
   {
     key: 'matiam',
@@ -45,6 +47,7 @@ export const REQUESTERS = [
       ({ list }) => `한 주 치 식단을 짜 봤어. ${list}… 부탁해도 될까.`,
       ({ list }) => `옷감 물들일 재료도 겸해서. ${list}. 좋은 걸로만.`,
     ],
+    thanks: ['고마워. 저녁은 내가 차릴게.', '좋은 걸로 골라 왔네… 고마워.'],
   },
   {
     key: 'zeta',
@@ -60,6 +63,7 @@ export const REQUESTERS = [
       ({ list }) => `대원정이다! ${list}! 하나라도 빠지면 출발 못 한다!`,
       ({ list }) => `단장 직속 보급 명령이다. ${list}. 이번 주 안에 끝낸다!`,
     ],
+    thanks: ['훌륭하다! 이 정도면 원정은 성공이다!', '역시! 단장이 사람 보는 눈은 틀리지 않는다!'],
   },
   {
     key: 'hansel',
@@ -80,6 +84,7 @@ export const REQUESTERS = [
       ({ list }) => `큰 솥에 뭘 좀 끓일 거야. ${list}. 하나라도 모자라면 너부터 넣는다.`,
       ({ list }) => `${list}. 적어 준 대로. 토 달지 마.`,
     ],
+    thanks: ['흥, 쓸 만하네. 다음에도 너한테 시킨다.', '두꺼비는 면했다. 가 봐.'],
   },
   {
     key: 'seiya',
@@ -95,6 +100,7 @@ export const REQUESTERS = [
       ({ list }) => `저, 다음 장터가 커서요… ${list}… 너무 많죠? 죄송해요…!`,
       ({ list }) => `혹시… 정말 혹시 되시면요… ${list}. 값은 꼭 제대로 드릴게요….`,
     ],
+    thanks: ['저, 정말 감사합니다…! 다음 장에서 꼭 갚을게요….', '수레가 꽉 찼어요… 고맙습니다….'],
   },
   {
     key: 'smith',
@@ -110,6 +116,7 @@ export const REQUESTERS = [
       ({ list }) => `마을 잔치 빵을 맡았어요. ${list}가 필요한데… 도와주시겠어요?`,
       ({ list }) => `이번 주 새 메뉴 재료예요. ${list}. 첫 빵은 꼭 드릴게요!`,
     ],
+    thanks: ['고마워요! 내일 아침 빵은 꼭 챙겨 둘게요.', '덕분에 오븐을 돌리겠네요. 고마워요!'],
   },
   {
     key: 'tezat',
@@ -136,6 +143,7 @@ export const REQUESTERS = [
         ({ list }) => `크흠, 큰 건이다. ${list}. …이거 다 못 구하면 부하들 볼 낯이 없어요. 제발요.`,
       ],
     },
+    thanks: ['훗, 역시 이 몸이 사람을 잘 봤다!', '부하들 앞에서 체면이 섰다. …고맙다, 진짜로.'],
   },
   {
     key: 'anonHum',
@@ -149,6 +157,7 @@ export const REQUESTERS = [
     basket: [
       ({ list }) => `${list}. 한꺼번에. 사례 큼.`,
     ],
+    thanks: ['확인함. 사례는 넣어 뒀음.'],
   },
   {
     key: 'anonElf',
@@ -162,6 +171,7 @@ export const REQUESTERS = [
     basket: [
       ({ list }) => `숲의 계절 제사에 올릴 것들입니다. ${list}. 부디.`,
     ],
+    thanks: ['숲이 그대를 기억할 겁니다.'],
   },
   {
     key: 'anonDwarf',
@@ -175,8 +185,12 @@ export const REQUESTERS = [
     basket: [
       ({ list }) => `갱도 한 달 치 식량이다. ${list}. 두말 않는다.`,
     ],
+    thanks: ['좋다! 이 정도면 갱도에서 한 달은 버틴다!'],
   },
 ];
+
+/** 납품 한마디가 없는 의뢰인이 쓸 말. */
+export const THANKS_DEFAULT = '고맙습니다. 잘 받았어요.';
 
 export const REQUESTER_BY_KEY = Object.fromEntries(REQUESTERS.map((r) => [r.key, r]));
 
@@ -207,4 +221,12 @@ export function voiceOf(order, nameOf) {
   return { who, line: pickLine(lines)({ crop: name, qty, obj: josa(name, ['을', '를']) }) };
 }
 
-export default { REQUESTERS, REQUESTER_BY_KEY, voiceOf, josa };
+/** 납품했을 때 그 의뢰인의 한마디. 주문마다 정해져 있다. */
+export function thanksOf(order, who) {
+  const lines = who?.thanks ?? [THANKS_DEFAULT];
+  return lines[Math.floor((Number(order.seed) || 0) / 31) % lines.length];
+}
+
+export default {
+  REQUESTERS, REQUESTER_BY_KEY, voiceOf, thanksOf, josa, THANKS_DEFAULT,
+};

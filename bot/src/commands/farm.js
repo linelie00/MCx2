@@ -32,14 +32,14 @@ import {
 } from 'discord.js';
 import {
   getFarm, getFarmOf, getFarmCrops, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
-  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather, getEquips, buyEquip, getBoard, deliverOrder,
+  fertilizeFarm, compostCrops, upgradePickaxe, getTools, getAccounts, getPreview, getBook, getWeather, getEquips, buyEquip, getBoard, deliverOrder, postAccountDeltas,
 } from '../api.js';
 import { base, fail, trunc, gauge } from '../embeds.js';
 import { forget } from '../casino/alive.js';
 import { forgetBag } from '../casino/bag.js';
 import { seatedAt, seatedMessage } from '../casino/tables.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
-import { voiceOf } from '../farm/requesters.js';
+import { voiceOf, thanksOf } from '../farm/requesters.js';
 import {
   FARM_COLOR, farmEmbed, cropName, plantName, cropEmoji, cellEmoji, plotNo, stars, modsBadge, seasonsText, SEASON_NAME, skyLine,
 } from '../farm/render.js';
@@ -104,6 +104,8 @@ function why(r, crops) {
     case 'noRocks': return '이 밭엔 치울 돌이 없어요. 바위는 하나씩 눌러 깨세요.';
     case 'fertCap': return `오늘 이 밭엔 **${FERTS[r.item]?.name ?? r.item}** 을(를) 더 못 넣어요 — 밭마다 하루 ${r.perDay}개.`;
     case 'soilMax': return '이 밭은 이미 토질 ★5 예요. 더 넣어도 소용없어요.';
+    case 'noCrop': return '✨ 황금 비료는 **자라는 작물이 있는 밭**에 뿌려요.';
+    case 'goldFertCap': return '이 밭엔 이미 ✨ 황금 비료를 뿌렸어요 — 밭 하나에 하나예요.';
     case 'noSeed': return `주머니에 **${cropName(crops, r.crop)}** 씨앗이 모자라요 — 가진 것 ${num(r.have)} / 필요 ${num(r.need)}. 희귀 씨앗은 개간하다 가끔 나와요.`;
     case 'noItem': return `**${r.item === 'ore' ? '원석' : itemName(crops, r.item)}${r.minStar ? ` ${STARS[r.minStar]} 이상` : ''}** 이(가) 모자라요 — 가진 것 ${num(r.have)}${r.need ? ` / 필요 ${num(r.need)}` : ''}.`;
     case 'noFarm': return '곡괭이는 농장이 있어야 올릴 수 있어요. `/농장 등록`';
@@ -688,7 +690,9 @@ function fertPayload({
   for (const [key, f] of Object.entries(FERTS)) {
     lines.push(`${f.emoji} **${f.name}** +${f.soil} · 오늘 ${used[key] ?? 0} / ${f.perDay} · 가진 것 **${num(items?.[key])}**`);
   }
+  lines.push(`✨ **황금 비료** 품질 +15 · 가진 것 **${num(items?.goldFertilizer)}**${p.goldBoost ? ' · _이 밭엔 이미 뿌렸어요_' : ''}`);
   lines.push('', `_비료는 상점 🌾 농사 진열대에서, 퇴비는 \`/농장 퇴비\` 로 작물 ${COMPOST_CROPS}개에 하나씩 만들어요._`);
+  lines.push('_✨ 황금 비료는 마을 주문 보상으로만 얻어요 — 그 밭 작물이 다 끝날 때까지 품질이 올라요._');
   if (note) lines.push('', note);
 
   const button = (key, all = false) => {
@@ -700,7 +704,9 @@ function fertPayload({
       .setLabel(all ? `${f.name} ${n}개 넣기` : `${f.name} 넣기`).setEmoji(f.emoji)
       .setStyle(ButtonStyle.Success).setDisabled(!room || !(items?.[key] > 0));
   };
-  const row = [button('fertilizer'), button('compost'), button('compost', true)];
+  const row = [button('fertilizer'), button('compost'), button('compost', true),
+    new ButtonBuilder().setCustomId(id('fg')).setLabel('황금 비료').setEmoji('✨').setStyle(ButtonStyle.Primary)
+      .setDisabled(!(items?.goldFertilizer > 0) || !p.crop || p.goldBoost)];
   if (openPlots(farm).length > 1) row.push(new ButtonBuilder().setCustomId(id('fn')).setLabel('다른 밭').setStyle(ButtonStyle.Secondary));
   row.push(new ButtonBuilder().setCustomId(id('fx')).setLabel('닫기').setStyle(ButtonStyle.Secondary));
 
@@ -871,6 +877,16 @@ const haveOf = (crop, minStar, items) => [1, 2, 3].filter((s) => s >= minStar).r
 /** 주문을 다 채울 수 있나 — 작물마다. */
 const canFill = (o, items) => o.parts.every((p) => haveOf(p.crop, o.minStar, items) >= p.qty);
 
+/** 덤 보상(5b) 한 토막 — 주문 창에 미리 보여 준다. */
+function bonusLine(bonus, crops) {
+  if (!bonus) return null;
+  const bits = [];
+  for (const [k, n] of Object.entries(bonus.seeds ?? {})) bits.push(`🌱 ${itemName(crops, k)} 씨앗 ×${n}`);
+  if (bonus.goldFert) bits.push(`✨ ${itemName(crops, 'goldFertilizer')}`);
+  if (bonus.mt) bits.push('🪙 MT 1 _(주 1개까지)_');
+  return bits.length ? `🎁 ${bits.join(' · ')}` : null;
+}
+
 /** 주문끼리 가르는 줄 — 필드 하나를 통째로 쓴다. 임베드엔 가로줄 문법이 없어 글자로 긋는다. */
 const ORDER_RULE = { name: '─────────────────────────', value: '​', inline: false };
 
@@ -896,7 +912,7 @@ function orderFields(o, n, {
     { name: `${ready ? '✅' : '📌'} ${n}. ${who.emoji} ${who.name}`, value: head.join('\n'), inline: false },
     { name: `${STARS[o.minStar]} 이상${o.parts.length > 1 ? ' (전부)' : ''}`, value: need.join('\n'), inline: true },
     { name: '기한', value: left ? `⏳ ${left}일 남음` : '⏳ **오늘까지**', inline: true },
-    { name: '보상', value: `🪙 ${num(o.gold)}\n✨ +${o.xp}`, inline: true },
+    { name: '보상', value: [`🪙 ${num(o.gold)}`, `✨ +${o.xp}`, bonusLine(o.bonus, crops)].filter(Boolean).join('\n'), inline: true },
   ];
 }
 
@@ -971,10 +987,27 @@ async function orderButton(interaction, act, [token, owner]) {
   forgetBag(owner);
   const { who } = voiceOf(r.order, (k) => itemName(crops, k));
   const what = r.order.parts.map((p) => `${itemName(crops, p.crop)} ${p.qty}개`).join(' · ');
-  await openOrders(interaction, { owner, note: `🧺 ${who.name}의 주문을 채웠어요 — 🪙 **+${num(r.order.gold)}** · ✨ +${r.xp} · 가진 골드 **${num(r.account?.gold)}**` });
+  // 받은 덤(5b) — 씨앗은 주머니로, 황금 비료는 창고로, MT 는 주 1개까지
+  const got = r.got ?? {};
+  const prize = [];
+  for (const [k, n] of Object.entries(got.seeds ?? {})) prize.push(`🌱 **${itemName(crops, k)} 씨앗 ×${n}** (주머니)`);
+  if (got.goldFert) prize.push(`✨ **${itemName(crops, 'goldFertilizer')}**`);
+  if (got.mt) prize.push('🪙 **MT 1**');
+  if (got.mtCapped) prize.push('🪙 _이번 주 MT 는 이미 받아서 골드로 대신 받았어요_');
+
+  // 헨젤의 주문은 따로 센다 — 의뢰인은 봇만 안다(칭호 「마녀의 하수인」)
+  if (who.key === 'hansel') await postAccountDeltas({ bump: { [owner]: { farmHansel: 1 } } }).catch(() => {});
+
+  await openOrders(interaction, {
+    owner,
+    note: [`🧺 ${who.name}의 주문을 채웠어요 — 🪙 **+${num(r.order.gold)}** · ✨ +${r.xp} · 가진 골드 **${num(r.account?.gold)}**`, ...prize].join('\n'),
+  });
   // 채널에 공개로 — 게시판 주문은 다른 농장도 노리던 것이다
   await interaction.followUp({
-    content: `🧺 <@${owner}> 님이 ${who.emoji} **${who.name}**의 ${r.order.kind === 'board' ? '게시판 주문' : '의뢰'}(${what})을 채웠어요 · 🪙 ${num(r.order.gold)}`,
+    content: [
+      `🧺 <@${owner}> 님이 ${who.emoji} **${who.name}**의 ${r.order.kind === 'board' ? '게시판 주문' : '의뢰'}(${what})을 채웠어요 · 🪙 ${num(r.order.gold)}${prize.length ? ` · ${prize.map((x) => x.replace(/\*\*/g, '')).join(' · ')}` : ''}`,
+      `${who.emoji} **${who.name}** — 「${thanksOf(r.order, who)}」`,
+    ].join('\n'),
     allowedMentions: QUIET,
   });
   return announceLevel(interaction, r.levelUp, crops);
@@ -1471,7 +1504,7 @@ async function fertButton(interaction, act, [ch, plotS, owner]) {
     return interaction.editReply(fertPayload({ ch, plot, owner, farm, items: accounts[owner]?.items }));
   }
 
-  const item = act === 'ff' || act === 'fF' ? 'fertilizer' : 'compost';
+  const item = act === 'fg' ? 'goldFertilizer' : (act === 'ff' || act === 'fF' ? 'fertilizer' : 'compost');
   const count = act === 'fC' ? FERTS.compost.perDay : 1;
   const r = await fertilizeFarm({ channelId: ch, userId: owner, plot, item, count });
   if (!r.ok) {
@@ -1480,6 +1513,11 @@ async function fertButton(interaction, act, [ch, plotS, owner]) {
     }));
   }
   forgetBag(owner);
+  if (item === 'goldFertilizer') {
+    return interaction.editReply(fertPayload({
+      ch, plot, owner, farm: r.farm, items: r.account?.items, note: `✨ 황금 비료를 뿌렸어요 — 이 밭 **${cropName(crops, r.crop)}** 의 품질 **+${r.gold}** (밭이 빌 때까지)`,
+    }));
+  }
   const f = FERTS[item];
   const up = r.to > r.from ? ` · 🎉 토질 **${stars(r.to)}**!` : '';
   return interaction.editReply(fertPayload({

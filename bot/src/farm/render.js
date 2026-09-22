@@ -61,7 +61,7 @@ export function ordersLine(farm) {
 }
 
 /** 밭에 놓인 설비 표시(4b) — `⛺`(덮개) · `🎋`(지지대). */
-export const equipBadge = (p) => `${p.cover ? '⛺' : ''}${p.stakes ? '🎋' : ''}`;
+export const equipBadge = (p) => `${p.cover ? '⛺' : ''}${p.stakes ? '🎋' : ''}${p.goldBoost ? '✨' : ''}`;
 
 /** 토질 ★ 다섯 칸. */
 export const stars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));

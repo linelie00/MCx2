@@ -18,6 +18,8 @@
  *   +설비       이웃+먹으며에 더해, 골드가 넉넉하면(200 넘게) 설비를 산다(4b) — 빗물통 → 덮개 →
  *               지지대 → 배수로 → 스프링클러. 덮개·지지대는 내일 다칠 밭(경고 줄)에만 산다.
  *               설비값을 되찾는지는 "설비 빼고 번 것" 으로 본다. `EQUIP_ONLY=빗물통키` 로 하나만 볼 수 있다
+ *   +과수       이웃+먹으며에 더해, Lv5 부터 열리는 밭 `TREES`(기본 3) 곳에 지금 제철인 나무를 심는다(4c).
+ *               나무 밭이 번 골드를 따로 센다 — 밭 하나 · 하루로 나눠 작물 밭과 견준다
  *
  * 작물은 **궁합 미리보기를 보고** 고른다 — 하루당 보장 이익 × 그 밭의 성장 배율(궁합·연작)이 가장
  * 큰 것, 토질 경험이 0 이 되는 연작은 조금 덜 친다(3a). 연작이 걸린 밭은 더 심지 않고 비워서
@@ -32,7 +34,7 @@ const rules = require('../../server/src/farm/rules.js');
 const affinity = require('../../server/src/farm/affinity.js');
 const weather = require('../../server/src/farm/weather.js');
 const land = require('../../server/src/farm/land.js');
-const { CROPS, seedPrice, guaranteed } = require('../../server/src/farm/crops.js');
+const { CROPS, CROP_BY_KEY, seedPrice, guaranteed } = require('../../server/src/farm/crops.js');
 
 const DAYS = Number(process.argv[2]) || 60;
 const RUNS = Number(process.argv[3]) || 20;
@@ -59,7 +61,7 @@ function seeded(seed) {
 }
 
 /** 레벨이 닿는 작물 가운데 하루당 보장 이익이 가장 큰 것. */
-const bestCrop = (level) => CROPS.filter((c) => c.lv <= level && !c.seedOnly)
+const bestCrop = (level) => CROPS.filter((c) => c.lv <= level && !c.seedOnly && !c.tree)
   .sort((a, b) => guaranteed(b) / b.days - guaranteed(a) / a.days || b.lv - a.lv)[0];
 
 /**
@@ -71,7 +73,7 @@ const longRun = (c) => (c.regrow ? c.price / c.regrow : guaranteed(c) / c.days);
 /** 궁합 미리보기와 제철을 보고 고른다 — 하루당 가치 × 성장 배율 × 제철, 연작(토질 0)은 20% 덜 친다. */
 function smartCrop(farm, plot, level, today) {
   let best = null; let score = -1;
-  for (const c of CROPS.filter((x) => x.lv <= level && !x.seedOnly)) {
+  for (const c of CROPS.filter((x) => x.lv <= level && !x.seedOnly && !x.tree)) {
     const m = affinity.modsFor(farm, plot, c.key);
     const season = weather.inSeason(c, today) ? 1 : weather.OFF_SEASON_GROWTH;
     const v = longRun(c) * (m?.rate ?? 1) * season * (m?.soil === 0 ? 0.8 : 1);
@@ -97,11 +99,18 @@ function breakBoulder(farm, today, plot, cell, st, rand, fossils) {
   return null;
 }
 
-function play({ eat, neighbor, fert, compost, naive, equip }, seed) {
+/** 지금 제철인 나무 가운데 하루당 가치(값 / 재수확)가 큰 것. */
+const bestTree = (level, today) => CROPS.filter((c) => c.tree && c.lv <= level && weather.inSeason(c, today))
+  .sort((a, b) => b.price / b.regrow - a.price / a.regrow)[0] ?? null;
+const TREE_KEYS = new Set(CROPS.filter((c) => c.tree).map((c) => c.key));
+const TREES = Number(process.env.TREES) || 3;
+
+function play({ eat, neighbor, fert, compost, naive, equip, trees }, seed) {
   const rand = seeded(seed);
   const farm = rules.newFarm({ channelId: String(100000 + seed), guildId: '1', owner: 'me', today: D0, now: `${D0}T00:00:00.000Z`, rand });
   let hp = MAX_HP; let gold = 0; let seeds = 0; let loot = 0; let waterMissed = 0; let dead = 0;
   let fertSpent = 0; let compostHeld = 0; let cropBank = 0; let equipSpent = 0;
+  let treeGold = 0; let treePlotDays = 0; let cropGold = 0; let cropPlotDays = 0;
   const reached = {};
   let lowHpDays = 0;
 
@@ -138,6 +147,9 @@ function play({ eat, neighbor, fert, compost, naive, equip }, seed) {
         if (compost && k !== 'dandelion' && k !== 'compost') { cropBank += left; left = 0; }
         if (k === 'compost') { compostHeld += left; left = 0; }
         gold += left * (ITEM_BY_KEY[k]?.price ?? 0);
+        const base = k.replace(/S[123]$/, '');
+        const worth = c * (ITEM_BY_KEY[k]?.price ?? 0);     // 먹은 것도 값으로 친다(밭끼리 견주려고)
+        if (TREE_KEYS.has(base)) treeGold += worth; else if (k !== 'dandelion' && k !== 'compost') cropGold += worth;
       }
     }
 
@@ -182,9 +194,24 @@ function play({ eat, neighbor, fert, compost, naive, equip }, seed) {
       // 연작(⚔️)이 걸린 밭은 **더 심지 않고 비운다** — 다 거두면 작물이 풀려 다른 것을 심는다.
       // 이어 심으면 밭이 영영 안 비어 연작이 풀리지 않는다(칸 하나로 연작을 피하지 못하게 한 규칙).
       if (!naive && p.crop && affinity.modsFor(farm, pi)?.rotation === 'same') continue;
+      // 나무 — 빈 흙 아홉 칸인 밭에, 나무 밭이 `TREES` 곳이 될 때까지
+      // 나무 밭은 Lv5 부터 열리는 밭 `TREES` 곳(7 · 1 · 3번 …) — 아홉 칸이 다 빌 때까지 다른 것을 안 심는다
+      const orchard = trees && land.PLOT_ORDER.slice(4, 4 + TREES).includes(pi);
+      if (orchard && !p.crop && soil.length < 9) continue;
+      const tree = orchard && !p.crop ? bestTree(level, today) : null;
+      if (orchard && !p.crop && !tree) continue;
+      if (tree) {
+        const r = rules.plant(farm, today, { plot: pi, cells: [4], crop: tree.key });
+        if (r.ok) { seeds += r.cost; gold -= r.cost; treeGold -= r.cost; }
+        continue;
+      }
       const crop = p.crop ?? (naive ? bestCrop(level) : smartCrop(farm, pi, level, today)).key;
       const r = rules.plant(farm, today, { plot: pi, cells: soil, crop });
-      if (r.ok) { seeds += r.cost; gold -= r.cost; }
+      if (r.ok) { seeds += r.cost; gold -= r.cost; cropGold -= r.cost; }
+    }
+    for (const p of farm.plots) {
+      if (!p.open || !p.crop) continue;
+      if (CROP_BY_KEY[p.crop]?.tree) treePlotDays += 1; else cropPlotDays += 1;
     }
 
     // 물 — 이웃 먼저(체력 20), 그다음 나
@@ -202,6 +229,7 @@ function play({ eat, neighbor, fert, compost, naive, equip }, seed) {
   const soils = farm.plots.filter((p) => p.open).map((p) => land.soilStar(p.soilXp));
   return {
     reached, gold, seeds, loot, waterMissed, dead, lowHpDays, level: rules.levelOf(farm), cells, soils, fertSpent, equipSpent,
+    treeDay: treePlotDays ? treeGold / treePlotDays : null, cropDay: cropPlotDays ? cropGold / cropPlotDays : null,
   };
 }
 
@@ -214,6 +242,7 @@ const STRATS = [
   ['+비료', { eat: true, neighbor: true, fert: true }],
   ['+퇴비', { eat: true, neighbor: true, compost: true }],
   ['+설비', { eat: true, neighbor: true, equip: true }],
+  ['+과수', { eat: true, neighbor: true, trees: true }],
 ];
 
 const avg = (xs) => xs.reduce((a, x) => a + x, 0) / xs.length;
@@ -235,6 +264,7 @@ for (const [name, s] of STRATS) {
     + ` · 체력 30 밑인 날 ${fmt(avg(res.map((r) => r.lowHpDays)))}일 · 마지막 날 심긴 칸 ${fmt(avg(res.map((r) => r.cells)))}`);
   console.log(`         토질 ★ 평균 ${avg(res.map((r) => avg(r.soils))).toFixed(2)} (★5 밭 ${avg(res.map((r) => r.soils.filter((x) => x === 5).length)).toFixed(1)}개)`
     + `${s.fert ? ` · 비료에 쓴 골드 ${fmt(avg(res.map((r) => r.fertSpent)))}` : ''}`
+    + `${s.trees ? ` · 밭 하루당 — 나무 ${avg(res.map((r) => r.treeDay ?? 0)).toFixed(1)} · 작물 ${avg(res.map((r) => r.cropDay ?? 0)).toFixed(1)}골드어치` : ''}`
     + `${s.equip ? ` · 설비에 쓴 골드 ${fmt(avg(res.map((r) => r.equipSpent)))} (설비 빼고 번 것 ${fmt(avg(res.map((r) => r.gold + r.equipSpent)))})` : ''}`);
 }
 console.log('\n목표: 성실하면 6~8주(42~56일)에 Lv10 (docs/FARM.md §8.2)\n');

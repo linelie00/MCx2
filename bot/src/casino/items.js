@@ -266,6 +266,10 @@ export const ITEMS = [
   { key: 'watermelon',      name: '수박',                    kind: '재료', cat: 'fruit',  price:   12, sell: true,  heal:  10,  shop: true,  loot: false, desc: '들고 다니기엔 너무 크다. 그래도 여름엔 다들 들고 다닌다.' },
   { key: 'soybean',         name: '콩',                      kind: '재료', cat: 'grain',  price:    3, sell: true,  heal:   1,  shop: true, desc: '메주가 될지 두부가 될지는 아직 모른다.' },
   { key: 'buckwheat',       name: '메밀',                    kind: '재료', cat: 'grain',  price:    4, sell: true,  heal:   2,  shop: true, desc: '꽃이 피면 소금을 뿌려 놓은 것 같다고 한다.' },
+  // ---- 농장에서만 나는 작물(docs/FARM.md §12). 가게에서 안 팔고 던전에서도 안 난다 —
+  //      밭에서 키워야만 얻는다. 성장일·씨앗값은 서버 작물표(server/src/farm/crops.js)가 원본이다.
+  { key: 'radish',          name: '무',                      kind: '재료', cat: 'veg',   price:    3, sell: true,  heal:   3,  loot: false, desc: '뽑을 때 생각보다 힘이 든다. 흙 속에 반쯤 더 있다.' },
+  { key: 'lettuce',         name: '상추',                    kind: '재료', cat: 'veg',   price:    2, sell: true,  heal:   3,  loot: false, desc: '겉잎부터 따 먹으면 속에서 또 난다. 밭 주인이 제일 먼저 질린다.' },
   { key: 'pepper',          name: '통후추',                   kind: '재료', cat: 'spice', price:   25, sell: true,  heal: -3,  shop: true,  loot: false, desc: '한 알에 은화 한 닢이던 시절도 있었다. 지금이 그 시절이다.' },
   { key: 'cinnamon',        name: '계피',                     kind: '재료', cat: 'spice', price:   20, sell: true,  heal: 0,   shop: true,  loot: false, desc: '나무껍질인데 비싸다. 향이 모든 걸 설명한다.' },
   { key: 'saffron',         name: '사프란',                   kind: '재료', cat: 'spice', price:   60, sell: true,  heal: 0,   shop: true,  loot: false, desc: '꽃술 세 가닥. 금보다 비싸다는 소문이 있다.' },

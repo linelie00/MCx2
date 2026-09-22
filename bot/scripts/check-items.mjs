@@ -13,6 +13,10 @@ import {
   ITEMS, ITEM_BY_KEY, MAX_HP, CATS, forSale, buyPrice, BUY_MARKUP, healOf, findItem,
 } from '../src/casino/items.js';
 import { BY_KEY as FISH_BY_KEY } from '../src/casino/fish.js';
+import { createRequire } from 'node:module';
+
+/** 농장 작물 키. 서버 작물표가 원본이다 — 레포 안에서만 도는 검사라 서버 파일을 직접 읽는다. */
+const FARM_KEYS = new Set(createRequire(import.meta.url)('../../server/src/farm/crops.js').CROPS.map((c) => c.key));
 
 process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
@@ -29,7 +33,7 @@ const eq = (name, got, want) => {
 };
 
 console.log('\n모양');
-eq('227종 — 시트 95 + 요리 재료 42+22 + 독 8 + 괴식 10 + 낚시 24+24 + 미끼 2', ITEMS.length, 227);
+eq('229종 — 시트 95 + 요리 재료 42+22 + 독 8 + 괴식 10 + 낚시 24+24 + 미끼 2 + 농장 작물 2', ITEMS.length, 229);
 eq('키가 안 겹친다', Object.keys(ITEM_BY_KEY).length, ITEMS.length);
 eq('이름이 안 겹친다', new Set(ITEMS.map((i) => i.name)).size, ITEMS.length);
 eq('키는 영문 카멜케이스', ITEMS.filter((i) => !/^[a-z][A-Za-z0-9]*$/.test(i.key)).map((i) => i.key), []);
@@ -46,7 +50,7 @@ eq('임베드 한 칸에 들어간다', ITEMS.filter((i) => i.desc.length > 200)
 
 console.log('\n재료');
 const FOOD = ITEMS.filter((i) => i.kind === '재료');
-eq('재료 백쉰일곱 — 장보기 둘째 배치로 스물둘이 늘었다', FOOD.length, 157);
+eq('재료 백쉰아홉 — 장보기 둘째 배치로 스물둘, 농장 작물로 둘이 늘었다', FOOD.length, 159);
 eq('잡화는 예순넷 — 낚시 잡동사니 넷', ITEMS.filter((i) => i.kind === '잡화').length, 64);
 eq('진열대가 다 있다', FOOD.filter((i) => !CATS.some((c) => c.key === i.cat)).map((i) => i.key), []);
 eq('진열대는 재료만', ITEMS.filter((i) => i.kind !== '재료' && (i.cat || i.shop)).map((i) => i.key), []);
@@ -55,8 +59,9 @@ eq('값이 0 인 재료는 옮겨 온 넷뿐 — 못 판다', FOOD.filter((i) =>
 eq('상점 쉰다섯', FOOD.filter((i) => i.shop).length, 55);
 eq('던전 백스물둘', FOOD.filter((i) => i.loot !== false).length, 122);
 // 낚시로만 나오는 것(전설)은 던전에서 막아 뒀다 — 그건 "안 나는" 것이 아니다.
+// 농장에서만 나는 작물도 마찬가지다 — 원본은 서버 작물표(server/src/farm/crops.js).
 eq('어디서도 안 나는 재료는 없다',
-  FOOD.filter((i) => !i.shop && i.loot === false && !FISH_BY_KEY[i.key]).map((i) => i.key), []);
+  FOOD.filter((i) => !i.shop && i.loot === false && !FISH_BY_KEY[i.key] && !FARM_KEYS.has(i.key)).map((i) => i.key), []);
 // 셀렉트 한 칸이 25 가 한도다. 넘으면 그 진열대가 통째로 안 뜬다.
 eq('진열대마다 25 이하', CATS.filter((c) => FOOD.filter((i) => i.cat === c.key && i.shop).length > 25).map((c) => c.key), []);
 eq('가게 물건은 던전에 안 굴러다닌다', ['flour', 'sugar', 'oil', 'pepper', 'saffron'].filter((k) => ITEM_BY_KEY[k].loot !== false), []);
@@ -177,7 +182,7 @@ const itemLines = (body) => lines(body).filter((l) => !l.startsWith('──'));
 
 console.log('\n/아이템 — 목록');
 let c = read(await show(null));
-eq('전체 227종', c.fields[0], '종류=**227**');
+eq('전체 229종', c.fields[0], '종류=**229**');
 eq('열두 쪽', c.fields[1], '쪽=1 / 12');
 eq('한 쪽에 스무 줄(머리줄 빼고)', itemLines(c.body).length, 20);
 eq('첫 줄은 종류 머리줄', lines(c.body)[0].startsWith('── 소비'), true);
@@ -220,14 +225,14 @@ eq('값 칸은 비운다', c.fields[1], '값=_없음_');
 
 eq('먹어 봐야 안다', read(await show('redFeather')).footer, '먹으면 어떻게 될지는 먹어 봐야 알아요');
 eq('목록에도 회복 칸이 없다', /\s[−-]?\d+\s*$/m.test(read(await click('item:list:use:0')).body.replace(/[\d,]+골드/g, '')), false);
-eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**227**');
+eq('없는 키를 주면 목록으로', read(await show('없는키')).fields[0], '종류=**229**');
 eq('독은 카드에 안 적는다 — 먹어 봐야 안다', /☠️|독/.test(read(await show('deathCap')).body), false);
 eq('괴식이면 카드에 적는다', /🪱 \*\*괴식\*\*/.test(read(await show('bugPile')).body), true);
 eq('멀쩡한 것은 아무 표시 없다', /☠️|🪱/.test(read(await show('honey')).body), false);
 
 console.log('\n/아이템 — 재료');
 c = read(await click('item:list:food:0'));
-eq('재료 탭', [c.fields[0], c.fields[1]], ['종류=**157**', '쪽=1 / 8']);
+eq('재료 탭', [c.fields[0], c.fields[1]], ['종류=**159**', '쪽=1 / 8']);
 eq('재료는 곡물부터', lines(c.body)[0].startsWith('── 곡물'), true);
 eq('잡화는 안 보인다', /나뭇가지/.test(c.body), false);
 c = read(await show('honey'));

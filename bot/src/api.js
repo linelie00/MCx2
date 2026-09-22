@@ -242,6 +242,30 @@ export const tryFish = (id, { peek = false } = {}) =>
 export const claimDaily = (id, { heal = true } = {}) =>
   request('/api/accounts/claim', { method: 'POST', bot: true, json: { id, heal } });
 
+// ---------------------------------------------------------------- 채널 농장
+
+/**
+ * 채널 농장(docs/FARM.md). 규칙은 전부 **서버가** 판정한다 — 봇은 결과를 그린다.
+ *
+ * 작물표만 캐시한다(배포 전에는 안 바뀐다). 농장 자체는 캐시하지 않는다 — 방금 준 물이
+ * 화면에 안 보이면 두 번 누르게 된다.
+ *
+ * 못 한 것(이미 물 줌 · 남의 땅 · 골드 모자람)은 오류가 아니라 `{ ok: false, reason }` 으로
+ * 온다(출첵과 같은 규약). 호출이 틀렸을 때만 `ApiError` 다.
+ */
+export const getFarmCrops = () =>
+  cached('farmCrops', 10 * 60 * 1000, () => request('/api/farms/crops', { bot: true }).then((r) => r.crops));
+
+export const getFarm = (channelId) => request(`/api/farms/${encodeURIComponent(channelId)}`, { bot: true });
+export const getFarmOf = (userId) => request(`/api/farms/by-owner/${encodeURIComponent(userId)}`, { bot: true });
+
+const farmPost = (what, json) => request(`/api/farms/${what}`, { method: 'POST', bot: true, json });
+export const registerFarm = ({ channelId, guildId, userId }) => farmPost('register', { channelId, guildId, userId });
+export const abandonFarm = (userId) => farmPost('abandon', { userId });
+export const waterFarm = ({ channelId, userId }) => farmPost('water', { channelId, userId });
+export const plantFarm = ({ channelId, userId, plot, cells, crop }) => farmPost('plant', { channelId, userId, plot, cells, crop });
+export const harvestFarm = ({ channelId, userId, plot = null }) => farmPost('harvest', { channelId, userId, plot });
+
 // ---------------------------------------------------------------- 자가진단
 
 /**
@@ -288,4 +312,5 @@ export async function checkBotKey() {
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
+  getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm,
 };

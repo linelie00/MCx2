@@ -256,15 +256,24 @@ export const claimDaily = (id, { heal = true } = {}) =>
 export const getFarmCrops = () =>
   cached('farmCrops', 10 * 60 * 1000, () => request('/api/farms/crops', { bot: true }).then((r) => r.crops));
 
-export const getFarm = (channelId) => request(`/api/farms/${encodeURIComponent(channelId)}`, { bot: true });
+/** `user` 를 주면, 그 사람이 주인일 때 오늘 남은 개간 기력(`me.stamina`)도 온다. */
+export const getFarm = (channelId, user = null) => request(
+  `/api/farms/${encodeURIComponent(channelId)}${user ? `?user=${encodeURIComponent(user)}` : ''}`,
+  { bot: true },
+);
 export const getFarmOf = (userId) => request(`/api/farms/by-owner/${encodeURIComponent(userId)}`, { bot: true });
 
 const farmPost = (what, json) => request(`/api/farms/${what}`, { method: 'POST', bot: true, json });
 export const registerFarm = ({ channelId, guildId, userId }) => farmPost('register', { channelId, guildId, userId });
 export const abandonFarm = (userId) => farmPost('abandon', { userId });
-export const waterFarm = ({ channelId, userId }) => farmPost('water', { channelId, userId });
+/** 한 포기에 체력 1. 모자라면 되는 만큼만 준다(`watered` · `left` · `hp`). */
+export const waterFarm = ({ channelId, userId, plot = null }) => farmPost('water', { channelId, userId, plot });
 export const plantFarm = ({ channelId, userId, plot, cells, crop }) => farmPost('plant', { channelId, userId, plot, cells, crop });
 export const harvestFarm = ({ channelId, userId, plot = null }) => farmPost('harvest', { channelId, userId, plot });
+/** 개간. `{ plot, all }` 돌 전부 · `{ plot, cell }` 돌 하나/잡초 · `{ plot, cell, pos }` 바위 휘두르기. */
+export const clearFarm = ({ channelId, userId, plot, cell = null, pos = null, all = false }) => farmPost('clear', {
+  channelId, userId, plot, cell, pos, all,
+});
 
 // ---------------------------------------------------------------- 자가진단
 
@@ -312,5 +321,5 @@ export async function checkBotKey() {
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
   getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
-  getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm,
+  getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
 };

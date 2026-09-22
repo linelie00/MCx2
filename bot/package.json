@@ -23,7 +23,8 @@
     "check-yacht-titles": "node scripts/check-yacht-titles.mjs",
     "check-fishing": "node scripts/check-fishing.mjs",
     "check-showdown": "node scripts/check-showdown.mjs",
-    "check-farm": "node scripts/check-farm.mjs"
+    "check-farm": "node scripts/check-farm.mjs",
+    "simulate-farm": "node scripts/simulate-farm.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

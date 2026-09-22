@@ -4,10 +4,11 @@
  * 그림을 안 쓰기로 했으니(embeds.js 머리말) 이모지 9×9 격자로 그린다. 밭 3×3 이 각각
  * 칸 3×3 이고, 번호는 둘 다 **키패드 배치**다(1 2 3 / 4 5 6 / 7 8 9).
  *
- * 셈은 서버가 끝내서 준다(`view` — 칸마다 `soil · seed · grow · ripe · over · dry · dead · locked`).
+ * 셈은 서버가 끝내서 준다(`view` — 칸마다 `soil · rock · boulder · crack · weed · seed · grow ·
+ * ripe · over · dry · dead · locked`).
  * 여기는 그 이름을 이모지와 문장으로 바꾸기만 한다. 규칙을 다시 갖지 않는다.
  */
-import { base } from '../embeds.js';
+import { base, gauge } from '../embeds.js';
 import { ITEM_BY_KEY } from '../casino/items.js';
 
 /** 농장 화면의 색. 흙빛 — 테마색(양피지)보다 조금 짙다. */
@@ -15,8 +16,12 @@ export const FARM_COLOR = 0x7a5c3a;
 
 /** 칸 상태 → 이모지. 익은 칸만 작물마다 다르다. */
 const CELL = {
-  soil: '🟫', seed: '🌱', grow: '🌿', dry: '🍂', dead: '💀', locked: '🔒',
+  soil: '🟫', rock: '🪨', boulder: '⛰️', crack: '⛰️', weed: '🌼',
+  seed: '🌱', grow: '🌿', dry: '🍂', dead: '💀', locked: '🔒',
 };
+
+/** 토질 ★ 다섯 칸. */
+export const stars = (n) => '★'.repeat(n) + '☆'.repeat(Math.max(0, 5 - n));
 
 /** 밭 번호(키패드 1~9). 서버는 0~8 을 쓴다. */
 export const plotNo = (i) => i + 1;
@@ -49,46 +54,70 @@ export function grid(farm, crops) {
   return lines.join('\n');
 }
 
-/** 열린 밭마다 한 줄. 작물 · 익은 것 · 남은 물주기 · 목마른 것. */
+/** 열린 밭마다 한 줄. 토질 · 작물 · 익은 것 · 남은 물주기 · 오늘 물 · 돌. */
 export function plotLines(farm, crops) {
   return farm.plots.map((p, i) => {
     if (!p.open) return null;
-    const head = `**${plotNo(i)}번 밭**`;
-    if (!p.crop) return `${head} — _비어 있어요. \`/농장 심기\`_`;
-    const bits = [`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}`];
+    const count = (st) => p.cells.filter((s) => s === st).length;
+    const head = `**${plotNo(i)}번 밭** ${stars(p.star)}`;
+    const bits = [];
+    if (p.crop) bits.push(`${cropEmoji(crops, p.crop)} ${cropName(crops, p.crop)}`);
     if (p.ripe) bits.push(`🧺 수확 ${p.ripe}`);
     if (p.growing) bits.push(`자라는 중 ${p.growing}${p.left != null ? ` (물 ${p.left}번 더)` : ''}`);
-    if (p.thirsty) bits.push(`💧 목마름 ${p.thirsty}`);
+    if (p.need) bits.push(`💧 오늘 ${p.need}`);
+    if (p.thirsty) bits.push(`⚠️ 목마름 ${p.thirsty}`);
+    if (count('dry')) bits.push(`🍂 ${count('dry')}`);
     if (p.dead) bits.push(`💀 ${p.dead}`);
-    const dry = p.cells.filter((s) => s === 'dry').length;
-    if (dry) bits.push(`🍂 시듦 ${dry}`);
+    const stones = count('rock') + count('boulder') + count('crack');
+    if (stones) bits.push(`⛏️ 돌 ${stones}`);
+    if (count('weed')) bits.push(`🌼 ${count('weed')}`);
+    if (!p.crop && !stones) bits.push('_비어 있어요 — `/농장 심기`_');
     return `${head} ${bits.join(' · ')}`;
   }).filter(Boolean).join('\n');
 }
 
+/** 레벨 한 줄. `Lv.3 ▰▰▰▱▱▱▱▱ 38% · 180 / 300` */
+export function levelLine(farm) {
+  if (farm.xpNext == null) return `**Lv.${farm.level}** · 최고 레벨`;
+  const done = farm.xp - farm.xpFloor;
+  const span = farm.xpNext - farm.xpFloor;
+  return `**Lv.${farm.level}** ${gauge(done, span)} · ${farm.xp} / ${farm.xpNext}`;
+}
+
+/** 다음 레벨에 열리는 것. */
+export function nextLine(farm, crops) {
+  if (farm.nextPlot == null) return null;
+  const fresh = (crops ?? []).filter((c) => c.lv === farm.level + 1);
+  return `🔓 _다음 Lv.${farm.level + 1} — ${plotNo(farm.nextPlot)}번 밭${fresh.length ? ` · 새 작물 ${fresh.map((c) => c.name).join(', ')}` : ''}_`;
+}
+
 /** 오늘 물 상태 한 줄. */
 export function waterLine(farm) {
-  return farm.watered
-    ? `💧 오늘 물 줌 — <@${farm.waterBy}>`
-    : '💧 _오늘은 아직 아무도 물을 안 줬어요._';
+  const who = farm.waterBy?.length ? ` — ${farm.waterBy.map((id) => `<@${id}>`).join(' ')}` : '';
+  if (farm.need) return `💧 오늘 물이 필요한 포기 **${farm.need}**${who}`;
+  return farm.waterBy?.length ? `💧 오늘 물을 다 줬어요${who}` : '💧 _물을 줄 작물이 없어요._';
 }
 
 /** `/농장 보기` 의 임베드. */
 export function farmEmbed(farm, crops, { name } = {}) {
   return base({
     // 제목에서는 <#채널> 멘션이 안 풀린다. 이름을 받아 쓰고, 멘션은 본문 첫 줄에 둔다.
-    title: name ? `🛖 #${name} 농장` : '🛖 농장',
+    title: `${farm.sign} ${name ? `#${name} ` : ''}농장`,
     description: [
       `<#${farm.channelId}> · 주인 <@${farm.owner}>`,
+      levelLine(farm),
       waterLine(farm),
       '',
       grid(farm, crops),
       '',
       plotLines(farm, crops),
-    ].join('\n'),
+      nextLine(farm, crops),
+    ].filter((l) => l != null).join('\n'),
     color: FARM_COLOR,
-    footer: '물은 하루 한 번, 누구나 줄 수 있어요 · 이틀 굶으면 시들고 나흘이면 죽어요',
+    footer: '물은 한 포기에 체력 1 · 이틀 굶으면 시들고 나흘이면 죽어요 · 돌은 /농장 개간',
   });
 }
 
-export default { FARM_COLOR, plotNo, cropName, cropEmoji, cellEmoji, grid, plotLines, waterLine, farmEmbed };
+export default {
+  FARM_COLOR, plotNo, stars, cropName, cropEmoji, cellEmoji, grid, plotLines, levelLine, nextLine, waterLine, farmEmbed,
+};

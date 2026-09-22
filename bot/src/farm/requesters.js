@@ -9,6 +9,7 @@
  *   lines  한마디. `({ crop, qty, obj })` 를 받는다 — `obj` 는 목적격 조사까지 붙은 작물 이름
  *   liked  좋아하는 작물일 때의 한마디
  *   basket 작물이 여럿인 주문(개인 의뢰)의 한마디. `({ list })` — `당근 12개, 감자 8개`
+ *   rare   가끔(`chance`) 나오는 한마디 `{ chance, lines, basket }` — 테자트가 본색을 드러낼 때
  */
 
 /** 받침이 있으면 앞, 없으면 뒤 — `을/를` · `이/가`. 한글이 아니면 뒤. */
@@ -114,16 +115,27 @@ export const REQUESTERS = [
     key: 'tezat',
     name: '테자트',
     emoji: '🗡️',
-    title: '도적',
+    title: '도적단 두목',
     lines: [
-      ({ crop, qty }) => `훗, ${crop} ${qty}개쯤이야 훔칠 수도 있지만… 사, 사는 게 낫겠지? 부탁할게….`,
-      ({ obj, qty }) => `이 몸이 ${obj} ${qty}개 원한다! …아, 아니 그러니까 좀 팔아 주면 안 될까요?`,
-      ({ crop, qty }) => `${crop} ${qty}개. 값은 두둑이… 아니 적당히… 아무튼 제발요.`,
+      ({ obj, qty }) => `이 몸, 도적단 두목 테자트가 ${obj} ${qty}개 원한다! 영광으로 알아라!`,
+      ({ crop, qty }) => `훔치는 것도 지겨워서 말이지. ${crop} ${qty}개, 값은 제대로 쳐 주마.`,
+      ({ crop, qty }) => `부하들 밥이다. ${crop} ${qty}개. 두목의 체면이 걸렸으니 좋은 걸로.`,
     ],
     basket: [
-      ({ list }) => `크흠, 큰 건이다. ${list}. …이거 다 못 구하면 나 진짜 곤란해요.`,
-      ({ list }) => `도적단 비상식량! ${list}! …두목한테 혼나기 전에 제발.`,
+      ({ list }) => `도적단 비상식량이다! ${list}! 두목이 직접 부탁하는 거다, 알겠나?`,
+      ({ list }) => `큰 건이다. ${list}. 이번 원정만 끝나면 부하들한테 한턱낸다!`,
     ],
+    // 가끔 본색이 나온다
+    rare: {
+      chance: 0.2,
+      lines: [
+        ({ crop, qty }) => `훗, ${crop} ${qty}개쯤이야 훔칠 수도 있지만… 사, 사는 게 낫겠지? 부탁할게….`,
+        ({ obj, qty }) => `이 몸이 ${obj} ${qty}개 원한다! …아, 아니 그러니까 좀 팔아 주면 안 될까요?`,
+      ],
+      basket: [
+        ({ list }) => `크흠, 큰 건이다. ${list}. …이거 다 못 구하면 부하들 볼 낯이 없어요. 제발요.`,
+      ],
+    },
   },
   {
     key: 'anonHum',
@@ -183,13 +195,15 @@ export function voiceOf(order, nameOf) {
     ? fans[part(seed, 7) % fans.length]
     : REQUESTERS[part(seed, 13) % REQUESTERS.length];
   const pickLine = (lines) => lines[part(seed, 101) % lines.length];
+  const rare = who.rare && part(seed, 1009) < who.rare.chance * 1000 ? who.rare : null;
   if (order.parts.length > 1) {
     const list = order.parts.map((p) => `${nameOf(p.crop)} ${p.qty}개`).join(', ');
-    return { who, line: pickLine(who.basket)({ list }) };
+    return { who, line: pickLine(rare?.basket ?? who.basket)({ list }) };
   }
   const [{ crop, qty }] = order.parts;
   const name = nameOf(crop);
-  const lines = who.likes?.includes(crop) && who.liked ? who.liked : who.lines;
+  const liked = who.likes?.includes(crop) && who.liked;
+  const lines = liked || rare?.lines || who.lines;
   return { who, line: pickLine(lines)({ crop: name, qty, obj: josa(name, ['을', '를']) }) };
 }
 

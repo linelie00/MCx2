@@ -386,6 +386,11 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('같은 주문은 늘 같은 사람 · 같은 말', JSON.stringify(voiceOf(all[0], nameOf)) === JSON.stringify(voiceOf(all[0], nameOf)), true);
   eq('게시판엔 모두가 나온다', REQUESTERS.every((r) => voices.some((v) => v.who.key === r.key)), true);
   eq('한마디에 수량', voices.every((v, i) => v.line.includes(String(all[i].parts[0].qty))), true);
+  const tz = REQUESTERS.find((r) => r.key === 'tezat');
+  eq('테자트는 도적단 두목', tz.title, '도적단 두목');
+  const tzv = voices.filter((v) => v.who.key === 'tezat');
+  const meek = tzv.filter((v) => /부탁할게|안 될까요|제발요/.test(v.line));
+  eq('테자트의 찌질한 한마디는 가끔만', meek.length > 0 && meek.length < tzv.length / 2, true);
   const apple = { id: 'b:x', parts: [{ crop: 'redApple', qty: 5 }], seed: 0 };
   eq('헨젤은 사과를 좋아한다', voiceOf(apple, nameOf).who.key, 'hansel');
   eq('헨젤의 사과 한마디', voiceOf(apple, nameOf).line, '사과 파이에 넣을 새빨간 사과 5개가 필요해. 벌레 먹은 거 가져오면 두꺼비로 만든다.');

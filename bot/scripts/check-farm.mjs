@@ -239,8 +239,27 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('도감 수집률', e.title, `📖 농장 도감 — 2 / ${crops.length} (${Math.round(200 / crops.length)}%)`);
   eq('도감 줄', [e.description.includes('🥕 **당근** · 12포기 · 최고 ★★'), e.description.includes('⚪ **무** · 18포기 · 최고 ★★★ · 🏆×1')], [true, true]);
   eq('안 키운 것은 ❔', e.description.includes('❔ _??? (Lv.1)_'), true);
-  eq('희귀는 이름을 숨긴다', e.description.includes('❔ _희귀 ???_'), true);
+  eq('도감 한 쪽은 25줄', e.description.split('\n').length, 2 + 25);
+  const nav = bp.components[0].toJSON().components;
+  eq('도감 쪽 버튼 — 첫 쪽엔 ◀ 잠김', nav.map((c) => [c.label, c.disabled, c.custom_id.split(':')[2]]), [['◀', true, '0'], ['▶', false, '1']]);
+  eq('도감 쪽 customId — 주인이 맨 뒤 · 안 겹침', [nav.every((c) => c.custom_id.endsWith(`:${OWNER}`)), new Set(nav.map((c) => c.custom_id)).size], [true, 2]);
+  const pages = Math.ceil(crops.length / 25);
+  const last = bookPayload({ who: OWNER, book: {}, crops, page: 99 });
+  const le = last.embeds[0].toJSON();
+  eq('마지막 쪽 — 희귀는 이름을 숨긴다 · ▶ 잠김', [le.description.includes('❔ _희귀 ???_'), last.components[0].toJSON().components[1].disabled, le.footer.text.startsWith(`${pages} / ${pages}쪽`)], [true, true, true]);
   eq('도감은 임베드 한도 안', e.description.length < 4096, true);
+}
+
+// 농장 칭호
+{
+  const { TITLES, earned, FARM_TOTAL } = await import('../src/casino/titles.js');
+  const farmT = TITLES.filter((t) => t.group === '농장');
+  eq('농장 칭호 열여섯', farmT.length, 16);
+  eq('칭호 키가 안 겹친다', new Set(TITLES.map((t) => t.key)).size, TITLES.length);
+  eq('식물도감 분모 = 서버 작물표', FARM_TOTAL, CROPS.length);
+  eq('새 계정엔 농장 칭호 없음', earned({ stats: {} }).filter((t) => t.group === '농장').length, 0);
+  const big = earned({ stats: { farmHarvest: 1000, farmLevel: 10, farmBookKinds: CROPS.length, farmGiant: 1, farmChop: 1 } }).filter((t) => t.group === '농장').map((t) => t.key);
+  eq('전적을 채우면 칭호', ['sprout', 'goodHarvest', 'villageFarmer', 'greatFarmer', 'botanist', 'herbarium', 'giantGrower', 'woodcutter'].every((k) => big.includes(k)), true);
 }
 
 // 4a — 날씨 · 제철

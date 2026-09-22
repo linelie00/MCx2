@@ -305,6 +305,31 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('완벽 두 번 뽑기 중 화석은 하나만', [r.fossils, r.loot], [1, { oddFossil: 1, crackleStone: 1 }]);
 }
 
+// --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
+{
+  // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
+  const old = {
+    channelId: '111111', guildId: '1', owner: 'o', createdAt: `${D0}T01:00:00.000Z`, lastTickDay: day(-1),
+    water: { day: D0, by: 'guest' },
+    plots: Array.from({ length: 9 }, (_, i) => (i === P
+      ? { open: true, crop: 'carrot', cells: [
+        ...Array.from({ length: 4 }, () => ({ t: 'plant', g: 1, thirst: 0, scar: false, ripeDay: null, planted: D0 })),
+        ...Array.from({ length: 5 }, () => ({ t: 'soil' })),
+      ] }
+      : { open: false, crop: null, cells: [] })),
+  };
+  const up = rules.upgrade(structuredClone(old));
+  eq('옛 농장: 물 준 사람은 배열로', up.water.by, ['guest']);
+  eq('옛 농장: 칸마다 wet 을 옮긴다', up.plots[P].cells.slice(0, 4).map((c) => c.wet), [D0, D0, D0, D0]);
+  eq('옛 농장: 경험치·토질·퇴비는 0', [up.xp, up.plots[P].soilXp, up.plots[0].soilXp, up.compostBits, up.grown], [0, 0, 0, 0, []]);
+  eq('upgrade 는 두 번 해도 같다', rules.upgrade(structuredClone(up)), up);
+  eq('옛 농장: 오늘은 물을 다 줬다', rules.water(structuredClone(up), D0, 'o').reason, 'already');
+  const t = rules.tick(rules.upgrade(structuredClone(old)), day(1));
+  eq('옛 농장: 어제 준 물이 인정된다', t.plots[P].cells[0].thirst, 0);
+  const w = rules.water(t, day(1), 'o');
+  eq('옛 농장: 물주기 · 경험치 +2', [w.watered, t.xp], [4, 2]);
+}
+
 // ================================================================ 4. API
 
 const app = require('../src/app');
@@ -411,6 +436,27 @@ const server = app.listen(0, async () => {
     eq('24시간 지난 폐농은 쿨다운', [a2.free, a2.until], [false, rules.addDays(dayKey(), 7)]);
     eq('쿨다운 중엔 못 연다', (await post('/farms/register', { channelId: CH, guildId: G, userId: U })).body.reason, 'cooldown');
     eq('다른 사람은 그 땅을 연다', (await post('/farms/register', { channelId: CH2, guildId: G, userId: W2 })).body.ok, true);
+
+    // --- 1단계에 연 농장이 파일에 있을 때
+    const d5 = readFile();
+    d5.farms[CH] = {
+      channelId: CH, guildId: G, owner: V, createdAt: new Date().toISOString(), lastTickDay: rules.addDays(dayKey(), -1),
+      water: { day: dayKey(), by: V },
+      plots: Array.from({ length: 9 }, (_, i) => (i === 4
+        ? { open: true, crop: 'potato', cells: [
+          { t: 'plant', g: 2, thirst: 0, scar: false, ripeDay: dayKey(), planted: dayKey() },
+          { t: 'plant', g: 1, thirst: 0, scar: false, ripeDay: null, planted: dayKey() },
+          ...Array.from({ length: 7 }, () => ({ t: 'soil' })),
+        ] }
+        : { open: false, crop: null, cells: [] })),
+    };
+    writeFile(d5);
+    const o1 = (await hit(`/farms/${CH}`)).body.farm;
+    eq('옛 농장 조회', [o1.level, o1.waterBy, o1.need], [1, [V], 0]);
+    eq('옛 농장 물 — 이미 줬다', (await post('/farms/water', { channelId: CH, userId: V })).body.reason, 'already');
+    const oh = (await post('/farms/harvest', { channelId: CH, userId: V })).body;
+    eq('옛 농장 수확 · 경험치', [oh.ok, oh.items, oh.farm.xp], [true, { potato: 1 }, 11]);
+    eq('옛 농장이 새 모양으로 저장된다', Array.isArray(readFile().farms[CH].water.by), true);
 
     // --- 손상된 파일은 0 으로 읽지 않는다
     fs.writeFileSync(FILE, '{"farms": {');

@@ -91,6 +91,32 @@ function newFarm({ channelId, guildId, owner, today, now, rand = Math.random }) 
   };
 }
 
+/**
+ * 옛 모양의 농장을 지금 모양으로 채운다. **읽을 때마다** 부른다(컨트롤러). 여러 번 불러도 같다.
+ *
+ * 1단계(MVP)에 연 농장에는 레벨·토질·퇴비 필드가 없고, 물 기록이 **농장에 하루 하나**
+ * (`water: { day, by: '한 사람' }`)였다. 2a 부터는 칸마다 `wet` 을 본다. 옛 농장에서는 물을 주면
+ * 자라는 칸 **전부**가 같이 받았으므로 `water.day` 를 그 칸들의 `wet` 으로 옮기면 그대로다
+ * (그날 물 준 뒤에 심은 칸도 옛 규칙에서 그날치를 받았다). 빠뜨리면 이미 물 받은 칸이
+ * 다음 셈에서 목마른 것으로 세어진다.
+ */
+function upgrade(farm) {
+  if (!Number.isFinite(farm.xp)) farm.xp = 0;
+  if (!Array.isArray(farm.grown)) farm.grown = [];
+  if (!Number.isFinite(farm.compostBits)) farm.compostBits = 0;
+  if (farm.waterXpDay === undefined) farm.waterXpDay = null;
+  if (!farm.water || typeof farm.water !== 'object') farm.water = { day: null, by: [] };
+  if (!Array.isArray(farm.water.by)) farm.water.by = farm.water.by ? [farm.water.by] : [];
+  for (const p of farm.plots) {
+    if (!Number.isFinite(p.soilXp)) p.soilXp = 0;
+    if (!Array.isArray(p.cells)) p.cells = [];
+    for (const c of p.cells) {
+      if (c.t === 'plant' && c.wet === undefined) c.wet = farm.water.day ?? null;
+    }
+  }
+  return farm;
+}
+
 const levelOf = (farm) => land.levelOf(farm.xp);
 
 /**
@@ -469,5 +495,5 @@ function view(farm, today) {
 module.exports = {
   PLOTS, CELLS, START_PLOT, WITHER, DEATH, OVERRIPE_AFTER, ROT_AFTER, GRACE_MS, COOLDOWN_DAYS,
   dayNum, keyOf, addDays,
-  newFarm, levelOf, gainXp, tick, water, plant, harvest, clear, view,
+  newFarm, upgrade, levelOf, gainXp, tick, water, plant, harvest, clear, view,
 };

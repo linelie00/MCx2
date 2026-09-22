@@ -41,6 +41,8 @@ const SNOWFLAKE = /^\d{5,25}$/;
 
 const now = () => new Date().toISOString();
 const clone = (o) => structuredClone(o);
+/** 저장된 농장 → 지금 모양으로 채우고(`upgrade`) 오늘까지 센 **사본.** 모든 읽기가 이 길로 온다. */
+const current = (stored, today) => rules.tick(rules.upgrade(clone(stored)), today);
 const ownedBy = (data, userId) => Object.values(data.farms).find((f) => f.owner === userId) ?? null;
 
 /** 모양이 틀린 입력의 문구. rules 가 `bad: true` 로 돌려준 사유를 받는다. */
@@ -135,7 +137,7 @@ exports.get = (req, res) => {
   const today = dayKey();
   const farm = data.farms[channelId];
   if (!farm) return res.json({ farm: null, today });
-  const f = rules.tick(clone(farm), today);
+  const f = current(farm, today);
   // `?user=` 가 주인이면 오늘 남은 개간 기력도 준다(개간 창이 적는다).
   const user = String(req.query.user ?? '');
   const me = user === f.owner ? { stamina: staminaFor(data, f, user, today) } : null;
@@ -153,7 +155,7 @@ exports.byOwner = (req, res) => {
   const farm = ownedBy(data, userId);
   const until = data.cooldowns[userId];
   return res.json({
-    farm: farm ? rules.view(rules.tick(clone(farm), today), today) : null,
+    farm: farm ? rules.view(current(farm, today), today) : null,
     cooldownUntil: until && until > today ? until : null,
     today,
   });
@@ -223,7 +225,7 @@ function farmFor(data, channelId, today, res) {
     res.json({ ok: false, reason: 'none', today });
     return null;
   }
-  return rules.tick(clone(stored), today);
+  return current(stored, today);
 }
 
 /**

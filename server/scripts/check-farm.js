@@ -840,6 +840,50 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   weather.pin(NEUTRAL);
 }
 
+// --- 5a: 주문
+{
+  const orders = require('../src/farm/orders');
+  const { CROP_BY_KEY, STAR_MULT } = require('../src/farm/crops');
+  weather.pin(null);
+  const b1 = orders.boardOf('2026-10-01');
+  eq('게시판 — 하루 셋 · 늘 같다', [b1.length, JSON.stringify(b1) === JSON.stringify(orders.boardOf('2026-10-01'))], [3, true]);
+  eq('게시판 — Lv1~3 · 4~6 · 7+ 한 건씩', b1.map((o) => orders.tierOf(CROP_BY_KEY[o.crop])), [0, 1, 2]);
+  eq('게시판 — 희귀 작물은 없다', b1.some((o) => CROP_BY_KEY[o.crop].seedOnly), false);
+  const o0 = b1[0]; const c0 = CROP_BY_KEY[o0.crop];
+  eq('기한 = 성장일 + 2', o0.due, rules.addDays('2026-10-01', c0.days + 2));
+  eq('보상 = 값 × 수량 × 품질 × 1.6', o0.gold, Math.ceil(c0.price * o0.qty * STAR_MULT[o0.minStar] * orders.BOARD_GOLD));
+  eq('게시판 경험치 = 급 + 5', b1.map((o) => o.xp), [10, 15, 20]);
+  const days = Array.from({ length: 200 }, (_, n) => rules.addDays('2026-09-21', n));
+  const all = days.flatMap(orders.boardOf);
+  eq('요구 품질은 ★ 이나 ★★', [...new Set(all.map((o) => o.minStar))].sort(), [1, 2]);
+  eq('주문 id 는 겹치지 않는다', new Set(all.map((o) => o.id)).size, all.length);
+  const act = orders.activeBoard('2026-10-01', {});
+  eq('오늘 게시판 — 여섯 건 · 기한 안', [act.length, act.every((o) => o.due >= '2026-10-01')], [6, true]);
+  eq('가져간 것은 빠진다', orders.activeBoard('2026-10-01', { [act[0].id]: { by: '1', channelId: '2', day: '2026-10-01' } }).some((o) => o.id === act[0].id), false);
+  eq('가져간 기록은 오래되면 지운다', Object.keys(orders.pruneTaken({ a: { day: '2026-09-01' }, b: { day: '2026-09-30' } }, '2026-10-01')), ['b']);
+
+  weather.pin(NEUTRAL);
+  const r1 = fresh();
+  rules.tick(r1, day(1));
+  eq('개인 의뢰 — 하루 한 건(등록한 날 · 오늘) · Lv 에 맞는 작물', [r1.requests.length, CROP_BY_KEY[r1.requests[0].crop].lv, r1.requests[0].kind, r1.requests[0].xp], [2, 1, 'mine', 5]);
+  const again = structuredClone(r1);
+  rules.tick(again, day(1));
+  eq('같은 날 다시 셈해도 같다', again.requests, r1.requests);
+  r1.xp = land.LEVEL_XP[9];
+  rules.tick(r1, day(1));
+  eq('같은 날 레벨이 올라도 오늘 의뢰는 그대로', r1.requests, again.requests);
+  rules.tick(r1, day(5));
+  eq('세 건까지 쌓인다', r1.requests.length, 3);
+  rules.tick(r1, day(30));
+  eq('기한이 지나면 지운다', [r1.requests.length <= 3, r1.requests.every((o) => o.due >= day(30)), r1.requests.some((o) => o.day === day(1))], [true, true, false]);
+
+  const o = { crop: 'carrot', qty: 5, minStar: 1 };
+  eq('낮은 ★ 부터 뺀다', orders.takeFor(o, { carrot: 9, carrotS1: 2, carrotS2: 2, carrotS3: 4 }).take, { carrotS1: 2, carrotS2: 2, carrotS3: 1 });
+  eq('보통 품질은 안 친다', orders.takeFor(o, { carrot: 9, carrotS1: 2 }), { take: null, have: 2 });
+  eq('★★ 주문엔 ★ 이 안 들어간다', orders.takeFor({ ...o, minStar: 2 }, { carrotS1: 9, carrotS2: 5 }).take, { carrotS2: 5 });
+  weather.pin(NEUTRAL);
+}
+
 // --- 1단계(MVP)에 연 농장 — 물 기록이 농장에 하루 하나였다
 {
   // 1단계 코드(7893ca5)의 newFarm → plant → water 가 저장한 모양 그대로
@@ -1124,6 +1168,34 @@ const server = app.listen(0, async () => {
     eq('농장 칭호 전적 — 레벨 · 도감 · 베기', [st2.farmLevel, st2.farmBookKinds >= 1, st2.farmChop, st2.farmScream >= 1], [10, true, 1, true]);
     eq('뽑기 API — 이상한 방식 400', (await post('/farms/clear', { channelId: CH2, userId: W2, plot: 2, cell: 4, uproot: 'all' })).status, 400);
     eq('뽑기 API — 주인만', (await post('/farms/clear', { channelId: CH2, userId: U, plot: 2, cell: 4, uproot: 'cell' })).body.reason, 'notOwner');
+
+    // --- 5a: 주문
+    {
+      weather.pin(null);
+      const bd = (await hit(`/farms/board?channel=${CH2}`)).body;
+      eq('게시판 라우트', [bd.board.length > 0, bd.board.length <= 6, Array.isArray(bd.mine), bd.mine.length >= 1], [true, true, true, true]);
+      eq('채널 없이도 게시판', Array.isArray((await hit('/farms/board')).body.board), true);
+      const bo = bd.board[0];
+      eq('주문 id 가 이상하면 400', (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: 'x' })).status, 400);
+      eq('주인만 납품', (await post('/farms/deliver', { channelId: CH2, userId: U, orderId: bo.id })).body.reason, 'notOwner');
+      const nf = (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: bo.id })).body;
+      eq('작물이 모자라면 noItem', [nf.reason, nf.need], ['noItem', bo.qty]);
+      const star = `${bo.crop}S${bo.minStar}`;
+      await post('/accounts/deltas', { items: { [W2]: { [star]: bo.qty + 1, [bo.crop]: 5 } } });
+      const g0 = (await acct(W2)).gold;
+      const dv = (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: bo.id })).body;
+      eq('게시판 납품 — 골드 · 작물 · 경험치', [dv.ok, dv.account.gold, dv.account.items[star], dv.account.items[bo.crop], dv.xp], [true, g0 + bo.gold, 1, 5, bo.xp]);
+      eq('먼저 가져간 농장이 임자', (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: bo.id })).body.reason, 'orderTaken');
+      eq('가져간 주문은 게시판에서 빠진다', (await hit('/farms/board')).body.board.some((o) => o.id === bo.id), false);
+      eq('가져간 기록이 저장됐다', readFile().board[bo.id].by, W2);
+      const mo = bd.mine[0];
+      await post('/accounts/deltas', { items: { [W2]: { [`${mo.crop}S3`]: mo.qty } } });
+      const dm = (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: mo.id })).body;
+      eq('개인 의뢰 납품 — 의뢰가 빠진다', [dm.ok, dm.farm.requests.some((o) => o.id === mo.id)], [true, false]);
+      eq('끝난 의뢰는 다시 못 한다', (await post('/farms/deliver', { channelId: CH2, userId: W2, orderId: mo.id })).body.reason, 'orderExpired');
+      eq('주문 전적', [(await acct(W2)).stats.farmOrders, (await acct(W2)).stats.farmBoard], [2, 1]);
+      weather.pin(NEUTRAL);
+    }
 
     // --- 1단계에 연 농장이 파일에 있을 때
     const d5 = readFile();

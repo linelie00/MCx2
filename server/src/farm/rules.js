@@ -51,6 +51,7 @@ const affinity = require('./affinity');
 const quality = require('./quality');
 const weather = require('./weather');
 const { EQUIP_BY_KEY, emptyEquip } = require('./equip');
+const orders = require('./orders');
 
 /** 밭 수, 한 밭의 칸 수. 둘 다 3×3 이고 키패드 배치다(1 2 3 / 4 5 6 / 7 8 9). */
 const PLOTS = 9;
@@ -290,6 +291,7 @@ function tick(farm, today) {
   for (let d = dayNum(farm.lastTickDay) + 1; d <= end; d += 1) {
     const key = keyOf(d);
     const sky = weather.weatherOf(key);
+    orders.ensureRequests(farm, key, levelOf(farm));  // 개인 의뢰(5a) — 못 들른 날에도 하루 한 건
     rainOn(farm, key);                               // 비 — 체력 없이 물을 준 날
     sprinkle(farm, key);                             // 스프링클러 — 그 주 처음 못 받은 날
     farm.plots.forEach((plot, pi) => {
@@ -347,6 +349,7 @@ function tick(farm, today) {
   }
   if (end > dayNum(farm.lastTickDay)) farm.lastTickDay = keyOf(end);
   rainOn(farm, today);                               // 오늘 비도 — wet=오늘 이라 몇 번 셈해도 같다
+  orders.ensureRequests(farm, today, levelOf(farm));   // 개인 의뢰(5a) — 오늘 것은 해시라 몇 번 셈해도 같다
   return farm;
 }
 
@@ -850,6 +853,7 @@ function view(farm, today) {
         : null,
     },
     equipCount: equipCount(farm),
+    requests: farm.requests ?? [],
     risk: riskOf(farm, today),
     plots: farm.plots.map((p) => {
       const crop = CROP_BY_KEY[p.crop] ?? null;

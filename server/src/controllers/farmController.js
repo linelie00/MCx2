@@ -36,6 +36,9 @@
  * **도감**(`book`, 3b)도 계정 기준 · 같은 파일이다. 수확이 농장을 쓸 때 같이 적는다.
  *
  * **설비**(4b)는 농장 문서에 적는다. 사는 것은 곡괭이와 같은 순서 — 계정(골드) 먼저, 농장 나중.
+ *
+ * **주문**(5a) 납품은 **농장 먼저**(주문 완료 · 경험치), 계정 나중(작물 빼기 · 골드) — 반대면 사이에
+ * 죽었을 때 같은 주문을 두 번 받는다. 게시판 경쟁은 읽기와 쓰기 사이에 `await` 이 없어 한쪽만 통과한다.
  */
 const farmStore = require('../services/farmStore');
 const accountStore = require('../services/accountStore');
@@ -47,6 +50,7 @@ const land = require('../farm/land');
 const affinity = require('../farm/affinity');
 const weather = require('../farm/weather');
 const { EQUIPS } = require('../farm/equip');
+const orders = require('../farm/orders');
 
 /** 디스코드 id(유저·채널·길드). NPC 는 농장을 안 가진다. */
 const SNOWFLAKE = /^\d{5,25}$/;
@@ -758,4 +762,86 @@ exports.equip = (req, res) => {
   data.farms[channelId] = farm;
   if (!save(farmStore, data, res, '농장')) return undefined;
   return res.json({ ...r, account: publicView(acct), farm: rules.view(farm, today), today });
+};
+
+// ---------------------------------------------------------------- 주문 (5a)
+
+/**
+ * GET /api/farms/board?channel= — 오늘 게시판(모든 농장이 같다)과, `channel` 을 주면 그 농장의 개인 의뢰.
+ */
+exports.board = (req, res) => {
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const today = dayKey();
+  const channel = String(req.query.channel ?? '');
+  let mine = null;
+  if (channel && SNOWFLAKE.test(channel) && data.farms[channel]) mine = current(data.farms[channel], today).requests ?? [];
+  return res.json({ board: orders.activeBoard(today, data.board), mine, today });
+};
+
+/**
+ * POST /api/farms/deliver — `{ channelId, userId, orderId }`. 주인만.
+ *
+ * 게시판 주문이면 아직 아무도 안 가져갔고 기한이 남아야 한다(`taken` · `expired`). 개인 의뢰면 그 농장의
+ * 의뢰여야 한다. 계정에서 요구 ★ 이상의 작물을 **낮은 ★ 부터** 뺀다(`noItem` — 가진 수 · 필요 수).
+ * 보상은 골드(새로 만든다) · 농장 경험치.
+ */
+exports.deliver = (req, res) => {
+  const got = ids(req.body, ['channelId', 'userId']);
+  if (typeof got === 'string') return res.status(400).json({ error: got });
+  const { channelId, userId } = got;
+  const orderId = String(req.body.orderId ?? '');
+  if (!/^[br]:[0-9:-]{10,60}$/.test(orderId)) return res.status(400).json({ error: '주문 id 모양이 아닙니다' });
+
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const acctData = readAccounts(res);
+  if (!acctData) return undefined;
+  const today = dayKey();
+
+  const farm = farmFor(data, channelId, today, res);
+  if (!farm) return undefined;
+  if (farm.owner !== userId) return res.json({ ok: false, reason: 'notOwner', owner: farm.owner, today });
+
+  let order;
+  if (orderId.startsWith('b:')) {
+    if (data.board[orderId]) return res.json({ ok: false, reason: 'orderTaken', by: data.board[orderId].by, today });
+    order = orders.activeBoard(today, data.board).find((o) => o.id === orderId)
+      ?? orders.boardOf(orderId.split(':')[1] ?? '').find((o) => o.id === orderId);
+    if (!order || order.due < today) return res.json({ ok: false, reason: 'orderExpired', today });
+  } else {
+    order = (farm.requests ?? []).find((o) => o.id === orderId);
+    if (!order) return res.json({ ok: false, reason: 'orderExpired', today });
+  }
+
+  const acct0 = load(acctData, userId, today);
+  const { take, have } = orders.takeFor(order, acct0.items);
+  if (!take) return res.json({ ok: false, reason: 'noItem', item: order.crop, minStar: order.minStar, have, need: order.qty, today });
+
+  // 농장 먼저 — 주문 완료 · 경험치
+  if (order.kind === 'board') {
+    data.board = orders.pruneTaken(data.board, today);
+    data.board[orderId] = { by: userId, channelId, day: today };
+  } else {
+    farm.requests = farm.requests.filter((o) => o.id !== orderId);
+  }
+  const levelUp = rules.gainXp(farm, order.xp, Math.random);
+  data.farms[channelId] = farm;
+  if (!save(farmStore, data, res, '농장')) return undefined;
+
+  const acct = touch(acctData, userId, today, (a) => {
+    for (const [k, n] of Object.entries(take)) {
+      a.items[k] -= n;
+      if (!a.items[k]) delete a.items[k];
+    }
+    a.gold += order.gold;
+    bump(a, 'farmOrders');
+    if (order.kind === 'board') bump(a, 'farmBoard');
+    farmMarks(a, farm, null);
+  });
+  if (!save(accountStore, acctData, res, '계정')) return undefined;
+
+  return res.json({
+    ok: true, order, took: take, levelUp, xp: order.xp, account: publicView(acct), farm: rules.view(farm, today), today,
+  });
 };

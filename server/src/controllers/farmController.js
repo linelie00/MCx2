@@ -4,22 +4,29 @@
  * 채널 하나가 농장 하나. 규칙은 전부 `farm/rules.js` 에 있고, 여기는 **읽고 · 규칙을 부르고 ·
  * 쓰는** 일만 한다. 설계는 docs/FARM.md.
  *
- * **"검사하고 쓰기" 를 서버가 한다.** 먼저 등록한 사람이 주인, 한 사람에 농장 하나, 물은 하루
- * 한 번 — 둘이 동시에 눌러도 노드가 단일 스레드라 한쪽만 통과한다. 그래서 읽기와 쓰기 사이에
+ * **"검사하고 쓰기" 를 서버가 한다.** 먼저 등록한 사람이 주인, 한 사람에 농장 하나, 물은 칸마다
+ * 하루 한 번 — 둘이 동시에 눌러도 노드가 단일 스레드라 한쪽만 통과한다. 그래서 읽기와 쓰기 사이에
  * `await` 을 넣지 않는다(accountStore 머리말과 같은 까닭).
  *
  * **두 파일에 걸친 쓰기.** 심기는 골드를, 수확은 아이템을 계정(accounts.json)에서 같이 옮긴다.
  * 파일이 둘이라 한 번에 못 쓰므로
  *   1. 두 파일을 **다 읽고**, 규칙과 잔액 검사를 **다 끝낸 다음** 쓴다. 거절은 쓰기 전에 난다
  *   2. 쓰는 순서는 **"잃을 수는 있어도 복제되지는 않게"**
- *        심기 — 계정(골드 빼기) 먼저, 농장 나중. 사이에 죽으면 씨앗값만 날아간다
- *        수확 — 농장(칸 비우기) 먼저, 계정 나중. 사이에 죽으면 그 수확만 날아간다
+ *        심기·물 — 계정(골드·체력 빼기) 먼저, 농장 나중. 사이에 죽으면 낸 것만 날아간다
+ *        수확·개간 — 농장(칸 비우기) 먼저, 계정 나중. 사이에 죽으면 그 수확·전리품만 날아간다
  *      반대로 두면 같은 칸을 두 번 거두거나 공짜로 심는 길이 생긴다.
  *
  * **못 한 것도 200 이다**(`ok: false, reason`). "이미 물을 줬다" · "주인이 따로 있다" 는 오류가
  * 아니라 답이다(`/claim` 과 같은 규약). 호출이 틀린 것(모양이 틀린 id·칸)만 400 이다.
  *
- * 조회는 셈만 하고 **쓰지 않는다.** 1단계의 셈에는 무작위가 없어 몇 번 셈해도 같다.
+ * 조회는 셈만 하고 **쓰지 않는다.** 하루치 셈의 무작위(잡초)는 해시 난수라 몇 번 셈해도 같다.
+ *
+ * **물은 체력으로 준다** — 한 포기에 1. 체력이 모자라면 줄 수 있는 만큼만 준다. 1은 남긴다 —
+ * 물을 주다가 쓰러지면(hp 0) 부활의 영약 없이는 아무것도 못 한다. 체력은 자원이라 심기와
+ * 같은 순서(계정 먼저)로 쓴다.
+ *
+ * **개간 기력은 계정 기준이다**(`daily`, farms.json). 농장 기준이면 폐농 무르기 → 재등록으로
+ * 돌을 새로 깔아 전리품을 되풀이해 캘 수 있다.
  */
 const farmStore = require('../services/farmStore');
 const accountStore = require('../services/accountStore');
@@ -27,6 +34,7 @@ const { load, publicView } = require('./accountController');
 const { dayKey } = require('../services/dayKey');
 const { CROPS, publicCrop } = require('../farm/crops');
 const rules = require('../farm/rules');
+const land = require('../farm/land');
 
 /** 디스코드 id(유저·채널·길드). NPC 는 농장을 안 가진다. */
 const SNOWFLAKE = /^\d{5,25}$/;
@@ -39,8 +47,25 @@ const ownedBy = (data, userId) => Object.values(data.farms).find((f) => f.owner 
 const BAD = {
   plot: '밭 번호는 0~8 이어야 합니다',
   cells: '칸은 0~8 의 겹치지 않는 번호 배열이어야 합니다',
+  cell: '칸 번호는 0~8 이어야 합니다',
+  pos: '휘두를 자리는 1~5 여야 합니다',
   crop: '모르는 작물입니다',
 };
+
+/** 물을 줘도 남겨 두는 체력. 0 이면 쓰러진다. */
+const KEEP_HP = 1;
+
+/** 오늘의 개간 기력 장부(계정 기준). 날이 바뀌었으면 새로 연다. */
+function dailyOf(data, userId, today) {
+  const d = data.daily[userId];
+  return d && d.day === today ? d : { day: today, used: 0, fossils: 0 };
+}
+
+/** 주인의 오늘 기력 `{ left, max }`. */
+function staminaFor(data, farm, userId, today) {
+  const max = land.staminaOf(rules.levelOf(farm));
+  return { left: Math.max(0, max - dailyOf(data, userId, today).used), max };
+}
 
 function readFarms(res) {
   try {
@@ -109,7 +134,12 @@ exports.get = (req, res) => {
 
   const today = dayKey();
   const farm = data.farms[channelId];
-  return res.json({ farm: farm ? rules.view(rules.tick(clone(farm), today), today) : null, today });
+  if (!farm) return res.json({ farm: null, today });
+  const f = rules.tick(clone(farm), today);
+  // `?user=` 가 주인이면 오늘 남은 개간 기력도 준다(개간 창이 적는다).
+  const user = String(req.query.user ?? '');
+  const me = user === f.owner ? { stamina: staminaFor(data, f, user, today) } : null;
+  return res.json({ farm: rules.view(f, today), me, today });
 };
 
 /** GET /api/farms/by-owner/:userId — 그 사람의 농장. 채널이 지워졌어도 찾는다. */
@@ -197,15 +227,17 @@ function farmFor(data, channelId, today, res) {
 }
 
 /**
- * POST /api/farms/water — `{ channelId, userId }`. **누구나** 줄 수 있다.
+ * POST /api/farms/water — `{ channelId, userId, plot? }`. **누구나** 줄 수 있다.
  *
- * 계정에는 전적만 남긴다(`farmWater`, 남의 농장이면 `farmHelp`). 전적은 잃어도 되는 것이라
- * 농장을 먼저 쓰고, 계정 쓰기가 실패해도 물은 준 것으로 둔다.
+ * 한 포기에 체력 1. 줄 수 있는 것은 `hp − 1` 포기까지다. 모자라면 급한 칸(시든 칸 → 목마른 칸)
+ * 부터 주고 나머지는 남긴다 — 다른 사람이 이어서 줄 수 있다.
+ * 계정에는 체력과 전적(`farmWater`, 남의 농장이면 `farmHelp`)이 같이 나간다.
  */
 exports.water = (req, res) => {
   const got = ids(req.body, ['channelId', 'userId']);
   if (typeof got === 'string') return res.status(400).json({ error: got });
   const { channelId, userId } = got;
+  const plot = req.body.plot ?? null;
 
   const data = readFarms(res);
   if (!data) return undefined;
@@ -215,23 +247,25 @@ exports.water = (req, res) => {
 
   const farm = farmFor(data, channelId, today, res);
   if (!farm) return undefined;
-  const r = rules.water(farm, today, userId);
-  if (!r.ok) return res.json({ ...r, farm: rules.view(farm, today), today });
+  const hp = load(acctData, userId, today).hp;
+  const r = rules.water(farm, today, userId, { budget: Math.max(0, hp - KEEP_HP), plot });
+  if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
+  if (!r.ok) return res.json({ ...r, hp, farm: rules.view(farm, today), today });
 
+  // 계정 먼저 — 체력은 자원이다(§ 머리말 2). 여기서 실패하면 물은 안 준 채로 끝난다.
+  const helper = userId !== farm.owner;
+  const acct = touch(acctData, userId, today, (a) => {
+    a.hp -= r.watered;
+    bump(a, 'farmWater');
+    if (helper) bump(a, 'farmHelp');
+  });
+  if (!save(accountStore, acctData, res, '계정')) return undefined;
   data.farms[channelId] = farm;
   if (!save(farmStore, data, res, '농장')) return undefined;
 
-  const helper = userId !== farm.owner;
-  touch(acctData, userId, today, (acct) => {
-    bump(acct, 'farmWater');
-    if (helper) bump(acct, 'farmHelp');
+  return res.json({
+    ...r, helper, hp: acct.hp, account: publicView(acct), farm: rules.view(farm, today), today,
   });
-  try {
-    accountStore.write(acctData);
-  } catch (e) {
-    console.error(`[농장] 물주기 전적을 못 썼습니다(물은 줬음): ${e.message}`);
-  }
-  return res.json({ ...r, helper, farm: rules.view(farm, today), today });
 };
 
 /**
@@ -307,4 +341,56 @@ exports.harvest = (req, res) => {
   if (!save(accountStore, acctData, res, '계정')) return undefined;
 
   return res.json({ ...r, account: publicView(acct), farm: rules.view(farm, today), today });
+};
+
+/**
+ * POST /api/farms/clear — `{ channelId, userId, plot, cell?, pos?, all? }`. 주인만.
+ *
+ * 돌은 기력 1, 바위는 휘두를 때마다 1, 잡초는 공짜(§9). 기력과 화석 상한은 **계정 기준**
+ * (`daily`) — 농장 파일에 같이 적으므로 한 번의 쓰기로 나간다. 전리품은 계정으로.
+ * 농장 먼저, 계정 나중(수확과 같은 순서) — 사이에 죽으면 그 전리품만 잃는다.
+ */
+exports.clear = (req, res) => {
+  const got = ids(req.body, ['channelId', 'userId']);
+  if (typeof got === 'string') return res.status(400).json({ error: got });
+  const { channelId, userId } = got;
+  const { plot, cell = null, pos = null, all = false } = req.body;
+
+  const data = readFarms(res);
+  if (!data) return undefined;
+  const acctData = readAccounts(res);
+  if (!acctData) return undefined;
+  const today = dayKey();
+
+  const farm = farmFor(data, channelId, today, res);
+  if (!farm) return undefined;
+  if (farm.owner !== userId) return res.json({ ok: false, reason: 'notOwner', owner: farm.owner, today });
+
+  const daily = dailyOf(data, userId, today);
+  const stamina = staminaFor(data, farm, userId, today);
+  const r = rules.clear(farm, today, { plot, cell, pos, all: all === true }, {
+    stamina: stamina.left, fossilLeft: land.FOSSIL_PER_DAY - daily.fossils,
+  });
+  if (r.bad) return res.status(400).json({ error: BAD[r.reason] });
+  if (!r.ok) return res.json({ ...r, stamina, farm: rules.view(farm, today), today });
+
+  data.daily[userId] = { ...daily, used: daily.used + r.used, fossils: daily.fossils + r.fossils };
+  data.farms[channelId] = farm;
+  if (!save(farmStore, data, res, '농장')) return undefined;
+
+  const cleared = r.cleared ?? 0;
+  const acct = touch(acctData, userId, today, (a) => {
+    for (const [key, n] of Object.entries(r.loot)) a.items[key] = (a.items[key] ?? 0) + n;
+    if (cleared || r.broke) bump(a, 'farmClear', cleared + (r.broke ? 1 : 0));
+    if (r.perfect) bump(a, 'farmPerfect');
+  });
+  if (!save(accountStore, acctData, res, '계정')) return undefined;
+
+  return res.json({
+    ...r,
+    stamina: staminaFor(data, farm, userId, today),
+    account: publicView(acct),
+    farm: rules.view(farm, today),
+    today,
+  });
 };

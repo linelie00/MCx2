@@ -21,5 +21,6 @@ router.post('/abandon', requireBot, express.json(), ctrl.abandon);
 router.post('/water', requireBot, express.json(), ctrl.water);
 router.post('/plant', requireBot, express.json(), ctrl.plant);
 router.post('/harvest', requireBot, express.json(), ctrl.harvest);
+router.post('/clear', requireBot, express.json(), ctrl.clear);
 
 module.exports = router;

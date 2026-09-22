@@ -1,7 +1,10 @@
 /**
  * farmStore — farms.json 읽기/쓰기
  *
- * 채널 농장. shape: { farms: { "<channelId>": farm }, cooldowns: { "<userId>": "YYYY-MM-DD" } }
+ * 채널 농장. shape:
+ *   { farms: { "<channelId>": farm },
+ *     cooldowns: { "<userId>": "YYYY-MM-DD" },            폐농 뒤 다시 열 수 있는 날
+ *     daily: { "<userId>": { day, used, fossils } } }     오늘 쓴 개간 기력 · 나온 화석(계정 기준)
  * farm 의 모양은 `farm/rules.js` 머리말에 있다.
  *
  * `accountStore` 와 **같은 규약**이다. 이 파일도 유일본이기 때문이다(시드가 없다).
@@ -23,13 +26,13 @@ const TMP = `${FILE}.tmp`;
 
 function read() {
   // 파일이 없는 것은 손상이 아니다 — 아직 아무도 등록 안 한 것뿐이다.
-  if (!fs.existsSync(FILE)) return { farms: {}, cooldowns: {} };
+  if (!fs.existsSync(FILE)) return { farms: {}, cooldowns: {}, daily: {} };
 
   const data = JSON.parse(fs.readFileSync(FILE, 'utf-8'));
   if (!data || typeof data.farms !== 'object' || data.farms === null) {
     throw new Error('farms.json 의 모양이 아닙니다 (farms 객체가 없음)');
   }
-  return { farms: data.farms, cooldowns: data.cooldowns ?? {} };
+  return { farms: data.farms, cooldowns: data.cooldowns ?? {}, daily: data.daily ?? {} };
 }
 
 function write(data) {

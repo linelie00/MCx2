@@ -326,12 +326,12 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('격자 — 나무와 그늘', grid(v1, crops).split('\n')[5].split(' │ ')[1], '🍃🌱🍃');
   eq('밭 줄 — 사과나무', plotLines(v1, crops).includes('🍎 사과나무'), true);
   weather.pin({ weather: 'clear', inSeason: false });
-  f.plots[4].cells[4] = { ...f.plots[4].cells[4], regrows: 1, g: 7 };
+  f.plots[4].cells[4] = { ...f.plots[4].cells[4], regrows: 1, g: 8 };
   const v2 = rules.view(f, D);
   eq('밭 줄 — 쉬는 나무', plotLines(v2, crops).includes('💤 쉬는 중 — 가을·겨울에 다시 열려요'), true);
   eq('쉬는 나무는 🪵', cellEmoji(v2.plots[4].cells[4], crops, 'redApple'), '🪵');
   weather.pin({ weather: 'clear', inSeason: true });
-  f.plots[4].cells[4].g = 8;
+  f.plots[4].cells[4].g = 9;
   eq('자라는 나무는 🌳', cellEmoji(rules.view(f, D).plots[4].cells[4], crops, 'redApple'), '🌳');
 
   const cl = clearPayload({ ch: CH, plot: 4, owner: OWNER, farm: rules.view(f, D), stamina: { left: 5, max: 5 }, crops }).components.map((r) => r.toJSON());
@@ -347,7 +347,7 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('뽑기 창 customId 100자 안 · 안 겹침', [ub.every((c) => c.custom_id.length <= 100), new Set(ub.map((c) => c.custom_id)).size], [true, 3]);
   eq('뽑기 문구', [swingNote({ kind: 'uproot', tree: true, crop: 'redApple', removed: 1, freed: true }, crops), swingNote({ kind: 'uproot', crop: 'carrot', removed: 2, freed: false }, crops)],
     ['🪓 **사과나무** 를 베었어요 — 밭이 비었어요', '🌱 **당근** 2포기를 뽑았어요']);
-  eq('봇이 옮겨 적은 나무 칸 · 열매 수', [rules.TREE_CELL, `${require('../../server/src/farm/crops.js').TREE_YIELD[0][0]}~${require('../../server/src/farm/crops.js').TREE_YIELD[4][1]}개`], [4, '3~9개']);
+  eq('봇이 옮겨 적은 나무 칸 · 열매 수', [rules.TREE_CELL, `${require('../../server/src/farm/crops.js').TREE_YIELD[0][0]}~${require('../../server/src/farm/crops.js').TREE_YIELD[4][1]}개`], [4, '18~48개']);
   weather.pin(null);
 }
 

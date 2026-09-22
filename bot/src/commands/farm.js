@@ -60,7 +60,7 @@ const GRAIN_SPOTS = 5;
 const CELL_COUNT = 9;
 const TREE_CELL = 4;
 /** 나무 한 번의 열매 수(서버 `TREE_YIELD` 의 ★1 최소 ~ ★5 최대 — 화면에 적는 용도). */
-const TREE_FRUITS = '3~9개';
+const TREE_FRUITS = '18~48개';
 /** 개간 창에서 누르면 뽑기로 가는 칸 상태(4c). */
 const UPROOTABLE = ['seed', 'grow', 'dry', 'ripe', 'over', 'dead', 'dormant', 'canopy'];
 

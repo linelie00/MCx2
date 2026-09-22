@@ -885,9 +885,12 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('과수 · 희귀는 안 나온다', rq.some((o) => o.parts.some((x) => CROP_BY_KEY[x.crop].tree || CROP_BY_KEY[x.crop].seedOnly)), false);
   eq('기한 — 적어도 그 주 일요일', rq.every((o) => o.due >= rules.addDays(o.day, 6)), true);
   eq('경험치 = 10 + 가짓수 × 5', rq.every((o) => o.xp === 10 + 5 * o.parts.length), true);
-  eq('가끔 ★★', new Set(rq.map((o) => o.minStar)).size, 2);
-  const lowR = orders.requestOf('111111', MON, 1);
-  eq('레벨에 맞는 작물', lowR.parts.every((x) => CROP_BY_KEY[x.crop].lv <= 1), true);
+  eq('Lv10 — 세 종 · 가끔 ★★', [rq.every((o) => o.parts.length === 3), new Set(rq.map((o) => o.minStar)).size], [true, 2]);
+  const low = days.map((d) => orders.requestOf('111111', d, 2)).filter(Boolean);
+  eq('Lv1~3 — 두 종 · ★★ 없음 · 레벨에 맞는 작물', [low.every((o) => o.parts.length === 2), low.every((o) => o.minStar === 1), low.every((o) => o.parts.every((x) => CROP_BY_KEY[x.crop].lv <= 2))], [true, true, true]);
+  const mid = days.map((d) => orders.requestOf('111111', d, 5)).filter(Boolean);
+  eq('Lv4~6 — 두세 종 · 가끔 ★★', [new Set(mid.map((o) => o.parts.length)).size, mid.some((o) => o.minStar === 2)], [2, true]);
+  eq('Lv1~3 수량은 ×1.5', low.every((o) => o.parts.every((x) => x.qty <= 9)), true);
 
   weather.pin(NEUTRAL);
   const r1 = rules.newFarm({ channelId: '111111', guildId: '222222', owner: '333333', today: MON, now: `${MON}T00:00:00.000Z` });

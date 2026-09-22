@@ -8,8 +8,9 @@
  *             (`farms.json` 의 `board: { [id]: { by, channelId, day } }`)
  *             작물은 지금 제철 — 계절 마지막 주(8~14일째)에는 절반이 **다음 계절 예약 주문**이다.
  *             예약 주문의 기한은 다음 계절 첫날부터 센다 — 계절이 바뀌자마자 심으면 맞출 수 있다
- *   ✉️ 개인 의뢰  **주 1회(월요일)**, 농장마다 한 건. 지금 제철 작물 **2~3종을 한꺼번에**, 수량도 많다
- *             (가끔 ★★). 크고 어려운 대신 보상이 크다. 농장 레벨에서 심을 수 있는 작물로 만들고
+ *   ✉️ 개인 의뢰  **주 1회(월요일)**, 농장마다 한 건. 지금 제철 작물 **여러 종을 한꺼번에**, 수량도 많다.
+ *             레벨이 오를수록 어렵다(`REQUEST_TIERS` — Lv1~3 두 종 · ×1.5 · ★★ 없음 … Lv7+ 세 종 · ×2 · ★★ 40%).
+ *             크고 어려운 대신 보상이 크다. 농장 레벨에서 심을 수 있는 작물로 만들고
  *             농장 문서(`farm.requests`)에 **그날 처음 셀 때 고정**한다
  *
  * 주문의 모양 `{ id, kind, parts: [{ crop, qty }], minStar, gold, xp, day, due, reserve?, seed }`.
@@ -38,10 +39,19 @@ const weekdayOf = (key) => (((dayNum(key) - MONDAY) % 7) + 7) % 7;
 const BOARD_DAYS = [0, 3];
 const BOARD_PER_POST = 3;
 const BOARD_SHOWN = 6;
-/** 개인 의뢰가 오는 요일(월) · 쌓이는 한도 · 한 의뢰의 작물 가짓수. */
+/** 개인 의뢰가 오는 요일(월) · 쌓이는 한도. */
 const REQUEST_DAYS = [0];
 const REQUEST_MAX = 2;
-const REQUEST_KINDS = [2, 3];
+/**
+ * 개인 의뢰의 난이도 — 농장 레벨에 따라. 가짓수 · 수량 배수 · ★★ 를 요구할 확률.
+ * Lv1~3 은 밭이 한둘이고 토질 ★1 이라 ★★ 가 안 나온다(★1 토질 ★★ 0%) — 거기에 맞춘다.
+ */
+const REQUEST_TIERS = [
+  { upTo: 3, kinds: [2], mult: 1.5, twoStar: 0 },
+  { upTo: 6, kinds: [2, 3], mult: 2, twoStar: 0.2 },
+  { upTo: 10, kinds: [3], mult: 2, twoStar: 0.4 },
+];
+const requestTier = (level) => REQUEST_TIERS.find((t) => level <= t.upTo) ?? REQUEST_TIERS.at(-1);
 /** 되돌아볼 날수 — 예약 주문(일주일 전에 올라와 다음 계절 + 성장일까지)을 덮는다. */
 const LOOKBACK = 30;
 /** 기한 = (심을 수 있는 날) + 성장일 + 이만큼. */
@@ -63,9 +73,8 @@ const REQUEST_DAY_GOLD = 12;
 const BOARD_XP = [10, 15, 20];
 const REQUEST_XP = 10;
 const REQUEST_XP_PER_KIND = 5;
-/** ★★ 를 요구할 확률. */
+/** 게시판이 ★★ 를 요구할 확률. */
 const BOARD_TWO_STAR = 0.25;
-const REQUEST_TWO_STAR = 0.3;
 
 /** 작물 급 — 0 · 1 · 2. */
 const tierOf = (crop) => (crop.lv <= 3 ? 0 : crop.lv <= 6 ? 1 : 2);
@@ -139,7 +148,7 @@ function activeBoard(today, taken = {}) {
   return out.slice(0, BOARD_SHOWN);
 }
 
-/** 그 농장의 그날 개인 의뢰 — 월요일에만. 지금 제철인 작물 2~3종(심을 수 있는 것). */
+/** 그 농장의 그날 개인 의뢰 — 월요일에만. 지금 제철인 작물(심을 수 있는 것)로, 레벨에 따라 2~3종. */
 function requestOf(channelId, day, level) {
   if (!REQUEST_DAYS.includes(weekdayOf(day))) return null;
   const id = `r:${channelId}:${day}`;
@@ -148,11 +157,12 @@ function requestOf(channelId, day, level) {
   const pool = CROPS.filter((c) => !c.seedOnly && !c.tree && c.lv <= level);
   const now = pool.filter((c) => weather.inSeason(c, day));
   const from = [...(now.length >= 2 ? now : pool)];
-  const kinds = Math.min(from.length, REQUEST_KINDS[Math.floor(rand() * REQUEST_KINDS.length)]);
+  const tier = requestTier(level);
+  const kinds = Math.min(from.length, tier.kinds[Math.floor(rand() * tier.kinds.length)]);
   const chosen = [];
   for (let k = 0; k < kinds; k += 1) chosen.push(...from.splice(Math.floor(rand() * from.length), 1));
-  const minStar = rand() < REQUEST_TWO_STAR ? 2 : 1;
-  const parts = chosen.map((c) => ({ crop: c.key, qty: qtyOf(c, rand, 2) }));
+  const minStar = rand() < tier.twoStar ? 2 : 1;
+  const parts = chosen.map((c) => ({ crop: c.key, qty: qtyOf(c, rand, tier.mult) }));
   const gold = parts.reduce((a, p) => {
     const c = CROP[p.crop];
     return a + Math.ceil(c.price * p.qty * STAR_MULT[minStar] * REQUEST_GOLD) + c.days * REQUEST_DAY_GOLD;
@@ -216,7 +226,7 @@ function pruneTaken(taken, today) {
 }
 
 module.exports = {
-  BOARD_DAYS, BOARD_PER_POST, BOARD_SHOWN, REQUEST_DAYS, REQUEST_MAX, REQUEST_KINDS, LOOKBACK, DUE_EXTRA, RESERVE_FROM,
+  BOARD_DAYS, BOARD_PER_POST, BOARD_SHOWN, REQUEST_DAYS, REQUEST_MAX, REQUEST_TIERS, requestTier, LOOKBACK, DUE_EXTRA, RESERVE_FROM,
   BOARD_GOLD, REQUEST_GOLD, BOARD_DAY_GOLD, REQUEST_DAY_GOLD, BOARD_XP, REQUEST_XP, REQUEST_XP_PER_KIND,
   weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor, pruneTaken,
 };

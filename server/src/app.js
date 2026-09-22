@@ -10,6 +10,7 @@ const guestbookRoutes = require('./routes/guestbook');
 const playlistRoutes = require('./routes/playlist');
 const movieRoutes = require('./routes/movie');
 const accountRoutes = require('./routes/accounts');
+const farmRoutes = require('./routes/farms');
 
 const app = express();
 
@@ -39,6 +40,8 @@ app.use('/api/playlist', playlistRoutes);
 app.use('/api/movie', movieRoutes);
 // 카지노 계정(골드·칭호·아이템) — 디스코드 봇 전용
 app.use('/api/accounts', accountRoutes);
+// 채널 농장 — 디스코드 봇 전용 (docs/FARM.md)
+app.use('/api/farms', farmRoutes);
 
 app.get('/', (req, res) => res.send('MIHEARTI API'));
 

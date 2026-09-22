@@ -659,6 +659,9 @@ exports.fishTry = (req, res) => {
   return res.json({ ok: true, left: FISH_TRIES - acct.fishedCount, tries: FISH_TRIES, today });
 };
 
+// 농장(farmController)이 심기·수확에서 계정을 같이 고친다. 읽는 길을 하나로 두려고 내보낸다.
+module.exports.load = load;
+module.exports.publicView = publicView;
 module.exports.FISH_TRIES = FISH_TRIES;
 module.exports.START_GOLD = START_GOLD;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;

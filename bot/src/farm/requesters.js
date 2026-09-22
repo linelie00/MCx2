@@ -8,6 +8,7 @@
  *   likes  이 작물이면 먼저 나선다(헨젤 — 사과). 좋아하는 작물 주문의 절반은 그 사람이 넣는다
  *   lines  한마디. `({ crop, qty, obj })` 를 받는다 — `obj` 는 목적격 조사까지 붙은 작물 이름
  *   liked  좋아하는 작물일 때의 한마디
+ *   basket 작물이 여럿인 주문(개인 의뢰)의 한마디. `({ list })` — `당근 12개, 감자 8개`
  */
 
 /** 받침이 있으면 앞, 없으면 뒤 — `을/를` · `이/가`. 한글이 아니면 뒤. */
@@ -26,6 +27,10 @@ export const REQUESTERS = [
       ({ crop, qty }) => `가게에 ${crop} ${qty}개만 부탁해. 손님들이 자꾸 찾더라고.`,
       ({ obj, qty }) => `오늘 안주로 ${obj} 좀 쓰려고. ${qty}개면 충분해.`,
     ],
+    basket: [
+      ({ list }) => `이번 주 가게 장부야. ${list}. 한 번에 가져오면 한 잔 살게.`,
+      ({ list }) => `축제 준비가 만만치 않네. ${list}만 채워 줄래?`,
+    ],
   },
   {
     key: 'matiam',
@@ -34,6 +39,10 @@ export const REQUESTERS = [
     lines: [
       ({ crop, qty }) => `이번 주 스튜에 쓸 윤나는 ${crop} ${qty}개만….`,
       ({ obj, qty }) => `모험단 저녁에 ${obj} 넣고 싶어. ${qty}개, 되도록 좋은 걸로.`,
+    ],
+    basket: [
+      ({ list }) => `한 주 치 식단을 짜 봤어. ${list}… 부탁해도 될까.`,
+      ({ list }) => `옷감 물들일 재료도 겸해서. ${list}. 좋은 걸로만.`,
     ],
   },
   {
@@ -45,6 +54,10 @@ export const REQUESTERS = [
       ({ obj, qty }) => `단장이 ${obj} ${qty}개 주문한다! 최고로 좋은 것만 가져와라!`,
       ({ crop, qty }) => `원정 식량이다. ${crop} ${qty}개, 기한 안에 반드시 준비한다!`,
       ({ crop, qty }) => `${crop} ${qty}개면 모험단이 사흘은 버틴다! 맡긴다!`,
+    ],
+    basket: [
+      ({ list }) => `대원정이다! ${list}! 하나라도 빠지면 출발 못 한다!`,
+      ({ list }) => `단장 직속 보급 명령이다. ${list}. 이번 주 안에 끝낸다!`,
     ],
   },
   {
@@ -62,6 +75,10 @@ export const REQUESTERS = [
       ({ crop, qty }) => `흥, 또 너야? ${crop} ${qty}개. 빨리 가져와.`,
       ({ crop, qty }) => `${crop} ${qty}개. 사과가 아니라서 기분은 별로지만.`,
     ],
+    basket: [
+      ({ list }) => `큰 솥에 뭘 좀 끓일 거야. ${list}. 하나라도 모자라면 너부터 넣는다.`,
+      ({ list }) => `${list}. 적어 준 대로. 토 달지 마.`,
+    ],
   },
   {
     key: 'seiya',
@@ -72,6 +89,10 @@ export const REQUESTERS = [
       ({ crop, qty }) => `저, 저기… 혹시 ${crop} ${qty}개 구할 수 있을까요…? 다음 마을에 가져가려고요….`,
       ({ obj, qty }) => `실례지만… ${obj} ${qty}개만 사고 싶어요. 값은 제대로 쳐 드릴게요…!`,
       ({ crop, qty }) => `${crop} ${qty}개면… 수레가 덜 허전할 것 같아요. 부탁드려도 될까요…?`,
+    ],
+    basket: [
+      ({ list }) => `저, 다음 장터가 커서요… ${list}… 너무 많죠? 죄송해요…!`,
+      ({ list }) => `혹시… 정말 혹시 되시면요… ${list}. 값은 꼭 제대로 드릴게요….`,
     ],
   },
   {
@@ -84,6 +105,10 @@ export const REQUESTERS = [
       ({ crop, qty }) => `${crop} ${qty}개면 동네 아이들 간식을 넉넉히 굽겠네요. 부탁드려요.`,
       ({ obj, qty }) => `새 빵을 궁리 중이에요. ${obj} ${qty}개만 나눠 주실래요?`,
     ],
+    basket: [
+      ({ list }) => `마을 잔치 빵을 맡았어요. ${list}가 필요한데… 도와주시겠어요?`,
+      ({ list }) => `이번 주 새 메뉴 재료예요. ${list}. 첫 빵은 꼭 드릴게요!`,
+    ],
   },
   {
     key: 'tezat',
@@ -95,6 +120,10 @@ export const REQUESTERS = [
       ({ obj, qty }) => `이 몸이 ${obj} ${qty}개 원한다! …아, 아니 그러니까 좀 팔아 주면 안 될까요?`,
       ({ crop, qty }) => `${crop} ${qty}개. 값은 두둑이… 아니 적당히… 아무튼 제발요.`,
     ],
+    basket: [
+      ({ list }) => `크흠, 큰 건이다. ${list}. …이거 다 못 구하면 나 진짜 곤란해요.`,
+      ({ list }) => `도적단 비상식량! ${list}! …두목한테 혼나기 전에 제발.`,
+    ],
   },
   {
     key: 'anonHum',
@@ -104,6 +133,9 @@ export const REQUESTERS = [
     lines: [
       ({ crop, qty }) => `${crop} ${qty}개 구함. 사례함.`,
       ({ crop, qty }) => `급함. ${crop} ${qty}개.`,
+    ],
+    basket: [
+      ({ list }) => `${list}. 한꺼번에. 사례 큼.`,
     ],
   },
   {
@@ -115,6 +147,9 @@ export const REQUESTERS = [
       ({ obj, qty }) => `숲의 잔치에 쓸 ${obj} ${qty}개 구합니다. 이름은 묻지 말아 주세요.`,
       ({ crop, qty }) => `달이 차기 전에 ${crop} ${qty}개가 필요합니다.`,
     ],
+    basket: [
+      ({ list }) => `숲의 계절 제사에 올릴 것들입니다. ${list}. 부디.`,
+    ],
   },
   {
     key: 'anonDwarf',
@@ -125,6 +160,9 @@ export const REQUESTERS = [
       ({ crop, qty }) => `${crop} ${qty}개! 맥주 안주로 쓸 거다. 누군지는 알 거 없고.`,
       ({ crop, qty }) => `광산에 내려가기 전에 ${crop} ${qty}개. 두말 않는다.`,
     ],
+    basket: [
+      ({ list }) => `갱도 한 달 치 식량이다. ${list}. 두말 않는다.`,
+    ],
   },
 ];
 
@@ -134,18 +172,25 @@ export const REQUESTER_BY_KEY = Object.fromEntries(REQUESTERS.map((r) => [r.key,
 const part = (seed, k) => Math.floor(seed / (k || 1)) % 1000;
 
 /**
- * 주문 하나의 의뢰인과 한마디 `{ who, line }`. 좋아하는 작물이면 절반은 그 사람이 나선다.
- * `cropName` 은 화면에 적을 작물 이름(사과 → "새빨간 사과").
+ * 주문 하나의 의뢰인과 한마디 `{ who, line }`. 좋아하는 작물이 들어 있으면 절반은 그 사람이 나선다.
+ * `nameOf(키)` 는 화면에 적을 작물 이름(사과 → "새빨간 사과"). 작물이 여럿이면 `basket` 한마디.
  */
-export function voiceOf(order, cropName) {
+export function voiceOf(order, nameOf) {
   const seed = Number(order.seed) || 0;
-  const fans = REQUESTERS.filter((r) => r.likes?.includes(order.crop));
+  const keys = order.parts.map((p) => p.crop);
+  const fans = REQUESTERS.filter((r) => r.likes?.some((k) => keys.includes(k)));
   const who = fans.length && part(seed, 1) % 2 === 0
     ? fans[part(seed, 7) % fans.length]
     : REQUESTERS[part(seed, 13) % REQUESTERS.length];
-  const lines = who.likes?.includes(order.crop) && who.liked ? who.liked : who.lines;
-  const say = lines[part(seed, 101) % lines.length];
-  return { who, line: say({ crop: cropName, qty: order.qty, obj: josa(cropName, ['을', '를']) }) };
+  const pickLine = (lines) => lines[part(seed, 101) % lines.length];
+  if (order.parts.length > 1) {
+    const list = order.parts.map((p) => `${nameOf(p.crop)} ${p.qty}개`).join(', ');
+    return { who, line: pickLine(who.basket)({ list }) };
+  }
+  const [{ crop, qty }] = order.parts;
+  const name = nameOf(crop);
+  const lines = who.likes?.includes(crop) && who.liked ? who.liked : who.lines;
+  return { who, line: pickLine(lines)({ crop: name, qty, obj: josa(name, ['을', '를']) }) };
 }
 
 export default { REQUESTERS, REQUESTER_BY_KEY, voiceOf, josa };

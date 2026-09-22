@@ -866,21 +866,28 @@ const orderOfToken = (t) => t.replaceAll('~', ':');
 /** 며칠 남았나 — 오늘 마감이면 0. */
 const daysLeft = (due, today) => Math.round((Date.parse(`${due}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
 
-/** 주문을 채울 수 있는 가진 수 — 요구 ★ 이상 전부. */
-const haveFor = (o, items) => [1, 2, 3].filter((s) => s >= o.minStar).reduce((a, s) => a + (items?.[`${o.crop}S${s}`] ?? 0), 0);
+/** 그 작물을 요구 ★ 이상으로 가진 수. */
+const haveOf = (crop, minStar, items) => [1, 2, 3].filter((s) => s >= minStar).reduce((a, s) => a + (items?.[`${crop}S${s}`] ?? 0), 0);
+/** 주문을 다 채울 수 있나 — 작물마다. */
+const canFill = (o, items) => o.parts.every((p) => haveOf(p.crop, o.minStar, items) >= p.qty);
 
-/** 주문 두 줄 — 의뢰인의 한마디, 그리고 작물 · 기한 · 보상 · 가진 것. */
+/**
+ * 주문 줄 — 의뢰인의 한마디, 작물마다 가진 것, 기한 · 보상. 예약 주문(`reserve`)은 그 계절이 오면 심으라고 적는다.
+ */
 function orderLines(o, n, { crops, items, today }) {
-  const name = itemName(crops, o.crop);
-  const { who, line } = voiceOf(o, name);
+  const { who, line } = voiceOf(o, (k) => itemName(crops, k));
   const left = daysLeft(o.due, today);
-  const have = haveFor(o, items);
-  const ready = have >= o.qty;
-  return [
+  const need = o.parts.map((p) => {
+    const have = haveOf(p.crop, o.minStar, items);
+    return `${have >= p.qty ? '✅' : '▫️'}${cropEmoji(crops, p.crop)} ${itemName(crops, p.crop)} ${num(Math.min(have, p.qty))}/${p.qty}`;
+  }).join(' · ');
+  const out = [
     `**${n}.** ${who.emoji} **${who.name}**${who.title ? ` _(${who.title})_` : ''} — 「${line}」`,
-    `　└ ${cropEmoji(crops, o.crop)} ${name} **${STARS[o.minStar]} 이상 ${o.qty}개** · ⏳ ${left ? `${left}일 남음` : '오늘까지'} · 🪙 ${num(o.gold)} · ✨ +${o.xp}`
-      + ` · ${ready ? '✅' : '❌'} 가진 것 ${num(have)}/${o.qty}`,
+    `　└ **${STARS[o.minStar]} 이상** ${need}`,
+    `　└ ⏳ ${left ? `${left}일 남음` : '오늘까지'} · 🪙 ${num(o.gold)} · ✨ +${o.xp}`,
   ];
+  if (o.reserve) out.push(`　└ 🗓️ _${SEASON_NAME[o.reserve]} 예약 주문 — ${SEASON_NAME[o.reserve]}이 오면 심으세요_`);
+  return out;
 }
 
 /**
@@ -891,10 +898,10 @@ function ordersPayload({
   owner, board, mine, crops, items, today, note,
 }) {
   const all = [...board, ...mine];
-  const lines = ['**📜 마을 게시판** — 먼저 채운 농장이 가져가요'];
+  const lines = ['**📜 마을 게시판** — 월·목에 올라와요 · 먼저 채운 농장이 가져가요'];
   if (!board.length) lines.push('_지금은 올라온 주문이 없어요._');
   board.forEach((o, i) => lines.push(...orderLines(o, i + 1, { crops, items, today })));
-  lines.push('', '**✉️ 내 의뢰** — 우리 농장에만 온 것 · 하루 한 건, 세 건까지');
+  lines.push('', '**✉️ 내 의뢰** — 우리 농장에만 온 큰 의뢰 · 월요일마다 한 건');
   if (!mine.length) lines.push('_와 있는 의뢰가 없어요._');
   mine.forEach((o, i) => lines.push(...orderLines(o, board.length + i + 1, { crops, items, today })));
   if (note) lines.push('', note);
@@ -904,7 +911,7 @@ function ordersPayload({
     .setLabel(`${i + 1}번 납품`)
     .setEmoji(o.kind === 'board' ? '📜' : '✉️')
     .setStyle(ButtonStyle.Success)
-    .setDisabled(haveFor(o, items) < o.qty));
+    .setDisabled(!canFill(o, items)));
   const rows = [];
   for (let k = 0; k < buttons.length && rows.length < 4; k += 5) rows.push(new ActionRowBuilder().addComponents(buttons.slice(k, k + 5)));
   rows.push(new ActionRowBuilder().addComponents(
@@ -947,12 +954,12 @@ async function orderButton(interaction, act, [token, owner]) {
   if (!r.ok) return openOrders(interaction, { owner, note: `⚠️ ${why(r, crops)}` });
 
   forgetBag(owner);
-  const name = itemName(crops, r.order.crop);
-  const { who } = voiceOf(r.order, name);
+  const { who } = voiceOf(r.order, (k) => itemName(crops, k));
+  const what = r.order.parts.map((p) => `${itemName(crops, p.crop)} ${p.qty}개`).join(' · ');
   await openOrders(interaction, { owner, note: `🧺 ${who.name}의 주문을 채웠어요 — 🪙 **+${num(r.order.gold)}** · ✨ +${r.xp} · 가진 골드 **${num(r.account?.gold)}**` });
   // 채널에 공개로 — 게시판 주문은 다른 농장도 노리던 것이다
   await interaction.followUp({
-    content: `🧺 <@${owner}> 님이 ${who.emoji} **${who.name}**의 ${r.order.kind === 'board' ? '게시판 주문' : '의뢰'}(${name} ${r.order.qty}개)을 채웠어요 · 🪙 ${num(r.order.gold)}`,
+    content: `🧺 <@${owner}> 님이 ${who.emoji} **${who.name}**의 ${r.order.kind === 'board' ? '게시판 주문' : '의뢰'}(${what})을 채웠어요 · 🪙 ${num(r.order.gold)}`,
     allowedMentions: QUIET,
   });
   return announceLevel(interaction, r.levelUp, crops);

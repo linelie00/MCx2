@@ -57,7 +57,7 @@ export function sprinklerLine(farm) {
 /** 개인 의뢰가 있으면 한 줄(5a). */
 export function ordersLine(farm) {
   const n = farm.requests?.length ?? 0;
-  return n ? `📜 _의뢰 ${n}건이 와 있어요 — \`/농장 주문\`_` : null;
+  return n ? `✉️ _큰 의뢰 ${n}건이 와 있어요 — \`/농장 주문\`_` : null;
 }
 
 /** 밭에 놓인 설비 표시(4b) — `⛺`(덮개) · `🎋`(지지대). */

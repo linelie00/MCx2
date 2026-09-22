@@ -151,7 +151,7 @@ export const ITEMS = [
 
   // ---- 낚시로 올라오는 것들(`/요트 낚시`). 길이와 뽑기 가중치는 casino/fish.js 가 따로 안다.
   { key: 'chipFish',        name: '칩붕어',                   kind: '재료', cat: 'meat',  price:   25, sell: true,  heal: 5,          desc: '비늘이 칩처럼 동그랗고 납작하다. bard 에서 흘러간 것이 여기까지 왔다.' },
-  { key: 'glassMinnow',     name: '유리 송사리',              kind: '재료', cat: 'meat',  price:    2, sell: true,  heal: 1,          desc: '물에 넣으면 어디 갔는지 못 찾는다.' },
+  { key: 'glassMinnow',     name: '바늘 송사리',              kind: '재료', cat: 'meat',  price:    2, sell: true,  heal: 1,          desc: '몸이 바늘처럼 가늘다. 낚싯바늘과 헷갈릴 때가 있다.' },
   { key: 'stoneSucker',     name: '돌붙이',                   kind: '재료', cat: 'meat',  price:    4, sell: true,  heal: 3,          desc: '돌에 붙어 산다. 떼어 내면 돌이 따라온다.' },
   { key: 'bigEyeCarp',      name: '왕눈 잉어',                kind: '재료', cat: 'meat',  price:   12, sell: true,  heal: 10,         desc: '눈이 몸의 절반이다. 무엇을 그렇게 보고 있나.' },
   { key: 'moonSweetfish',   name: '달빛 은어',                kind: '재료', cat: 'meat',  price:   18, sell: true,  heal: 15,         desc: '밤에만 은빛이 돈다. 낮에는 그냥 물고기다.' },
@@ -187,7 +187,7 @@ export const ITEMS = [
   { key: 'wingScallop',     name: '날개 가리비',             kind: '재료', cat: 'meat',  price:   20, sell: true,  heal:   15, desc: '껍데기를 퍼덕여 도망간다. 잡으려면 쫓아가야 한다.' },
   { key: 'eyeClam',         name: '눈 조개',                 kind: '재료', cat: 'meat',  price:   26, sell: true,  heal:    0, monster: true, desc: '속에 진주가 아니라 눈이 들었다. 이쪽을 보고 있다.' },
   { key: 'twoHeadSnake',    name: '두 머리 물뱀',            kind: '재료', cat: 'meat',  price:   28, sell: true,  heal:  -15, desc: '머리 둘이 서로 다른 데로 가고 싶어 한다.' },
-  { key: 'glassShrimp',     name: '유리 새우',               kind: '재료', cat: 'meat',  price:    5, sell: true,  heal:    5, desc: '속이 다 보인다. 방금 무엇을 먹었는지까지.' },
+  { key: 'glassShrimp',     name: '도둑 새우',               kind: '재료', cat: 'meat',  price:    5, sell: true,  heal:    5, desc: '미끼를 훔치는 데 들켰다. 표정이 뻔뻔하다.' },
   { key: 'hornSeahorse',    name: '뿔 해마',                 kind: '재료', cat: 'meat',  price:   35, sell: true,  heal:    5, desc: '손바닥만 한 용. 본인은 아주 진심이다.' },
   { key: 'starUrchin',      name: '별빛 성게',               kind: '재료', cat: 'meat',  price:   18, sell: true,  heal:   20, desc: '가시 끝마다 파랗게 빛난다. 밟으면 사흘은 절뚝인다.' },
   { key: 'boneCoral',       name: '뼈 산호',                 kind: '재료', cat: 'meat',  price:   22, sell: true,  heal:  -10, monster: true, desc: '가지가 손가락처럼 갈라진다. 쥐면 마주 쥔다.' },

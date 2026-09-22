@@ -21,7 +21,7 @@ export const REQUESTERS = [
   {
     key: 'migel',
     name: '미겔',
-    emoji: '🍺',
+    emoji: '🎸',
     lines: [
       ({ crop, qty }) => `가게에 ${crop} ${qty}개만 부탁해. 손님들이 자꾸 찾더라고.`,
       ({ obj, qty }) => `오늘 안주로 ${obj} 좀 쓰려고. ${qty}개면 충분해.`,
@@ -30,7 +30,7 @@ export const REQUESTERS = [
   {
     key: 'matiam',
     name: '마티암',
-    emoji: '🍲',
+    emoji: '🪡',
     lines: [
       ({ crop, qty }) => `이번 주 스튜에 쓸 윤나는 ${crop} ${qty}개만….`,
       ({ obj, qty }) => `모험단 저녁에 ${obj} 넣고 싶어. ${qty}개, 되도록 좋은 걸로.`,

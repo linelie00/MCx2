@@ -483,7 +483,8 @@ eq('체력 부족과 기력 부족은 다른 말', why({ reason: 'tired', hp: 1 
 
 // ---------------------------------------------------------------- 6. 옮겨 적은 수
 
-const src = await import('node:fs').then((fs) => fs.readFileSync(new URL('../src/commands/farm.js', import.meta.url), 'utf-8'));
+// 화면에 적으려고 옮겨 적은 수는 창들이 같이 쓰는 `farm/ui/shared.js` 에 있다
+const src = await import('node:fs').then((fs) => fs.readFileSync(new URL('../src/farm/ui/shared.js', import.meta.url), 'utf-8'));
 const num = (re) => Number(src.match(re)?.[1]);
 eq('거름 한도·토질이 서버와 같다', [
   num(/fertilizer: \{[^}]*soil: (\d+)/), num(/fertilizer: \{[^}]*perDay: (\d+)/),

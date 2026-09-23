@@ -25,7 +25,7 @@ import { createRequire } from 'node:module';
 import { ITEM_BY_KEY } from '../src/casino/items.js';
 import { grid, plotLines, cellEmoji, levelLine, nextLine, modsBadge, skyLine, seasonsText, waterLine, riskLine, sprinklerLine, farmEmbed } from '../src/farm/render.js';
 import {
-  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, ordersPayload, waterNote, swingNote, harvestNote, harvestLine, why,
+  plantPayload, clearPayload, boulderPayload, uprootPayload, fertPayload, toolsPayload, bookPayload, weatherPayload, equipPayload, ordersPayload, compostPayload, waterNote, swingNote, harvestNote, harvestLine, why,
   cellsOf, maskOf, unlocked, modsLines, PLANT_PAGE,
 } from '../src/commands/farm.js';
 import { flatShare } from '../src/casino/crafts.js';
@@ -456,6 +456,17 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('이미 뿌린 밭엔 다시 못 뿌린다', fp(boosted, { goldFertilizer: 1 }).disabled, true);
   eq('밭 줄에 ✨', plotLines(boosted, crops).includes('✨'), true);
   eq('사유 — 황금 비료', [why({ reason: 'noCrop' }, crops).includes('자라는 작물'), why({ reason: 'goldFertCap' }, crops).includes('하나')], [true, true]);
+
+  // 퇴비 창 — 가진 작물만
+  const cItems = { carrot: 12, potato: 7, tomato: 3, compost: 4 };
+  const cp = compostPayload({ owner: OWNER, items: cItems, crops, crop: 'carrot' });
+  const crows = limits('퇴비 창', cp);
+  const cSel = crows[0].components[0];
+  eq('가진 작물만 · 다섯 개 넘는 것만 · 싼 것부터', cSel.options.map((o) => o.value), ['carrot', 'potato']);
+  eq('고른 작물 표시 · 만들 수 있는 수', [cSel.options.find((o) => o.value === 'carrot').default, crows[1].components[1].label], [true, '2개 다 만들기']);
+  eq('고르기 전엔 만들기가 잠긴다', compostPayload({ owner: OWNER, items: cItems, crops }).components[1].toJSON().components.map((c) => Boolean(c.disabled)), [true, true, false]);
+  const cEmpty = compostPayload({ owner: OWNER, items: { carrot: 2 }, crops });
+  eq('만들 게 없으면 셀렉트도 없다', [cEmpty.components.length, cEmpty.embeds[0].toJSON().description.includes('더 거둬 오세요')], [1, true]);
 
   eq('사유 — 늦음 · 끝남', [why({ reason: 'orderTaken', by: '1' }, crops).startsWith('한발 늦었어요'), why({ reason: 'orderExpired' }, crops).startsWith('기한이')], [true, true]);
   eq('noItem 에 ★', why({ reason: 'noItem', item: 'carrot', minStar: 1, have: 2, need: 5 }, crops), '**당근 ★ 이상** 이(가) 모자라요 — 가진 것 2 / 필요 5.');

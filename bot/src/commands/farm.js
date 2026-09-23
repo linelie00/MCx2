@@ -690,9 +690,9 @@ function fertPayload({
   for (const [key, f] of Object.entries(FERTS)) {
     lines.push(`${f.emoji} **${f.name}** +${f.soil} · 오늘 ${used[key] ?? 0} / ${f.perDay} · 가진 것 **${num(items?.[key])}**`);
   }
-  lines.push(`✨ **황금 비료** 품질 +15 · 가진 것 **${num(items?.goldFertilizer)}**${p.goldBoost ? ' · _이 밭엔 이미 뿌렸어요_' : ''}`);
+  lines.push(`✨ **황금 비료** 다음 수확 품질 +15 · 가진 것 **${num(items?.goldFertilizer)}**${p.goldBoost ? ' · _이 밭엔 이미 뿌렸어요_' : ''}`);
   lines.push('', `_비료는 상점 🌾 농사 진열대에서, 퇴비는 \`/농장 퇴비\` 로 작물 ${COMPOST_CROPS}개에 하나씩 만들어요._`);
-  lines.push('_✨ 황금 비료는 마을 주문 보상으로만 얻어요 — 그 밭 작물이 다 끝날 때까지 품질이 올라요._');
+  lines.push('_✨ 황금 비료는 마을 주문 보상으로만 얻어요 — **다음 수확 한 번**의 품질이 올라요._');
   if (note) lines.push('', note);
 
   const button = (key, all = false) => {
@@ -1619,7 +1619,7 @@ async function fertButton(interaction, act, [ch, plotS, owner]) {
   forgetBag(owner);
   if (item === 'goldFertilizer') {
     return interaction.editReply(fertPayload({
-      ch, plot, owner, farm: r.farm, items: r.account?.items, note: `✨ 황금 비료를 뿌렸어요 — 이 밭 **${cropName(crops, r.crop)}** 의 품질 **+${r.gold}** (밭이 빌 때까지)`,
+      ch, plot, owner, farm: r.farm, items: r.account?.items, note: `✨ 황금 비료를 뿌렸어요 — 이 밭 **${cropName(crops, r.crop)}** 의 품질 **+${r.quality}** (다음 수확 한 번)`,
     }));
   }
   const f = FERTS[item];

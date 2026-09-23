@@ -441,7 +441,15 @@ eq('요리 가짓수 — 다른 작물은 두 가지', flatShare(['carrot', 'pot
   eq('의뢰인마다 감사 한마디', REQUESTERS.filter((r) => !r.thanks?.length).map((r) => r.key), []);
   eq('같은 주문엔 같은 감사', [thanksOf(board[0], REQUESTERS[0]) === thanksOf(board[0], REQUESTERS[0]), thanksOf(board[0], {}) === THANKS_DEFAULT], [true, true]);
 
-  const fp = (farmView, items) => fertPayload({ ch: CH, plot: 4, owner: OWNER, farm: farmView, items }).components[0].toJSON().components.find((c) => c.custom_id.startsWith('farm:fg:'));
+  const fpAll = (farmView, items) => fertPayload({ ch: CH, plot: 4, owner: OWNER, farm: farmView, items });
+  const fp = (farmView, items) => fpAll(farmView, items).components.flatMap((r) => r.toJSON().components).find((c) => c.custom_id.startsWith('farm:fg:'));
+  // 밭이 여럿이면 버튼이 여섯 — 줄을 나눠야 디스코드 한도(줄마다 다섯)를 안 넘는다
+  const twoPlots = rules.view((() => {
+    const f2 = rules.newFarm({ channelId: CH, guildId: '1', owner: OWNER, today: D, now: `${D}T00:00:00.000Z` });
+    f2.xp = land.LEVEL_XP[2];
+    return rules.upgrade(f2);
+  })(), D);
+  limits('거름 창(밭 여럿)', fertPayload({ ch: CH, plot: 4, owner: OWNER, farm: twoPlots, items: { fertilizer: 1, compost: 3, goldFertilizer: 1 } }));
   const gfarm = rules.view(farm, D);
   eq('황금 비료 버튼 — 작물이 있고 가진 게 있어야', [fp(gfarm, {}).disabled, fp(gfarm, { goldFertilizer: 1 }).disabled], [true, false]);
   const boosted = { ...gfarm, plots: gfarm.plots.map((pp, i) => (i === 4 ? { ...pp, goldBoost: true } : pp)) };

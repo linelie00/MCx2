@@ -704,11 +704,13 @@ function fertPayload({
       .setLabel(all ? `${f.name} ${n}개 넣기` : `${f.name} 넣기`).setEmoji(f.emoji)
       .setStyle(ButtonStyle.Success).setDisabled(!room || !(items?.[key] > 0));
   };
+  // 줄마다 버튼 다섯까지 — 거름 넷과 조작을 따로 둔다(5b 에서 황금 비료가 늘며 여섯이 됐다)
   const row = [button('fertilizer'), button('compost'), button('compost', true),
     new ButtonBuilder().setCustomId(id('fg')).setLabel('황금 비료').setEmoji('✨').setStyle(ButtonStyle.Primary)
       .setDisabled(!(items?.goldFertilizer > 0) || !p.crop || p.goldBoost)];
-  if (openPlots(farm).length > 1) row.push(new ButtonBuilder().setCustomId(id('fn')).setLabel('다른 밭').setStyle(ButtonStyle.Secondary));
-  row.push(new ButtonBuilder().setCustomId(id('fx')).setLabel('닫기').setStyle(ButtonStyle.Secondary));
+  const tail = [];
+  if (openPlots(farm).length > 1) tail.push(new ButtonBuilder().setCustomId(id('fn')).setLabel('다른 밭').setStyle(ButtonStyle.Secondary));
+  tail.push(new ButtonBuilder().setCustomId(id('fx')).setLabel('닫기').setStyle(ButtonStyle.Secondary));
 
   return {
     embeds: [base({
@@ -717,7 +719,7 @@ function fertPayload({
       color: FARM_COLOR,
       footer: '토질이 오르면 물 한 번에 더 자라고, 한 칸에서 더 많이 나와요',
     })],
-    components: [new ActionRowBuilder().addComponents(row)],
+    components: [new ActionRowBuilder().addComponents(row), new ActionRowBuilder().addComponents(tail)],
     allowedMentions: QUIET,
   };
 }

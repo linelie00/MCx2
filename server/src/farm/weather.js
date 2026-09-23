@@ -27,7 +27,6 @@ const SEASONS = [
   { key: 'autumn', name: '가을', emoji: '🍂' },
   { key: 'winter', name: '겨울', emoji: '❄️' },
 ];
-const SEASON_BY_KEY = Object.fromEntries(SEASONS.map((s) => [s.key, s]));
 /** 한 계절의 날수. */
 const SEASON_DAYS = 14;
 /** 이날이 가을 1일째. */
@@ -155,7 +154,7 @@ function forecast(key) {
 }
 
 module.exports = {
-  SEASONS, SEASON_BY_KEY, SEASON_DAYS, WEATHERS, TABLE,
+  SEASONS, SEASON_DAYS, WEATHERS, TABLE,
   OFF_SEASON_GROWTH, IN_SEASON_QUALITY, OFF_SEASON_QUALITY, STORM_FALL, DOWNPOUR_ROOT_QUALITY, RAINBOW_QUALITY,
   seasonOf, weekOf, allSeasons, inSeason, weatherOf, hpCost, growthOf, qualityOf, forecast, pin,
 };

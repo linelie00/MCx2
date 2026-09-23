@@ -130,10 +130,14 @@ function makePlot(rand, { first = false } = {}) {
   const kinds = [...Array(rocks).fill('rock'), ...Array(boulders).fill('boulder')];
   while (kinds.length < CELLS) kinds.push('soil');
   shuffle(kinds, rand);
+  // `history` · `streak` 까지 채운다 — 레벨이 올라 열리는 밭도 `upgrade` 를 다시 돌리지 않고
+  // 바로 지금 모양이어야 한다(3a 의 윤작 기록).
   return {
     open: true,
     crop: null,
     soilXp: 0,
+    history: [],
+    streak: 0,
     cells: kinds.map((k) => {
       if (k === 'rock') return rock();
       if (k === 'boulder') return boulder(rand);

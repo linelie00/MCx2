@@ -71,6 +71,7 @@ eq('레벨표는 오르기만 한다', land.LEVEL_XP.every((x, i) => !i || x > l
 eq('간판', [1, 3, 6, 9, 10].map(land.signOf), ['🛖', '🏠', '🏡', '🏯', '🏰']);
 eq('기력 Lv1 5 · Lv3 6', [land.staminaOf(1), land.staminaOf(3)], [5, 6]);
 eq('밭이 열리는 순서는 아홉 칸 전부', [...land.PLOT_ORDER].sort(), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+eq('새로 여는 밭도 지금 모양 — 윤작 기록까지', Object.keys(land.makePlot(Math.random)).sort(), ['cells', 'crop', 'history', 'open', 'soilXp', 'streak']);
 
 {
   const p = land.makePlot(Math.random, { first: true });
@@ -830,6 +831,9 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   rules.plant(u1, D0, { plot: P, cells: [0, 1, 2], crop: 'carrot' });
   eq('뽑기 — 작물이 아니면 notPlant', rules.clear(u1, D0, { plot: P, cell: 5, uproot: 'cell' }).reason, 'notPlant');
   eq('뽑기 — 이상한 방식은 bad', rules.clear(u1, D0, { plot: P, cell: 0, uproot: 'x' }).bad, true);
+  eq('뽑기가 돌 모두 치우기보다 먼저', rules.clear(structuredClone(u1), D0, {
+    plot: P, cell: 0, all: true, uproot: 'cell',
+  }, { stamina: 5 }).kind, 'uproot');
   const r1 = rules.clear(u1, D0, { plot: P, cell: 0, uproot: 'cell' });
   eq('뽑기 — 한 칸 · 기력 안 듦 · 작물은 남는다', [r1.ok, r1.removed, r1.used, r1.freed, u1.plots[P].crop, u1.plots[P].cells[0].t], [true, 1, 0, false, 'carrot', 'soil']);
   const r2 = rules.clear(u1, D0, { plot: P, cell: 1, uproot: 'plot' });
@@ -886,10 +890,13 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('가져가면 바로 빠진다', orders.activeBoard(S1, tk).some((o) => o.id === slow.id), false);
   const k = orders.tierOf(CROP_BY_KEY[slow.parts[0].crop]);
   eq('빈 칸은 다음 월·목에 채워진다', orders.activeBoard(S3, tk).find((o) => orders.tierOf(CROP_BY_KEY[o.parts[0].crop]) === k)?.day, S3);
-  eq('가져간 기록은 지우지 않는다', Object.keys(orders.pruneTaken({ a: { day: '2026-08-01' }, b: { day: '2026-09-30' } })), ['a', 'b']);
 
   // 개인 의뢰 — 주 1회, 여러 작물
   const rq = days.map((d) => orders.requestOf('111111', d, 10)).filter(Boolean);
+  eq('의뢰 id 에 레벨이 들어간다 — 레벨이 다르면 다른 주문', (() => {
+    const a3 = orders.requestOf('111111', MON, 3); const a7 = orders.requestOf('111111', MON, 7);
+    return [a3.id !== a7.id, a3.id.endsWith(':3'), a7.id.endsWith(':7')];
+  })(), [true, true, true]);
   eq('개인 의뢰는 월요일에만', [rq.length, rq.every((o) => orders.weekdayOf(o.day) === 0)], [32, true]);
   eq('작물 2~3종 · 겹치지 않는다 · 지금 제철', rq.every((o) => o.parts.length >= 2 && o.parts.length <= 3
     && new Set(o.parts.map((x) => x.crop)).size === o.parts.length
@@ -950,7 +957,7 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   eq('작물이 없으면 못 넣는다', rules.fertilize(f1, D0, { plot: P, item: 'goldFertilizer' }).reason, 'noCrop');
   rules.plant(f1, D0, { plot: P, cells: [0, 1], crop: 'carrot' });
   const g1 = rules.fertilize(f1, D0, { plot: P, item: 'goldFertilizer' });
-  eq('황금 비료 — 품질 +15 · 토질은 그대로', [g1.ok, g1.gold, f1.plots[P].soilXp, f1.plots[P].goldBoost], [true, 15, 0, true]);
+  eq('황금 비료 — 품질 +15 · 토질은 그대로', [g1.ok, g1.quality, f1.plots[P].soilXp, f1.plots[P].goldBoost], [true, 15, 0, true]);
   eq('밭 하나에 하나', rules.fertilize(f1, D0, { plot: P, item: 'goldFertilizer' }).reason, 'goldFertCap');
   eq('보기에 표시', rules.view(f1, D0).plots[P].goldBoost, true);
   // 품질 — 같은 무작위로 굴려 ★ 가 더 잘 나온다
@@ -962,6 +969,12 @@ eq('윤년', rules.addDays('2028-02-28', 1), '2028-02-29');
   const plain = structuredClone(f1);
   delete plain.plots[P].goldBoost;
   eq('황금 비료를 넣으면 품질이 오른다', stars(f1).findLastIndex((n) => n > 0) > stars(plain).findLastIndex((n) => n > 0), true);
+  // 한 번 거두면 사라진다 — 재수확 밭에서 영영 남지 않게(점검에서 나온 것)
+  const re = structuredClone(f1);
+  re.plots[P].crop = 'strawberry';
+  re.plots[P].cells = re.plots[P].cells.map((c) => (c.t === 'plant' ? { ...c, g: 99, ripeDay: D0 } : c));
+  rules.harvest(re, D0, { plot: P }, { rand: ZERO });
+  eq('한 번 거두면 황금 비료는 사라진다(재수확 밭도)', [re.plots[P].crop, re.plots[P].goldBoost], ['strawberry', undefined]);
   rules.harvest(f1, D0, { plot: P }, { rand: ZERO });
   const f2 = structuredClone(f1);
   f2.plots[P].cells = f2.plots[P].cells.map(() => ({ t: 'soil' }));

@@ -43,7 +43,7 @@
  *   거둘 때 토질 ★ 에 따라 `TREE_YIELD` 개. 키가 커서 이웃에 그늘을 주지만(`tall`) 폭풍엔 안 쓰러진다.
  *   다년생이라 윤작·연작을 따지지 않는다. `treeName` 은 화면용 이름(사과 아이템 이름이 "새빨간 사과"다).
  *
- * 인삼(6단계) · 황금 밀(5단계)은 그 규칙이 들어오는 단계에서 넣는다.
+ * 인삼은 품평회(6단계)와 함께 넣는다. 황금 밀은 5b 에 들어왔다(주문 보상 전용).
  */
 const CROPS = [
   // ---- Lv1
@@ -186,5 +186,5 @@ const publicCrop = (c) => ({
 });
 
 module.exports = {
-  CROPS, CROP_BY_KEY, guaranteed, seedPrice, gradeOf, YIELD, TREE_YIELD, SAPLING_MULT, publicCrop, STAR_MULT, starKey, giantKey, GIANT_MULT,
+  CROPS, CROP_BY_KEY, guaranteed, seedPrice, gradeOf, YIELD, TREE_YIELD, publicCrop, STAR_MULT, starKey, giantKey, GIANT_MULT,
 };

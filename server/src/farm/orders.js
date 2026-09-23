@@ -27,8 +27,6 @@ const { CROPS, STAR_MULT } = require('./crops');
 const { hashRand, between } = require('./land');
 const weather = require('./weather');
 
-/** 그날이 몇째 주인가 — MT 주간 상한(5b)이 쓴다. `weather.weekOf` 와 같은 기준(월요일). */
-
 const DAY_MS = 24 * 60 * 60 * 1000;
 const dayNum = (key) => {
   const [y, m, d] = String(key).split('-').map(Number);
@@ -123,12 +121,20 @@ function nextSeasonStart(day) {
   return keyOf(dayNum(day) + weather.SEASON_DAYS - s.day + 1);
 }
 
-/** 그날 게시판에 올라온 주문 — 월·목만 세 건(Lv1~3 · 4~6 · 7+ 한 건씩), 다른 날은 없다. */
+/**
+ * 그날 게시판에 올라온 주문 — 월·목만 세 건(Lv1~3 · 4~6 · 7+ 한 건씩), 다른 날은 없다.
+ *
+ * **날마다 한 번만 만들고 기억해 둔다.** `activeBoard` 가 `BOARD_START` 부터 하루씩 훑으므로
+ * 해가 갈수록 같은 날을 몇 번이고 다시 만들게 된다(3년이면 한 번에 38ms).
+ */
+const postCache = new Map();
 function boardOf(day) {
   if (!BOARD_DAYS.includes(weekdayOf(day))) return [];
+  const hit = postCache.get(day);
+  if (hit) return hit;
   const late = weather.seasonOf(day).day >= RESERVE_FROM;
   const next = nextSeasonStart(day);
-  return [0, 1, 2].slice(0, BOARD_PER_POST).map((k) => {
+  const out = [0, 1, 2].slice(0, BOARD_PER_POST).map((k) => {
     const id = `b:${day}:${k}`;
     let n = 0;
     const rand = () => hashRand('board', id, n++);
@@ -156,6 +162,9 @@ function boardOf(day) {
       seed: seedOf(id),
     };
   });
+  if (postCache.size > 4000) postCache.clear();
+  postCache.set(day, out);
+  return out;
 }
 
 /**
@@ -178,10 +187,16 @@ function activeBoard(today, taken = {}) {
   return slots.filter((o) => o && !taken[o.id] && dayNum(o.due) >= t);
 }
 
-/** 그 농장의 그날 개인 의뢰 — 월요일에만. 지금 제철인 작물(심을 수 있는 것)로, 레벨에 따라 2~3종. */
+/**
+ * 그 농장의 그날 개인 의뢰 — 월요일에만. 지금 제철인 작물(심을 수 있는 것)로, 레벨에 따라 2~3종.
+ *
+ * **id 에 레벨을 넣는다.** 내용(작물 풀 · 난이도 · 덤)이 레벨을 타므로, id 가 (채널, 날짜)뿐이면
+ * 같은 id 가 레벨마다 다른 주문이 된다 — 밀린 월요일을 몰아 셀 때와 레벨표를 낮춘 배포 직후에
+ * 창에 그려 둔 것과 서버가 보는 것이 어긋난다.
+ */
 function requestOf(channelId, day, level) {
   if (!REQUEST_DAYS.includes(weekdayOf(day))) return null;
-  const id = `r:${channelId}:${day}`;
+  const id = `r:${channelId}:${day}:${level}`;
   let n = 0;
   const rand = () => hashRand('request', id, n++);
   const pool = CROPS.filter((c) => !c.seedOnly && c.lv <= level);
@@ -250,6 +265,7 @@ function ensureRequests(farm, today, level) {
  * 하나라도 모자라면 `take: null`. `have` 는 작물마다 가진 수 `{ 작물: n }`.
  */
 function takeFor(order, items = {}) {
+  if (!order.parts?.length) return { take: null, have: {} };      // 빈 주문은 공짜가 아니다
   const take = {};
   const have = {};
   let short = false;
@@ -266,14 +282,8 @@ function takeFor(order, items = {}) {
   return { take: short ? null : take, have };
 }
 
-/**
- * 가져간 기록 — **지우지 않는다.** 게시판 칸을 처음부터 다시 셈하므로, 지우면 그 칸에 지난 주문이 되살아난다.
- * 주에 여섯 건쯤이라 1년에 300줄 남짓이다.
- */
-const pruneTaken = (taken) => ({ ...(taken ?? {}) });
-
 module.exports = {
   BOARD_DAYS, BOARD_PER_POST, BOARD_START, REQUEST_DAYS, REQUEST_DUE_MIN, REQUEST_DUE_MAX, SLOW_DAYS, isSlow, SLOW_QTY, TREE_QTY, REQUEST_TIERS, requestTier, DUE_EXTRA, RESERVE_FROM,
   BOARD_GOLD, REQUEST_GOLD, BOARD_DAY_GOLD, REQUEST_DAY_GOLD, BOARD_XP, REQUEST_XP, REQUEST_XP_PER_KIND,
-  SEED_CHANCE, SEED_CROP, GOLD_FERT_CHANCE, weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor, pruneTaken,
+  SEED_CHANCE, SEED_CROP, GOLD_FERT_CHANCE, weekdayOf, tierOf, nextSeasonStart, boardOf, activeBoard, requestOf, ensureRequests, takeFor,
 };

@@ -568,6 +568,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
     // 비명(3c) — 밭을 한 번 거둘 때마다 한 번. 귀마개·체력은 컨트롤러가 계정에서 셈한다.
     if (here && crop.scream) screams += 1;
     if (here) {
+      delete p.goldBoost;        // ✨ 황금 비료는 **한 번 거둘 때까지**(5b) — 재수확 밭에서 영영 남지 않게
       const base = here + (crop.family === 'legume' ? land.LEGUME_SOIL : 0);
       p.soilXp += Math.round(base * (mods?.soil ?? 1));
       if (!crop.regrow) p.streak = (p.streak ?? 0) + here;
@@ -608,6 +609,7 @@ function harvest(farm, today, { plot = null } = {}, { rand = Math.random } = {})
  * `tool` 은 곡괭이(`land.PICKAXES`). 철부터는 빗나간 힌트에 거리(`dist`)가 붙는다.
  *
  * **뽑기**(4c) `{ plot, cell, uproot: 'cell' | 'plot' }` — 작물을 거두지 않고 없앤다. 기력은 안 든다.
+ * `all`(돌 모두 치우기)보다 먼저 본다 — 둘 다 오면 뽑기다.
  * `cell` 은 그 칸만, `plot` 은 그 밭의 작물 칸 전부(죽은 칸 포함). 나무는 어느 쪽이든 **밭 전체**다.
  * 씨앗값은 돌려주지 않고, 퇴비 조각도 없다(싼 씨앗을 뽑아 퇴비를 찍어 내지 못하게).
  * 윤작 기록(`history`)에도 안 적는다 — 거둔 것이 아니다.
@@ -649,7 +651,7 @@ function clear(farm, today, {
     };
   };
 
-  if (all) {
+  if (uproot === null && all) {
     const rocks = p.cells.map((c, i) => (c.t === 'rock' ? i : -1)).filter((i) => i >= 0);
     if (!rocks.length) return { ok: false, reason: 'noRocks' };
     if (stamina < 1) return { ok: false, reason: 'tired' };
@@ -733,7 +735,7 @@ function fertilize(farm, today, { plot, item, count = 1 }) {
     if (p0.goldBoost) return { ok: false, reason: 'goldFertCap' };
     p0.goldBoost = true;
     return {
-      ok: true, item, used: 1, gold: land.GOLD_FERT_QUALITY, crop: p0.crop,
+      ok: true, item, used: 1, quality: land.GOLD_FERT_QUALITY, crop: p0.crop,
     };
   }
   const f = land.FERTS[item];
@@ -897,7 +899,8 @@ function view(farm, today) {
         growing: growing.length,
         need: dry.length,
         thirsty: dry.filter((cell) => cell.thirst === witherAt(crop) - 1).length,
-        left: crop && growing.length
+        // 오늘 아예 안 자라는 작물(월광초의 흐린 날)은 나눗셈이 Infinity 다 — 모르는 것은 null 로 준다
+        left: crop && growing.length && rate > 0
           ? Math.min(...growing.map((cell) => Math.max(0, Math.ceil(round((crop.days - cell.g) / rate)))))
           : null,
         swings,

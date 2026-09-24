@@ -68,15 +68,22 @@ const makeServer = (gold, hp) => {
   };
 };
 
-/** 한 핸드를 끝까지 아무 수나 두고 정산한다. */
-function playHand(game) {
+/** 아무 수나. `[수, 레이즈 총액]`. */
+const anyMove = (game) => {
+  const action = pick([...hold.actionsFor(game)]);
+  const raises = hold.raisesFor(game);
+  return [action, action === 'raise' && raises.length ? pick(raises).to : 0];
+};
+
+/** 체크 아니면 콜 — 아무도 먼저 걸지 않는다. 핸드마다 BB 만큼만 오가서 오래 산다. */
+const passiveMove = (game) => [hold.actionsFor(game).has('check') ? 'check' : 'call', 0];
+
+/** 한 핸드를 끝까지 두고 정산한다. 기본은 아무 수나. */
+function playHand(game, move = anyMove) {
   let guard = 0;
   while (!['showdown', 'settled', 'done'].includes(game.phase)) {
-    const legal = [...hold.actionsFor(game)];
-    if (!legal.length) break;
-    const action = pick(legal);
-    const raises = hold.raisesFor(game);
-    hold.act(game, action, action === 'raise' && raises.length ? pick(raises).to : 0);
+    if (!hold.actionsFor(game).size) break;
+    hold.act(game, ...move(game));
     guard += 1;
     if (guard > 400) throw new Error('베팅이 안 끝난다');
   }
@@ -603,9 +610,14 @@ check('탈락 순서가 인원과 맞는다', () => {
 check('블라인드가 오른다 — 칩 양에 묶여서', () => {
   // 6핸드마다 한 칸. 단 다음 칸에서 남은 사람 평균이 15BB 밑이면 멈추고 15핸드마다만 한 칸
   // (state.stepTourney). 칸이 바뀔 때마다 그 규칙을 지켰는지 본다.
-  let sawPause = false;
+  //
+  // 절반은 아무 수나, 절반은 체크·콜만 둔다. 아무 수나 두면 올인이 잦아 몇 핸드 만에 끝나는
+  // 판이 많아서, 마흔 판을 다 돌아도 바닥에 한 번도 안 닿을 때가 있었다(아홉 번에 한 번꼴로
+  // 이 검사가 떨어졌다). 체크·콜만 두면 12핸드 동안 많아야 360 을 잃어 넷이 다 살아 있고,
+  // 13핸드째 다음 칸(BB 100)에서 평균 1000 이 10BB 라 **반드시 멈춘다.**
   let sawRise = false;
   for (let i = 0; i < 40; i += 1) {
+    const move = i % 2 ? passiveMove : anyMove;
     const channelId = `tb-${i}`;
     const gold = Object.fromEntries([1, 2, 3, 4].map((n) => [user(n).id, 1000]));
     const game = hold.create({ channelId, homeChannelId: channelId, guildId: 'g', starterId: user(1).id, mode: 'tourney' });
@@ -613,11 +625,12 @@ check('블라인드가 오른다 — 칩 양에 묶여서', () => {
     hold.start(game, gold);
     let lastAt = 1;
     let level = game.stakes.level ?? 0;
+    let paused = false;
     for (let h = 0; h < 400; h += 1) {
-      if (!playHand(game)) break;
+      if (!playHand(game, move)) break;
       if (!hold.beginHand(game)) break;
       const now = game.stakes.level ?? 0;
-      if (game.blindsPaused) sawPause = true;
+      if (game.blindsPaused) paused = true;
       if (now === level) continue;
       assert.equal(now, level + 1, `${game.handNo}핸드에 블라인드가 ${now - level}칸 뛰었다`);
       const gap = game.handNo - lastAt;
@@ -631,11 +644,11 @@ check('블라인드가 오른다 — 칩 양에 묶여서', () => {
       lastAt = game.handNo;
       level = now;
     }
+    if (move === passiveMove) assert.ok(paused, '체크·콜만 뒀는데 한 번도 안 멈췄다 — 바닥이 안 걸린다');
     assert.equal(game.stakes.stack, STAKES.low.stack, '스택까지 같이 올랐다');
     hold.remove(channelId);
   }
   assert.ok(sawRise, '한 번도 안 올랐다');
-  assert.ok(sawPause, '한 번도 안 멈췄다 — 바닥이 안 걸린다');
 });
 
 check('칩이 모자라도 결국 끝난다 — 멈춘 동안에도 15핸드마다 한 칸', () => {

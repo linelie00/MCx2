@@ -262,6 +262,10 @@ check('독과 괴식을 재료 줄에 적고, 먹은 결과는 쓰지 말라고'
   assert.equal(/"look"/.test(system), false, '모양 칸이 남았다');
   // 실제로 "주사위의 도움 덕분인지" 라고 쓴 적이 있다. 이야기 속 인물은 주사위를 모른다.
   assert.match(system, /"주사위"·"점수"·"등급" 같은 말을 쓰지 마라/);
+  // 볶고 오븐에 익힌 키쉬가 주사위 3 에 "속이 덜 익었다" 가 되어 식중독이었다.
+  // 식중독은 과정만 본다 — 주사위의 탈은 1(탄 것)뿐이다.
+  assert.match(system, /fit·craft·harmony·heal 은 주사위와 따로/);
+  assert.match(system, /과정만 보고 매긴다 — 주사위나 네가 쓸 묘사가 아니라/);
 });
 check('등급 문턱은 모델에게 안 알려 준다', () => {
   const { system, user } = promptFor(CRAFT, { name: 'x', process: 'y', counts: { oreRed: 1 }, dice: 10 });

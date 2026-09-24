@@ -75,8 +75,9 @@ export const stampMd = (t) => `${tierOf(t).stars} **${t.name}**`;
  * 금색이 아무 뜻도 없어진다.
  *
  * 얼굴은 사람이면 디스코드 CDN 주소, 미겔·마티암이면 로컬 파일이라 같이 올려야 한다.
+ * `total` 은 수집률의 분모 — 미겔·마티암은 `titles.totalFor(true)` 를 넘긴다(모을 수 있는 것이 다르다).
  */
-export function awardCard({ name, avatar, avatarFile, fresh, held }) {
+export function awardCard({ name, avatar, avatarFile, fresh, held, total = TOTAL }) {
   const top = fresh.reduce((a, t) => Math.max(a, t.tier ?? 1), 1);
 
   const embed = new EmbedBuilder()
@@ -88,7 +89,7 @@ export function awardCard({ name, avatar, avatarFile, fresh, held }) {
       value: trunc(`_${t.desc}_\n-# 🔓 ${t.cond}`, 1024),
       inline: false,
     })))
-    .setFooter({ text: `수집  ${bar(held, TOTAL)}  ${held} / ${TOTAL}` });
+    .setFooter({ text: `수집  ${bar(held, total)}  ${held} / ${total}` });
 
   if (avatar) embed.setThumbnail(avatar);
 

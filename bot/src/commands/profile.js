@@ -5,6 +5,7 @@
  *
  * **탭이 넷이다** — 카드 · 전적 · 칭호 · 아이템. 한 화면에 다 넣으면 임베드가 스크롤이
  * 되고, 무엇보다 칭호와 아이템은 늘어나는 목록이라 언젠가 혼자 화면을 다 먹는다.
+ * 미겔·마티암에게는 **일기** 탭이 하나 더 있다 — `/일상` 으로 보낸 최근 날들.
  *
  * **칭호는 저장돼 있지 않다.** 전적에서 계산해 낸다(casino/titles.js) — 저장하는 것은
  * 지금 달고 있는 것 하나뿐이고, 그것도 이름이 아니라 키다. 꾸밈(별·등급 색)은
@@ -34,13 +35,15 @@ import { NPC_CHOICES, resolveTarget, displayOf } from '../casino/accounts.js';
 import { seatedAt } from '../casino/tables.js';
 import { CATEGORIES, CATEGORY_LABEL } from '../casino/poker.js';
 import {
-  TITLES, GROUPS, earned as earnedTitles, TITLE_BY_KEY, TOTAL as TITLE_TOTAL,
+  TITLES, GROUPS, earned as earnedTitles, TITLE_BY_KEY, fits as fitsTitle, totalFor as titleTotal,
 } from '../casino/titles.js';
 import { stamp, stampMd } from '../casino/titleCard.js';
 import { ITEM_BY_KEY, MAX_HP } from '../casino/items.js';
 import { GRADE_BY_KEY } from '../casino/crafts.js';
 import { craftLabel } from '../casino/bag.js';
 import { width, padEndW, padStartW, clipW } from '../text.js';
+import { OWNER_META } from '../owners.js';
+import { josa } from '../farm/requesters.js';
 
 export const PREFIX = 'prof';
 
@@ -59,6 +62,9 @@ const TABS = [
   { key: 'titles', label: '칭호' },
   { key: 'items', label: '아이템' },
 ];
+
+/** 미겔·마티암만 일기 탭이 있다 — 사람은 `/일상` 을 보내지 않는다. */
+const tabsFor = (who) => (who.npc ? [...TABS, { key: 'diary', label: '일기' }] : TABS);
 
 /**
  * 셀렉트 한 벌에 넣을 수 있는 칭호 수.
@@ -195,13 +201,14 @@ function titlesTab(account, page, npc) {
 
   const worn = account.title ? TITLE_BY_KEY[account.title] : null;
   const lines = [
-    `**수집** ${gauge(held.length, TITLE_TOTAL, { percent: false })} **${held.length}** / ${TITLE_TOTAL}`,
+    // 분모는 **그 계정이 모을 수 있는 것만** — 사람에게 일상 칭호를, 미겔·마티암에게 골드 칭호를 안 센다.
+    `**수집** ${gauge(held.length, titleTotal(npc), { percent: false })} **${held.length}** / ${titleTotal(npc)}`,
     `**달고 있는 것** ${worn ? `**${stamp(worn)}**` : '없음'}`,
   ];
 
   let folded = false;
   for (const group of GROUPS) {
-    const all = TITLES.filter((t) => t.group === group && (t.npc !== false || !npc));
+    const all = TITLES.filter((t) => t.group === group && fitsTitle(t, npc));
     if (!all.length) continue;
     const mine = all.filter((t) => has.has(t.key));
 
@@ -301,12 +308,51 @@ function itemsTab(account, page) {
   };
 }
 
+// ---------------------------------------------------------------- 일기
+
+/** 일기 한 쪽에 보이는 날 수. */
+const DIARY_PER_PAGE = 5;
+
+const npcName = (id) => OWNER_META[String(id).replace(/^npc:/, '')]?.character ?? '누군가';
+/** `2026-09-24` → `9/24` */
+const shortDay = (day) => String(day ?? '').split('-').slice(1).map(Number).join('/');
+
+/**
+ * 일기 — 미겔·마티암이 `/일상` 으로 보낸 날들. **새것이 위.** 서버가 스무 날까지 둔다.
+ *
+ * 한 날은 머리 한 줄(날짜 · 무엇을 했는지 · 누구와)과 그날의 요약 줄들이다. 요약 줄은
+ * 스레드를 연 메시지에 적힌 그대로다(`daily/run.js` 의 diaryOf — 멘션은 이름으로 바꿔 두었다).
+ * 상대의 일상에 불려 간 날은 누가 불렀는지 적는다.
+ */
+export function diaryTab(account, page) {
+  const days = [...(account.diary ?? [])].reverse();
+  // 요약의 인용 줄(`> 첫 마디`)은 들여 쓰면 인용이 안 되므로 「」 로 감싼다.
+  const said = (l) => (l.startsWith('> ') ? `「${l.slice(2)}」` : l);
+  if (!days.length) {
+    return { text: '_아직 적힌 날이 없어요._\n`/일상` 으로 하루를 보내면 여기에 남아요.', pages: 1 };
+  }
+  const pages = Math.ceil(days.length / DIARY_PER_PAGE);
+  const at = Math.min(Math.max(0, page), pages - 1);
+  const blocks = days.slice(at * DIARY_PER_PAGE, (at + 1) * DIARY_PER_PAGE).map((d) => {
+    const who = d.with ? ` · ${josa(npcName(d.with), ['과', '와'])} 함께` : '';
+    const how = d.by ? ` _(${josa(npcName(d.by), ['이', '가'])} 불러서)_` : '';
+    return [`**${shortDay(d.day)}** ${d.icon} ${d.label}${who}${how}`, ...(d.lines ?? []).map((l) => `　${said(l)}`)].join('\n');
+  });
+  return {
+    text: blocks.join('\n\n'),
+    below: facts([['적힌 날', `**${days.length}**`], pages > 1 ? ['쪽', `${at + 1} / ${pages}`] : null]),
+    pages,
+    page: at,
+  };
+}
+
 // ---------------------------------------------------------------- 카드
 
 const TAB_BODY = {
   record: (account) => recordTab(account),
   items: (account, page) => itemsTab(account, page),
   titles: (account, page, who) => titlesTab(account, page, who.npc),
+  diary: (account, page) => diaryTab(account, page),
 };
 
 /** 새 형식은 글자를 **메시지 전체에서 4000자**까지 받는다. 본문이 넘치면 여기서 자른다. */
@@ -332,7 +378,7 @@ const cid = (id, tab, page) => [PREFIX, tab, page, id].join(':');
 const TAB_PAGE = 't';
 
 function tabRow(who, tab) {
-  return new ActionRowBuilder().addComponents(...TABS.map((t) => new ButtonBuilder()
+  return new ActionRowBuilder().addComponents(...tabsFor(who).map((t) => new ButtonBuilder()
     .setCustomId(cid(who.id, t.key, TAB_PAGE))
     .setLabel(t.label)
     .setStyle(t.key === tab ? ButtonStyle.Primary : ButtonStyle.Secondary)

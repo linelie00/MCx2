@@ -165,7 +165,10 @@ async function runTalk(ctx, io) {
     await io.say(who, text);
     if (i === 0) await io.note(`${josa(NAME[partner], ['이', '가'])} 다가왔다.`);
   }
-  return { lines: [`💬 ${josa(NAME[partner], ['과', '와'])} 이야기를 나눴어요.`, `> ${transcript[0]?.text ?? ''}`] };
+  return {
+    lines: [`💬 ${josa(NAME[partner], ['과', '와'])} 이야기를 나눴어요.`, `> ${transcript[0]?.text ?? ''}`],
+    marks: { chat: true },
+  };
 }
 
 // ---------------------------------------------------------------- 🛒 장보기
@@ -271,6 +274,7 @@ async function runShop(ctx, io) {
       `${revive ? '💫' : plan.drink ? '🍶' : '🛒'} ${NAME[partner]}에게 ${bought}`,
       plan.drink ? `❤️ ${NAME[partner]} ${hpText}` : null,
     ].filter(Boolean),
+    marks: { care: true },
   };
 }
 
@@ -331,7 +335,7 @@ async function runGift(ctx, io) {
   } else {
     await io.say(me, said.after);
   }
-  return { lines: [`🎁 ${to}에게 ${shown}`] };
+  return { lines: [`🎁 ${to}에게 ${shown}`], marks: duo ? { care: true } : { giftHuman: true } };
 }
 
 // ---------------------------------------------------------------- 🍳 요리 · 🔨 제작
@@ -502,6 +506,7 @@ async function runMake(ctx, io) {
   await io.say(partner, thanks);
   return {
     lines: [title, eat ? `🍽️ ${josa(NAME[partner], ['이', '가'])} 바로 먹었어요 · ${hpText}` : `🎁 ${NAME[partner]}에게 건넸어요.`],
+    marks: { care: true },
   };
 }
 
@@ -747,6 +752,7 @@ async function runDungeon(ctx, io) {
   };
   const fallen = [];                 // 쓰러진 순서
   let carrier = null;                // 쓰러진 쪽을 업고 나온 쪽
+  let avenger = null;                // 쓰러진 쪽 대신 이어 싸운 쪽
   let level = game.stakes.level ?? 0;
   let unsaved = false;
   const nextHand = async () => {
@@ -783,6 +789,7 @@ async function runDungeon(ctx, io) {
       await io.say(f.character, fill(canned(f.character, 'fallen', ctx.rand), vars));
       const after = delve.afterFall(game, ctx.rand);
       if (after.step === 'avenge') {
+        avenger = after.to;
         delve.swap(game, after.to);
         const now = delve.fighterOf(game);
         await io.say(now.character, fill(canned(now.character, 'avenge', ctx.rand), vars));
@@ -921,20 +928,82 @@ async function runDungeon(ctx, io) {
       carrier ? `🏃 ${josa(nameOfId(carrier), ['이', '가'])} 업고 나왔어요.` : null,
       unsaved ? '_저장하지 못한 것이 있어요._' : null,
     ].filter(Boolean),
+    marks: { carry: carrier, avenge: avenger },
   };
 }
 
 /**
- * 한 장면을 진행한다. `{ lines }` — 요약 카드에 적을 줄들.
+ * 그 장면이 계정에 남기는 전적 — 일상 칭호가 읽는다(`casino/titles.js` 의 일상 갈래). `{ id: { 카운터: n } }`.
  *
- * ctx  `{ character, partner, me, partnerAccount, human, choice, setting, rand }`
- *      human 은 `{ id, name }`(명령한 사람), setting 은 "가을 4일째, 날씨는 맑음" 같은 한 줄(없으면 null)
+ *   부른 쪽  dailyDone · 둘이면 dailyDuo · 수다면 dailyChat · 상대를 챙겨 줬으면 dailyCare ·
+ *            사람에게 선물했으면 dailyGiftHuman
+ *   상대     둘이면 dailyDuo · 수다면 dailyChat — **둘이 한 일은 상대의 기록에도 남는다**
+ *   던전     쓰러진 동료를 업고 나온 쪽 dailyCarry · 대신 이어 싸운 쪽 dailyAvenge
+ *
+ * 장면이 돌려준 `marks` 만 본다. 저장이 실패한 장면(못 샀다·못 건넸다)은 marks 를 안 낸다.
+ */
+export function recordOf(ctx, result) {
+  const me = NPC_ID[ctx.character];
+  const other = NPC_ID[ctx.partner];
+  const m = result?.marks ?? {};
+  const bump = { [me]: { dailyDone: 1 } };
+  const add = (id, key) => { (bump[id] ??= {})[key] = (bump[id][key] ?? 0) + 1; };
+  if (ctx.choice.duo) { add(me, 'dailyDuo'); add(other, 'dailyDuo'); }
+  if (m.chat) { add(me, 'dailyChat'); add(other, 'dailyChat'); }
+  if (m.care) add(me, 'dailyCare');
+  if (m.giftHuman) add(me, 'dailyGiftHuman');
+  if (m.carry) add(m.carry, 'dailyCarry');
+  if (m.avenge) add(m.avenge, 'dailyAvenge');
+  return bump;
+}
+
+/** 일기 한 줄의 길이 상한 — 서버와 같다(`accountController` 의 diaryEntryOf). */
+const DIARY_LINE = 200;
+
+/**
+ * 그 장면을 일기에 적을 모양 — `{ id: { icon, label, lines, with, by } }`(`api.writeDiary`).
+ * `/프로필` 의 일기 탭이 읽는다.
+ *
+ * **둘이 한 날은 상대의 일기에도 적는다** — `by` 가 누가 불러서 갔는지다. 쓰러진 상대를 일으키러
+ * 간 날도 상대의 일기에 남는다(그날은 "함께" 가 아니라 `by` 만 있다).
+ * 요약 줄의 멘션은 **이름으로 바꾼다** — 일기를 펼칠 때마다 그 사람이 불리면 안 된다.
+ */
+export function diaryOf(ctx, result, { icon, label }) {
+  const me = NPC_ID[ctx.character];
+  const other = NPC_ID[ctx.partner];
+  const together = ctx.choice.duo && !ctx.choice.plan?.revive;
+  const lines = (result?.lines ?? [])
+    .map((l) => String(l).replace(/<@!?(\d+)>/g, (_, id) => (id === ctx.human?.id ? ctx.human.name : '누군가')).trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((l) => ([...l].length > DIARY_LINE ? `${[...l].slice(0, DIARY_LINE - 1).join('')}…` : l));
+  if (!lines.length) return {};
+  const out = { [me]: { icon, label, lines, with: together ? other : null, by: null } };
+  if (ctx.choice.duo) out[other] = { icon, label, lines, with: together ? me : null, by: me };
+  return out;
+}
+
+/**
+ * 한 장면을 진행한다. `{ lines, marks }` — lines 는 요약 카드에 적을 줄들, marks 는 기록할 것(`recordOf`).
+ *
+ * ctx  `{ character, partner, me, partnerAccount, human, choice, setting, rand, declined }`
+ *      human 은 `{ id, name }`(명령한 사람), setting 은 "가을 4일째, 날씨는 맑음" 같은 한 줄(없으면 null).
+ *      declined 면 **상대를 불렀다가 거절당하고** 혼자 한다 — 오늘 이미 여러 번 불려 나가 쉬고 싶어 한다.
  */
 export async function runDay(ctx, io) {
   const run = {
     talk: runTalk, shop: runShop, gift: runGift, cook: runMake, craft: runMake, fish: runFish, dungeon: runDungeon,
   }[ctx.choice.kind];
-  return run({ rand: Math.random, ...ctx }, io);
+  const full = { rand: Math.random, ...ctx };
+  if (full.declined) {
+    const vars = { partner: NAME[full.partner], giver: NAME[full.character] };
+    await io.say(full.character, fill(canned(full.character, 'askJoin', full.rand), vars));
+    await io.say(full.partner, fill(canned(full.partner, 'decline', full.rand), vars));
+  }
+  const result = await run(full, io);
+  return full.declined
+    ? { ...result, lines: [...result.lines, `_${josa(NAME[full.partner], ['은', '는'])} 오늘 쉬고 싶대요._`] }
+    : result;
 }
 
-export default { runDay, labelOf };
+export default { runDay, labelOf, recordOf, diaryOf };

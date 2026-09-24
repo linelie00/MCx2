@@ -245,6 +245,13 @@ export const tryFish = (id, { peek = false } = {}) =>
 export const tryNpcDay = (id) =>
   request('/api/accounts/npc-day', { method: 'POST', bot: true, json: { id } });
 
+/**
+ * `/일상` 의 일기를 적는다. `{ id: { icon, label, lines, with, by } }` — 미겔·마티암만, 한 번에 둘까지.
+ * 날짜는 서버가 찍고 최근 스무 개만 남긴다. `/프로필` 의 일기 탭이 읽는다.
+ */
+export const writeDiary = (entries) =>
+  request('/api/accounts/diary', { method: 'POST', bot: true, json: { entries } });
+
 /** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
 export const claimDaily = (id, { heal = true } = {}) =>
   request('/api/accounts/claim', { method: 'POST', bot: true, json: { id, heal } });
@@ -362,7 +369,7 @@ export async function checkBotKey() {
 
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
-  getAccounts, postAccountDeltas, claimDaily, tryFish, tryNpcDay, setTitle, checkBotKey,
+  getAccounts, postAccountDeltas, claimDaily, tryFish, tryNpcDay, writeDiary, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
   fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook, getWeather, getEquips, buyEquip, getBoard, deliverOrder,
 };

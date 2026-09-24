@@ -17,11 +17,17 @@
  *   - 판에 앉아 있거나 이미 다른 하루를 보내는 중이면 거절한다(`seatedAt` — 일상도 판으로 친다)
  *   - 상대가 쓰러졌거나 판에·다른 하루에 있으면 부르지 않는다. 혼자 한다
  *   - 명령한 사람이 판에 앉아 있으면 그 사람에게는 선물하지 않는다(`/양도` 와 같은 까닭)
+ *   - 상대가 오늘 이미 여러 번 불려 나갔으면 가끔 쉬고 싶다며 거절한다 — 그러면 혼자 한다
+ *
+ * 끝나면 **기록**을 남기고(일상 칭호의 전적 — `run.recordOf`), 새로 얻은 칭호가 있으면 스레드에
+ * 칭호 카드를 올린다. 요리·낚시·던전 칭호도 여기서 같이 뜬다.
  *
  * 명령한 사람의 몸은 필요 없다 — 쓰러져 있어도 부를 수 있다(`allowDead`).
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { getAccounts, getWeather, tryNpcDay, tryFish } from '../api.js';
+import {
+  getAccounts, getWeather, tryNpcDay, tryFish, writeDiary,
+} from '../api.js';
 import { base, fail } from '../embeds.js';
 import { NPC_CHOICES, NPC_ID, characterOf, displayOf } from '../casino/accounts.js';
 import { OWNER_META } from '../owners.js';
@@ -33,13 +39,18 @@ import { sayAsOrPlain } from '../discord/webhook.js';
 import { josa } from '../farm/requesters.js';
 import * as busy from '../daily/busy.js';
 import { choose, PARTNER } from '../daily/pick.js';
-import { runDay, labelOf } from '../daily/run.js';
+import {
+  runDay, labelOf, recordOf, diaryOf,
+} from '../daily/run.js';
 import {
   monologue, reply, recipe, judgeMade, canJudge,
 } from '../daily/talk.js';
 import { resultEmbed } from './make.js';
 import { resultEmbed as fishResultEmbed } from '../yacht/fishRender.js';
 import * as payout from '../holdem/payout.js';
+import { earned as earnedTitles, gained as gainedTitles, totalFor as titleTotal } from '../casino/titles.js';
+import { awardCard } from '../casino/titleCard.js';
+import { canned, fill } from '../daily/lines.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
@@ -131,14 +142,14 @@ async function spend(interaction, day, { id, character, name }) {
 
   // 상대가 올 수 있는지 보고 **같은 동기 블록에서** 자리를 잡는다(검사와 잡기 사이에 await 없음).
   const human = displayOf(interaction.user.id, { user: interaction.user, member: interaction.member });
-  const choice = choose({
+  const pick = (partnerFree) => choose({
     character,
     me,
     // 쓰러진 상대는 부를 수 없다 — 대신 골드가 넉넉하면 부활의 영약을 사다 먹일 수 있다(`dead`).
     partner: {
       account: accounts[partnerId],
-      free: !isDead(accounts[partnerId]) && !seatedAt(partnerId),
-      dead: isDead(accounts[partnerId]) && !seatedAt(partnerId),
+      free: partnerFree && !isDead(accounts[partnerId]) && !seatedAt(partnerId),
+      dead: partnerFree && isDead(accounts[partnerId]) && !seatedAt(partnerId),
     },
     human: interaction.user.bot ? null : {
       free: !seatedAt(interaction.user.id),
@@ -147,7 +158,20 @@ async function spend(interaction, day, { id, character, name }) {
     // 요리·제작은 심사관까지 서너 번을 부른다. 지금 막혀 있으면 후보에서 뺀다.
     canMake: canJudge(),
   });
-  if (choice.duo) busy.join(day, partnerId);
+  let choice = pick(true);
+  // 오늘 이미 여러 번 불려 나간 상대는 가끔 쉬고 싶어 한다 — 그러면 혼자 할 일을 다시 고른다.
+  // 쓰러진 상대를 일으키러 가는 것은 거절할 수가 없다(쓰러져 있다).
+  const declined = choice.duo && !choice.plan?.revive && busy.tired(partnerId);
+  if (declined) choice = pick(false);
+  if (choice.duo) {
+    busy.join(day, partnerId);
+    busy.noteJoin(partnerId);
+  }
+  // 새 칭호를 알리려면 **쓰기 전** 칭호가 있어야 한다(칭호는 전적에서 계산한다).
+  const involved = [id, ...(choice.duo ? [partnerId] : [])];
+  const titlesBefore = Object.fromEntries(involved.map((x) => [
+    x, earnedTitles(accounts[x], { npc: true }).map((t) => t.key),
+  ]));
 
   const nth = quota.tries - quota.left;
   const emoji = today?.emoji ?? '☀️';
@@ -223,30 +247,81 @@ async function spend(interaction, day, { id, character, name }) {
   };
 
   const { icon, label } = labelOf(choice);
+  const ctx = {
+    character,
+    partner,
+    me,
+    partnerAccount: accounts[partnerId],
+    human: { id: interaction.user.id, name: human.name },
+    choice,
+    setting: today?.text ?? null,
+    declined,
+  };
   let result;
   try {
-    result = await runDay({
-      character,
-      partner,
-      me,
-      partnerAccount: accounts[partnerId],
-      human: { id: interaction.user.id, name: human.name },
-      choice,
-      setting: today?.text ?? null,
-    }, io);
+    result = await runDay(ctx, io);
   } catch (err) {
     console.error('[일상] 진행 중 오류:', err);
-    result = { lines: [`_도중에 멈췄어요. ${err.message}_`] };
+    result = { lines: [`_도중에 멈췄어요. ${err.message}_`], failed: true };
   }
 
+  // 기록 — 일상 칭호의 전적과 일기. 도중에 멈춘 장면은 안 남긴다.
+  if (!result.failed) {
+    const saved = await apply({ bump: recordOf(ctx, result) });
+    if (!saved.ok) console.warn('[일상] 기록을 남기지 못했어요');
+    const pages = diaryOf(ctx, result, { icon, label });
+    if (Object.keys(pages).length) {
+      await writeDiary(pages).catch((err) => console.warn('[일상] 일기를 적지 못했어요:', err.message));
+    }
+    await announceTitles(room, io, involved, titlesBefore);
+  }
+
+  // 둘이 한 날은 제목에 같이 적는다. 쓰러진 상대를 일으키러 간 날은 "함께" 가 아니다.
+  const together = choice.duo && !choice.plan?.revive
+    ? ` · ${josa(OWNER_META[partner].character, ['과', '와'])} 함께` : '';
   await interaction.editReply({
     embeds: [base({
-      title: `${icon} ${name}의 하루 · ${label}`,
+      title: `${icon} ${name}의 하루 · ${label}${together}`,
       description: result.lines.join('\n'),
       color,
       footer: `오늘 남은 일상 ${quota.left}번 · 한국 시간 0시에 다시 세 번`,
     })],
   }).catch((err) => console.warn('[일상] 요약 실패:', err.message));
+}
+
+/**
+ * 새 칭호 — 쓰기 전(`before`, 키 목록)과 지금을 견준다. 캐릭터마다 칭호 카드 한 장과 한마디.
+ * 일상 전적뿐 아니라 그 장면의 요리·낚시·던전 전적으로 얻은 것도 여기서 뜬다.
+ * 못 읽으면 조용히 넘어간다 — 칭호는 전적에서 계산하므로 다음에 `/프로필` 에서 보인다.
+ */
+async function announceTitles(room, io, ids, before) {
+  let after;
+  try {
+    ({ accounts: after } = await getAccounts(ids));
+  } catch {
+    return;
+  }
+  for (const who of ids) {
+    const held = earnedTitles(after?.[who], { npc: true });
+    const fresh = gainedTitles(before[who] ?? [], held);
+    if (!fresh.length) continue;
+    const face = displayOf(who);
+    const character = characterOf(who);
+    await room.send(awardCard({
+      name: OWNER_META[character].character,
+      avatar: face.avatar,
+      avatarFile: face.avatarFile,
+      fresh,
+      held: held.length,
+      total: titleTotal(true),
+    })).catch((err) => console.warn('[일상] 칭호 알림 실패:', err.message));
+    const line = await io.reply({
+      character,
+      facts: [`방금 칭호 「${fresh[0].name}」을(를) 얻었다 — ${fresh[0].desc}`],
+      ask: '혼잣말 — 새 칭호를 얻고 하는 한마디.',
+    });
+    await io.say(character, line || fill(canned(character, 'titleGot'), {}));
+  }
 }
 
 export default { data, execute, allowDead: true };

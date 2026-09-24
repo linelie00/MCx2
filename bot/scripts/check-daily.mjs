@@ -14,6 +14,9 @@
  *   6. 낚시꾼이 기척을 바르게 읽고(숨은 줄을 후보에서 안 지운다), `/요트 낚시` 와 같은 셈으로 정산하는지
  *   7. 던전이 체력을 한 톨도 새지 않고, 들어올 때 체력을 넘겨 저장하지 않고, 성격대로 교대·도망하고,
  *      이기면 전리품·지면 쓰러짐으로 끝나는지. 쓰러진 상대에게는 부활의 영약을 사다 먹이는지
+ *   8. 기록이 맞는 사람에게 맞는 칸으로 가고, 일상 칭호가 사람 명부에 안 섞이고, 많이 불려 다닌
+ *      상대가 쉬고 싶어 하는지
+ *   9. 일기가 둘이 한 날은 상대에게도 남고, 멘션을 이름으로 바꾸고, 새것이 위로 보이는지
  */
 process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
@@ -30,7 +33,9 @@ const delve = await import('../src/daily/delve.js');
 const holdem = await import('../src/holdem/state.js');
 const { DUNGEON_FLOOR } = await import('../src/daily/pick.js');
 const { LINES, fill, canned } = await import('../src/daily/lines.js');
-const { runDay, labelOf } = await import('../src/daily/run.js');
+const { runDay, labelOf, recordOf, diaryOf } = await import('../src/daily/run.js');
+const { diaryTab } = await import('../src/commands/profile.js');
+const titles = await import('../src/casino/titles.js');
 const busy = await import('../src/daily/busy.js');
 const { seatedAt, seatedMessage } = await import('../src/casino/tables.js');
 const { ITEM_BY_KEY, buyPrice } = await import('../src/casino/items.js');
@@ -305,7 +310,7 @@ const KEYS = ['muse', 'chat', 'bye', 'shopOpen', 'shopBrowse', 'shopAfter', 'pot
   'delveOpen', 'delveInvite', 'delveCome', 'delveFace', 'delveWin', 'delveHit', 'delveLow',
   'swapOut', 'swapIn', 'fleeLine', 'delveWon', 'delveFled', 'fallen', 'delveCheer', 'delveSigh', 'fallenCry',
   'avenge', 'carryOut',
-  'reviveOpen', 'reviveHand', 'revived'];
+  'reviveOpen', 'reviveHand', 'revived', 'askJoin', 'decline', 'titleGot'];
 for (const c of ['migel', 'matiam']) {
   eq(`${c}: 대목이 다 있다`, KEYS.filter((k) => !LINES[c][k]?.length), []);
   eq(`${c}: 혼잣말은 세 줄 한 벌`, LINES[c].muse.every((set) => set.length === 3), true);
@@ -625,6 +630,82 @@ const applies = (log) => log.filter(([k]) => k === 'apply').map(([, m]) => m);
   eq('던전 16판 — 정산·저장·중계가 결과와 맞는다', bad, []);
   eq('던전 16판 — 이긴 판이 있다', seen.won > 0, true);
   eq('꼬리표: 던전', labelOf({ kind: 'dungeon', duo: false, plan: {} }), { icon: '⚔️', label: '던전' });
+}
+
+// ---------------------------------------------------------------- 기록 · 칭호
+console.log('\n기록 · 칭호');
+{
+  const ctxDuo = { character: 'migel', partner: 'matiam', choice: { kind: 'talk', duo: true } };
+  eq('수다: 둘 다 함께한 것·수다를 센다', recordOf(ctxDuo, { marks: { chat: true } }), {
+    'npc:migel': { dailyDone: 1, dailyDuo: 1, dailyChat: 1 }, 'npc:matiam': { dailyDuo: 1, dailyChat: 1 },
+  });
+  eq('사람에게 선물: 부른 쪽만', recordOf({ character: 'matiam', partner: 'migel', choice: { kind: 'gift', duo: false } }, { marks: { giftHuman: true } }),
+    { 'npc:matiam': { dailyDone: 1, dailyGiftHuman: 1 } });
+  eq('던전: 업고 나온 쪽 · 대신 싸운 쪽', recordOf({ ...ctxDuo, choice: { kind: 'dungeon', duo: true } }, { marks: { carry: 'npc:matiam', avenge: null } }), {
+    'npc:migel': { dailyDone: 1, dailyDuo: 1 }, 'npc:matiam': { dailyDuo: 1, dailyCarry: 1 },
+  });
+  eq('저장 못 한 장면은 한 것만 센다', recordOf({ character: 'migel', partner: 'matiam', choice: { kind: 'shop', duo: false } }, { lines: [] }),
+    { 'npc:migel': { dailyDone: 1 } });
+}
+{
+  const npcStats = { stats: { dailyDone: 1, dailyDuo: 10, dailyCarry: 1 } };
+  const npcHeld = titles.earned(npcStats, { npc: true }).map((t) => t.key);
+  eq('미겔·마티암은 일상 칭호를 받는다', ['dayOne', 'bestBuddy', 'broadBack'].every((k) => npcHeld.includes(k)), true);
+  eq('사람은 같은 전적이어도 일상 칭호를 못 받는다', titles.earned(npcStats).some((t) => t.group === '일상'), false);
+  eq('사람의 수집 분모에 일상 칭호가 없다', titles.TOTAL, titles.TITLES.filter((t) => !t.npcOnly).length);
+  eq('미겔·마티암의 분모에는 골드 칭호가 없다', titles.totalFor(true), titles.TITLES.filter((t) => t.npc !== false).length);
+  eq('일상 칭호는 전부 미겔·마티암 것', titles.TITLES.filter((t) => t.group === '일상').every((t) => t.npcOnly), true);
+}
+{
+  const day = '2099-01-01';
+  eq('처음엔 안 지쳤다', busy.tired('npc:matiam', () => 0, day), false);
+  busy.noteJoin('npc:matiam', day);
+  eq('한 번 불려 나가도 괜찮다', busy.tired('npc:matiam', () => 0, day), false);
+  busy.noteJoin('npc:matiam', day);
+  eq('두 번이면 반쯤 쉬고 싶다', [busy.tired('npc:matiam', () => 0.4, day), busy.tired('npc:matiam', () => 0.6, day)], [true, false]);
+  busy.noteJoin('npc:matiam', day);
+  eq('세 번이면 대개 쉬고 싶다', busy.tired('npc:matiam', () => 0.7, day), true);
+  eq('날이 바뀌면 다시 센다', busy.joinsToday('npc:matiam', '2099-01-02'), 0);
+}
+{
+  const io = fakeIo();
+  const out = await runDay(ctxOf({ kind: 'talk', duo: false, plan: {} }, { declined: true }), io);
+  eq('거절: 부른 쪽이 먼저 청하고 상대가 쉬겠다고 한다', says(io.log).slice(0, 2).map(([, who, t]) => [who, LINES[who][who === 'migel' ? 'askJoin' : 'decline'].includes(t)]),
+    [['migel', true], ['matiam', true]]);
+  eq('거절: 요약에 쉬고 싶대요', out.lines.at(-1).includes('쉬고 싶대요'), true);
+}
+{
+  const io = fakeIo();
+  const out = await runDay(ctxOf({ kind: 'gift', duo: true, plan: { key: 'acorn', count: 1 } }), io);
+  eq('상대에게 선물하면 챙겨 준 것으로 남는다', out.marks, { care: true });
+  const io2 = fakeIo({ saveOk: false });
+  const out2 = await runDay(ctxOf({ kind: 'gift', duo: false, plan: { key: 'acorn', count: 1 } }), io2);
+  eq('못 건넨 선물은 안 남는다', out2.marks, undefined);
+}
+
+// ---------------------------------------------------------------- 일기
+console.log('\n일기');
+{
+  const ctxDuo = { character: 'migel', partner: 'matiam', choice: { kind: 'shop', duo: true, plan: {} }, human: { id: '12345', name: '겨울' } };
+  const pages = diaryOf(ctxDuo, { lines: ['🛒 마티암에게 꿀 ×2 · −40골드'] }, { icon: '🛒', label: '장보기' });
+  eq('둘이 한 날은 두 사람 일기에', Object.keys(pages).sort(), ['npc:matiam', 'npc:migel']);
+  eq('부른 쪽은 함께, 불려 간 쪽은 누가 불렀는지', [pages['npc:migel'].with, pages['npc:migel'].by, pages['npc:matiam'].with, pages['npc:matiam'].by],
+    ['npc:matiam', null, 'npc:migel', 'npc:migel']);
+  const revive = diaryOf({ ...ctxDuo, choice: { kind: 'shop', duo: true, plan: { revive: true } } }, { lines: ['💫 마티암에게 부활의 영약'] }, { icon: '💫', label: '부활의 영약' });
+  eq('일으켜 준 날은 "함께" 가 아니다', [revive['npc:migel'].with, revive['npc:matiam'].with, revive['npc:matiam'].by], [null, null, 'npc:migel']);
+  const gift = diaryOf({ ...ctxDuo, choice: { kind: 'gift', duo: false, plan: {} } }, { lines: ['🎁 <@12345>에게 도토리 ×2', '_x_'] }, { icon: '🎁', label: '선물' });
+  eq('멘션은 이름으로 — 일기를 펼칠 때마다 불리면 안 된다', gift['npc:migel'].lines[0], '🎁 겨울에게 도토리 ×2');
+  eq('혼자 한 날은 부른 쪽 일기에만', Object.keys(gift), ['npc:migel']);
+  eq('긴 줄은 자른다', [...diaryOf(ctxDuo, { lines: ['가'.repeat(300)] }, { icon: 'x', label: 'y' })['npc:migel'].lines[0]].length, 200);
+}
+{
+  const diary = [...Array(7)].map((_, i) => ({ day: `2026-09-${String(10 + i)}`, icon: '🎣', label: '낚시', lines: ['> 말', `${i}`], with: null, by: i === 6 ? 'npc:matiam' : null }));
+  const first = diaryTab({ diary }, 0);
+  eq('일기: 새것이 위', first.text.split('\n')[0].startsWith('**9/16**'), true);
+  eq('일기: 불려 간 날은 누가 불렀는지', first.text.split('\n')[0].includes('마티암이 불러서'), true);
+  eq('일기: 인용 줄은 「」 로', first.text.includes('「말」'), true);
+  eq('일기: 다섯 날씩 넘긴다', [first.pages, diaryTab({ diary }, 1).text.split('\n\n').length], [2, 2]);
+  eq('일기: 빈 일기', diaryTab({}, 0).text.includes('아직 적힌 날이 없어요'), true);
 }
 
 // ---------------------------------------------------------------- 자리

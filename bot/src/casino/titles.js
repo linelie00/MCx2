@@ -200,6 +200,19 @@ export const TITLES = [
   { key: 'witchsHand', name: '마녀의 하수인', tier: 2, cond: '헨젤의 주문 5건', group: '농장', desc: '두꺼비가 되지 않으려면 사과를 제때 가져다줘야 한다.', when: (s) => n(s, 'farmHansel') >= 5 },
   { key: 'woodcutter', name: '나무꾼', tier: 1, cond: '과수를 베면', group: '농장', desc: '금도끼 은도끼는 안 나왔다.', when: (s) => n(s, 'farmChop') >= 1 },
 
+  // ---------------------------------------------------------------- 일상 — 미겔·마티암만(`/일상`)
+  // 사람은 `/일상` 을 보낼 수 없어서 **아예 안 보인다**(`npcOnly`). 전적은 `/일상` 이 적는다(`daily/run.js` 의 recordOf).
+  { key: 'dayOne', name: '하루의 시작', tier: 1, cond: '일상을 한 번 보내면', group: '일상', desc: '누가 시키지 않아도 하루가 흘러간다.', npcOnly: true, when: (s) => n(s, 'dailyDone') >= 1 },
+  { key: 'busyDays', name: '부지런한 하루', tier: 2, cond: '일상 30번', group: '일상', desc: '마을 사람들이 이제 얼굴을 안다.', npcOnly: true, when: (s) => n(s, 'dailyDone') >= 30 },
+  { key: 'townFace', name: '마을의 얼굴', tier: 3, cond: '일상 100번', group: '일상', desc: '이 마을의 하루에는 늘 이 사람이 있다.', npcOnly: true, when: (s) => n(s, 'dailyDone') >= 100 },
+  { key: 'bestBuddy', name: '단짝', tier: 1, cond: '둘이 함께 보낸 일상 10번', group: '일상', desc: '부르면 온다. 안 불러도 온다.', npcOnly: true, when: (s) => n(s, 'dailyDuo') >= 10 },
+  { key: 'dreamPair', name: '환상의 짝꿍', tier: 3, cond: '둘이 함께 보낸 일상 50번', group: '일상', desc: '이쯤 되면 둘이서 하루 하나를 산다.', npcOnly: true, when: (s) => n(s, 'dailyDuo') >= 50 },
+  { key: 'chatterbox', name: '수다쟁이', tier: 1, cond: '둘이 나눈 수다 10번', group: '일상', desc: '할 말이 떨어지는 날이 없다.', npcOnly: true, when: (s) => n(s, 'dailyChat') >= 10 },
+  { key: 'caringHand', name: '살뜰한 손', tier: 2, cond: '상대를 챙겨 준 것 10번 (사다 주기·만들어 주기·선물)', group: '일상', desc: '제 것보다 남의 것을 먼저 챙긴다.', npcOnly: true, when: (s) => n(s, 'dailyCare') >= 10 },
+  { key: 'townSanta', name: '마을의 산타', tier: 2, cond: '사람에게 선물 10번', group: '일상', desc: '주머니에서 뭔가가 자꾸 나온다.', npcOnly: true, when: (s) => n(s, 'dailyGiftHuman') >= 10 },
+  { key: 'broadBack', name: '든든한 등', tier: 2, cond: '쓰러진 동료를 업고 던전에서 나오면', group: '일상', desc: '무거웠다. 그래도 내려놓지 않았다.', npcOnly: true, when: (s) => n(s, 'dailyCarry') >= 1 },
+  { key: 'avenger', name: '복수의 칼날', tier: 2, cond: '쓰러진 동료 대신 던전에서 싸우면', group: '일상', desc: '쓰러진 이의 몫까지 들고 나섰다.', npcOnly: true, when: (s) => n(s, 'dailyAvenge') >= 1 },
+
   // ---- MT 상점 — 전적이 아니라 **산 것**이다. `shop.mt` 가 값, `shop.stat` 이 산 기록
   // (`own…` 카운터 — 서버가 모양으로 받는다). 명부에 한 줄 넣으면 상점에 바로 뜬다.
   ...[
@@ -246,18 +259,28 @@ export const GROUPS = [...new Set(TITLES.map((t) => t.group))];
 
 export const TITLE_BY_KEY = Object.fromEntries(TITLES.map((t) => [t.key, t]));
 
-/** 명부 전체 수. 수집률 게이지가 이걸 분모로 쓴다. */
-export const TOTAL = TITLES.length;
+/**
+ * 그 칭호가 그 계정의 명부에 드는지. `npc: false` 는 미겔·마티암이 못 받고(골드 계열),
+ * `npcOnly` 는 **사람이 못 받는다**(일상 — 사람은 `/일상` 을 보낼 수 없다). 못 받는 칭호는
+ * 목록에도 수집률 분모에도 안 넣는다 — 영영 못 채우는 칸이 게이지에 남는다.
+ */
+export const fits = (t, npc = false) => (npc ? t.npc !== false : !t.npcOnly);
+
+/** 그 계정이 모을 수 있는 칭호 수 — 수집률 게이지의 분모. */
+export const totalFor = (npc = false) => TITLES.filter((t) => fits(t, npc)).length;
+
+/** 사람의 명부 수. 예전부터 이 이름으로 쓰던 곳이 있어서 남겨 둔다. */
+export const TOTAL = totalFor(false);
 
 /**
  * 그 계정이 가진 칭호들. 명부 순서를 지킨다.
  *
  * `npc: false` 로 표시된 칭호는 미겔·마티암이 못 받는다 — `/급여` 로 넣은 골드가
- * 최고 잔액을 올려서 골드 계열이 공짜가 되기 때문이다.
+ * 최고 잔액을 올려서 골드 계열이 공짜가 되기 때문이다. 거꾸로 `npcOnly` 는 사람이 못 받는다(`fits`).
  */
 export function earned(account, { npc = false } = {}) {
   const stats = account?.stats ?? {};
-  return TITLES.filter((t) => (t.npc !== false || !npc) && t.when(stats, account));
+  return TITLES.filter((t) => fits(t, npc) && t.when(stats, account));
 }
 
 /**
@@ -293,5 +316,5 @@ export const counterForHand = (category) => HAND_COUNTER[category] ?? null;
 export const isHighCard = (category) => category === CATEGORIES[CATEGORIES.length - 1];
 
 export default {
-  TITLES, SHOP_TITLES, TITLE_BY_KEY, TOTAL, TIER, GROUPS, tierOf, earned, gained, counterForHand, isHighCard,
+  TITLES, SHOP_TITLES, TITLE_BY_KEY, TOTAL, TIER, GROUPS, tierOf, fits, totalFor, earned, gained, counterForHand, isHighCard,
 };

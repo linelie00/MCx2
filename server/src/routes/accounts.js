@@ -18,6 +18,7 @@ router.post('/deltas', requireBot, express.json(), ctrl.applyDeltas);
 router.post('/claim', requireBot, express.json(), ctrl.claim);
 router.post('/fish', requireBot, express.json(), ctrl.fishTry);
 router.post('/npc-day', requireBot, express.json(), ctrl.npcDayTry);
+router.post('/diary', requireBot, express.json(), ctrl.writeDiary);
 router.post('/title', requireBot, express.json(), ctrl.setTitle);
 
 module.exports = router;

@@ -10,7 +10,7 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, mt, hp, title, items, crafts, enemies, fish, stats, refilledAt, healedAt, checkinAt, checkinStreak, fishedAt, fishedCount, npcDayAt, npcDayCount, updatedAt }
+ * account shape: { gold, mt, hp, title, items, crafts, enemies, fish, stats, refilledAt, healedAt, checkinAt, checkinStreak, fishedAt, fishedCount, npcDayAt, npcDayCount, diary, updatedAt }
  *
  * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
  * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
@@ -150,6 +150,7 @@ const blank = () => ({
   fishedCount: 0,       //
   npcDayAt: null,       // 미겔·마티암의 /일상 도장(한국 날짜). 하루 NPC_DAY_TRIES 번
   npcDayCount: 0,       //
+  diary: [],            // 미겔·마티암의 일기 — /일상 한 장면에 한 줄. 최근 DIARY_MAX 개만
   stats: {},
   refilledAt: null,
   healedAt: null,       // 오늘 체력을 되찾았는지. 골드 도장(refilledAt)과 **따로** 센다
@@ -181,6 +182,7 @@ const normalize = (raw) => {
   if (!Number.isSafeInteger(acct.fishedCount) || acct.fishedCount < 0) acct.fishedCount = 0;
   if (!Number.isSafeInteger(acct.checkinStreak) || acct.checkinStreak < 0) acct.checkinStreak = 0;
   if (!Number.isSafeInteger(acct.npcDayCount) || acct.npcDayCount < 0) acct.npcDayCount = 0;
+  if (!Array.isArray(acct.diary)) acct.diary = [];
   return acct;
 };
 
@@ -198,6 +200,7 @@ const publicView = (acct) => ({
   fishedCount: acct.fishedCount,
   stats: acct.stats,
   refilledAt: acct.refilledAt,
+  diary: acct.diary,
 });
 
 /**
@@ -353,6 +356,9 @@ const BUMP_KEYS = new Set([
   'yachtPlayed', 'yachtYacht', 'yachtBonus', 'yachtEmpty', 'yachtWon', 'yachtLast',
   // 홀덤 토너먼트 — 1위 · 2위 · 제일 먼저 탈락 · 모브 둘 이상 앉은 판 우승 · 5BB 밑에서 살아나 우승
   'tourneyWon', 'tourneySecond', 'tourneyFirstOut', 'mobHuntWon', 'comebackWon',
+  // /일상 — 미겔·마티암의 하루. 보낸 것 · 둘이 함께한 것 · 둘이 나눈 수다 · 상대를 챙겨 줌 ·
+  // 사람에게 선물 · 쓰러진 동료를 업고 나옴 · 쓰러진 동료 대신 싸움
+  'dailyDone', 'dailyDuo', 'dailyChat', 'dailyCare', 'dailyGiftHuman', 'dailyCarry', 'dailyAvenge',
 ]);
 
 /**
@@ -725,11 +731,80 @@ exports.npcDayTry = (req, res) => {
   return res.json({ ok: true, left: NPC_DAY_TRIES - acct.npcDayCount, tries: NPC_DAY_TRIES, today });
 };
 
+/** 일기 한 권에 남기는 날 수. 오래된 것부터 지운다 — `/프로필` 의 일기 탭이 다섯씩 넘겨 본다. */
+const DIARY_MAX = 20;
+
+/**
+ * 일기 한 줄을 검사한다. 이상하면 사유(문자열), 멀쩡하면 저장할 모양.
+ * **날짜와 시각은 서버가 찍는다** — 봇이 보낸 날짜를 믿지 않는다(하루의 경계는 한국 날짜다).
+ *
+ *   icon · label  장면의 꼬리표(`🛒 장보기`)
+ *   lines         요약 줄 1~4개 — 봇이 요약 카드에 적은 그대로
+ *   with          함께한 상대(미겔·마티암), by  누가 불러서 갔는지 — 상대의 일상에 불려 간 날
+ */
+function diaryEntryOf(e, today) {
+  if (!e || typeof e !== 'object' || Array.isArray(e)) return '일기가 객체가 아닙니다';
+  const str = (v, max) => typeof v === 'string' && v.trim().length > 0 && [...v.trim()].length <= max;
+  if (!str(e.icon, 8)) return '아이콘은 1~8자여야 합니다';
+  if (!str(e.label, 30)) return '제목은 1~30자여야 합니다';
+  if (!Array.isArray(e.lines) || !e.lines.length || e.lines.length > 4 || !e.lines.every((l) => str(l, 200))) {
+    return '줄은 1~4개, 줄마다 200자까지입니다';
+  }
+  for (const k of ['with', 'by']) {
+    if (e[k] != null && !(typeof e[k] === 'string' && ID_RE.test(e[k]) && isNpc(e[k]))) return `${k} 는 미겔·마티암의 id 여야 합니다`;
+  }
+  return {
+    day: today, at: now(), icon: e.icon.trim(), label: e.label.trim(),
+    lines: e.lines.map((l) => l.trim()), with: e.with ?? null, by: e.by ?? null,
+  };
+}
+
+/**
+ * POST /api/accounts/diary — `{ entries: { id: 일기 한 줄 } }`. `/일상` 이 장면이 끝날 때 부른다.
+ *
+ * **미겔·마티암만 받는다.** 한 번에 둘까지 — 둘이 한 날은 상대의 일기에도 같이 적는다.
+ * 한 번의 쓰기로 둘 다 들어간다. 일기는 모양이 정해진 기록이라 증감(`/deltas`)에 섞지 않았다.
+ */
+exports.writeDiary = (req, res) => {
+  const entries = req.body && req.body.entries;
+  if (!entries || typeof entries !== 'object' || Array.isArray(entries)) return res.status(400).json({ error: 'entries 는 객체여야 합니다' });
+  const ids = Object.keys(entries);
+  if (!ids.length || ids.length > 2) return res.status(400).json({ error: '일기는 한 번에 한두 사람 몫입니다' });
+  for (const id of ids) {
+    if (!ID_RE.test(id) || !isNpc(id)) return res.status(400).json({ error: `미겔·마티암의 일기만 씁니다: ${id}` });
+  }
+  const today = dayKey();
+  const made = {};
+  for (const id of ids) {
+    const got = diaryEntryOf(entries[id], today);
+    if (typeof got === 'string') return res.status(400).json({ error: `${id}: ${got}` });
+    made[id] = got;
+  }
+
+  const data = readOr503(res);
+  if (!data) return undefined;
+  const out = {};
+  for (const id of ids) {
+    const acct = load(data, id, today);
+    acct.diary = [...acct.diary, made[id]].slice(-DIARY_MAX);
+    acct.updatedAt = now();
+    data.accounts[id] = acct;
+    out[id] = publicView(acct);
+  }
+  try {
+    store.write(data);
+  } catch (e) {
+    return res.status(503).json({ error: `계정 데이터를 쓰지 못했습니다: ${e.message}` });
+  }
+  return res.json({ accounts: out });
+};
+
 // 농장(farmController)이 심기·수확에서 계정을 같이 고친다. 읽는 길을 하나로 두려고 내보낸다.
 module.exports.load = load;
 module.exports.publicView = publicView;
 module.exports.FISH_TRIES = FISH_TRIES;
 module.exports.NPC_DAY_TRIES = NPC_DAY_TRIES;
+module.exports.DIARY_MAX = DIARY_MAX;
 module.exports.START_GOLD = START_GOLD;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;
 module.exports.DAILY_HEAL = DAILY_HEAL;

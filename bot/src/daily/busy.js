@@ -27,4 +27,27 @@ export const close = (day) => { days.delete(day); };
 /** `seatedAt` 이 판 목록처럼 읽는다. */
 export const openGames = () => [...days];
 
-export default { open, join, close, openGames };
+// ---------------------------------------------------------------- 불려 나간 횟수
+
+/**
+ * 오늘 상대의 일상에 불려 나간 횟수 — 한국 날짜로 센다. 많이 불려 다닌 날은 쉬고 싶어 한다(`tired`).
+ * **인메모리다.** 봇이 재시작하면 다시 센다 — 쉬는 핑계일 뿐이라 서버에 둘 까닭이 없다.
+ */
+const joins = new Map();
+const kstDay = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+
+export const joinsToday = (id, today = kstDay()) => (joins.get(id)?.day === today ? joins.get(id).n : 0);
+
+/** 불려 나갔다. */
+export function noteJoin(id, today = kstDay()) {
+  joins.set(id, { day: today, n: joinsToday(id, today) + 1 });
+}
+
+/** 쉬고 싶어 하는지 — 오늘 두 번 불려 나갔으면 반쯤, 세 번 넘게면 대개 거절한다. */
+export function tired(id, rand = Math.random, today = kstDay()) {
+  const n = joinsToday(id, today);
+  if (n >= 3) return rand() < 0.75;
+  return n >= 2 ? rand() < 0.5 : false;
+}
+
+export default { open, join, close, openGames, joinsToday, noteJoin, tired };

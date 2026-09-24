@@ -405,9 +405,9 @@ cd server && npm install && npm start   # 또는 npm run dev (--watch)
 | `/에너미 도감` | 누구나 | `GET /api/accounts` (만난 에너미만 이름이 열린다) |
 | `/양도` | 누구나 | `GET /api/accounts` · `POST /deltas` (보내는 쪽 −, 받는 쪽 + 한 번에) |
 | `/출첵` | 누구나 | `POST /api/accounts/claim` |
-| `/일상` | 누구나 | `POST /api/accounts/npc-day` (캐릭터마다 하루 3번) · `GET /api/accounts` · `POST /deltas` (장보기·선물·요리·제작·낚시 · 던전은 핸드마다 체력, 끝에 전리품·넘친 기운·전적) · `POST /accounts/fish` (낚시 — 그 캐릭터의 하루 몫) · 제미나이 1~6회(요리·제작은 심사 포함 4회 안팎) · 스레드 |
+| `/일상` | 누구나 | `POST /api/accounts/npc-day` (캐릭터마다 하루 3번) · `GET /api/accounts` · `POST /deltas` (장보기·선물·요리·제작·낚시 · 던전은 핸드마다 체력, 끝에 전리품·넘친 기운·전적) · `POST /accounts/fish` (낚시 — 그 캐릭터의 하루 몫) · 끝에 `POST /deltas` 로 기록(일상 칭호) · `POST /accounts/diary` 로 일기 · 제미나이 1~6회(요리·제작은 심사 포함 4회 안팎) · 스레드 |
 | `/급여` | 누구나 | `POST /api/accounts/deltas` |
-| `/프로필` | 누구나 | `GET /api/accounts` · `POST /accounts/title` (카드·전적·칭호·아이템 탭) |
+| `/프로필` | 누구나 | `GET /api/accounts` · `POST /accounts/title` (카드·전적·칭호·아이템 탭 · 미겔·마티암은 일기 탭) |
 | `/요트` 1위 | — | `POST /api/accounts/deltas` (MT +1) |
 | `/아이템 정보` | 누구나 | 없음 (명부가 코드 안에 있다) |
 | `/상점 사기 · 팔기` | 누구나 | `GET /api/accounts` · `POST /deltas` (에페메랄) |

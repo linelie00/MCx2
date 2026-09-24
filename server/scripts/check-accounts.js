@@ -71,6 +71,14 @@ const server = app.listen(0, async () => {
   const mx2 = await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { bestPot: 300 } } });
   eq('작은 값은 안 덮는다', mx2.body.accounts['1000004'].stats.bestPot, 500);
   eq('모르는 카운터는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { hax: 1 } } })).status, 400);
+  // /일상 의 기록 — 미겔·마티암의 하루. 칭호가 읽는다.
+  const daily = await post('/deltas', {
+    bump: {
+      'npc:migel': { dailyDone: 1, dailyDuo: 1, dailyChat: 1, dailyCare: 1, dailyGiftHuman: 1, dailyCarry: 1 },
+      'npc:matiam': { dailyDuo: 1, dailyChat: 1, dailyAvenge: 1 },
+    },
+  });
+  eq('일상 기록 칸을 받는다', [daily.status, daily.body.accounts?.['npc:migel']?.stats?.dailyDone, daily.body.accounts?.['npc:matiam']?.stats?.dailyAvenge], [200, 1, 1]);
   eq('음수 카운터는 400', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000004: { hands: -1 } } })).status, 400);
   // 카운터만 있는 쓰기도 되므로(토너먼트가 그렇게 쓴다) deltas 에 없는 id 는 이제 정상이다.
   eq('카운터만 있는 id 도 받는다', (await post('/deltas', { deltas: { 1000004: 0 }, bump: { 1000005: { hands: 1 } } })).status, 200);
@@ -429,6 +437,19 @@ const server = app.listen(0, async () => {
   eq('일어나면 마티암은 따로 세 번', (await post('/npc-day', { id: 'npc:matiam' })).body.left, 2);
   eq('사람 id 는 400', (await post('/npc-day', { id: '1000001' })).status, 400);
   eq('이상한 id 는 400', (await post('/npc-day', { id: 'npc:drop' })).status, 400);
+
+  // --- 일기 — 미겔·마티암만, 최근 스무 개. 날짜는 서버가 찍는다
+  const page = { icon: '🛒', label: '장보기', lines: ['🛒 꿀 ×2 · −40골드'], with: 'npc:matiam', day: '1999-01-01' };
+  const wrote = await post('/diary', { entries: { 'npc:migel': page, 'npc:matiam': { ...page, by: 'npc:migel', with: 'npc:migel' } } });
+  const mine = wrote.body.accounts?.['npc:migel']?.diary ?? [];
+  eq('일기를 적는다 — 둘이 한 날은 둘 다', [wrote.status, mine.length, wrote.body.accounts?.['npc:matiam']?.diary?.[0]?.by], [200, 1, 'npc:migel']);
+  eq('날짜는 서버가 찍는다', mine[0]?.day !== '1999-01-01' && /^\d{4}-\d{2}-\d{2}$/.test(mine[0]?.day ?? ''), true);
+  for (let i = 0; i < 24; i += 1) await post('/diary', { entries: { 'npc:migel': { ...page, lines: [`${i}번째`] } } });
+  const kept = (await hit('?ids=npc:migel')).body.accounts['npc:migel'].diary;
+  eq('스무 개만 남기고 오래된 것부터 지운다', [kept.length, kept.at(-1).lines[0]], [20, '23번째']);
+  eq('사람의 일기는 안 쓴다', (await post('/diary', { entries: { 1000001: page } })).status, 400);
+  eq('모양이 틀리면 400', (await post('/diary', { entries: { 'npc:migel': { icon: '🛒', label: '', lines: [] } } })).status, 400);
+  eq('함께한 상대는 미겔·마티암만', (await post('/diary', { entries: { 'npc:migel': { ...page, with: '1000001' } } })).status, 400);
 
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');

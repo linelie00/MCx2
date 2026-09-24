@@ -6,8 +6,8 @@ import { base } from '../../embeds.js';
 import { FARM_COLOR } from '../render.js';
 import { EPH, QUIET } from './shared.js';
 
-/** 날씨 효과 한 줄(설명). */
-const SKY_NOTE = {
+/** 날씨 효과 한 줄(설명). 출첵의 소식(`farm/news.js`)도 쓴다. */
+export const SKY_NOTE = {
   clear: '보통 날', cloudy: '성장 ×0.9', rain: '비가 물을 줘요(체력 안 듦)', downpour: '비가 물을 줘요 · 뿌리 작물 품질 −10',
   heat: '물 한 포기에 체력 2 · 용의 고추 ×2', frost: '제철이 아닌 작물이 상해요', storm: '키 큰 작물(옥수수·해바라기)이 쓰러져요',
   rainbow: '오늘 거두면 품질 +10',

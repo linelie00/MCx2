@@ -18,6 +18,9 @@
  * 그날 파산하면 그때 받을 수 있다. "하루 한 번 시도" 가 아니라 "하루 한 번, 진짜로
  * 모자랐을 때" 다.
  *
+ * 화면은 **마을 소식**(오늘·내일 날씨, 계절 — `farm/news.js`)이 먼저고 체력이 상자 밖 아래다.
+ * 골드는 실제로 채운 날만 적는다. 소식을 못 가져와도 출첵은 된다 — 상자만 빠진다.
+ *
  * 판에 앉아 있어도 쓸 수 있다. 양도와 달리 안전하다 — 일일 규칙은 계정을 덮어쓰고,
  * 판의 증감은 정산 시점 잔액 위에 얹히기 때문이다. 300으로 앉아 출첵으로 1000이 되고
  * 300을 잃으면 700, 맞다. 다만 지금 앉은 판의 스택은 안 바뀌므로 그렇다고 적어 준다.
@@ -27,11 +30,12 @@
  * 찍히므로 나와서 다시 누르면 받는다.
  */
 import { SlashCommandBuilder } from 'discord.js';
-import { claimDaily } from '../api.js';
+import { claimDaily, getWeather } from '../api.js';
 import { base, fail } from '../embeds.js';
 import { displayOf } from '../casino/accounts.js';
 import { seatedAt } from '../casino/tables.js';
 import { forget } from '../casino/alive.js';
+import { newsBox } from '../farm/news.js';
 
 const data = new SlashCommandBuilder()
   .setName('출첵')
@@ -49,6 +53,9 @@ async function execute(interaction) {
   const seated = seatedAt(interaction.user.id);
   const inDungeon = seated?.mode === 'dungeon';
 
+  // 소식은 곁들이는 것이다. 날씨를 못 가져와도 출첵은 막지 않는다.
+  const news = getWeather(14).then(newsBox, () => null);
+
   let res;
   try {
     res = await claimDaily(interaction.user.id, { heal: !inDungeon });
@@ -57,7 +64,12 @@ async function execute(interaction) {
     return;
   }
 
-  const lines = [goldLine(res, me), hpLine(res.heal, me)];
+  const box = await news;
+  const lines = [box, box && '', hpLine(res.heal, me), goldLine(res)]
+    .filter((l) => l != null && l !== false);
+  // 체력 줄이 없고(옛 서버) 골드도 안 채웠으면 끝의 빈 줄이 남는다
+  while (lines.length && lines.at(-1) === '') lines.pop();
+  if (!lines.length) lines.push('오늘도 다녀가셨어요.');
   if (seated) {
     lines.push('', inDungeon
       ? `_지금 <#${seated.channelId}> 던전에 있어요 — 체력은 나와서 다시 누르면 받아요. 오늘 몫은 그대로 남아 있어요._`
@@ -65,10 +77,9 @@ async function execute(interaction) {
         + ' _그 판에 들고 간 골드는 그대로고, 받은 몫은 판이 끝난 뒤에 합쳐져요._');
   }
 
-  const got = res.refilled || res.heal?.healed;
   await interaction.editReply({
     embeds: [base({
-      title: got ? `${me.name}님, 오늘 몫이에요` : '출첵',
+      title: `좋은 하루입니다, ${me.name}님!`,
       description: lines.join('\n'),
       color: me.color,
       footer: '내일 또 오세요 (한국 시간 0시 기준)',
@@ -78,14 +89,9 @@ async function execute(interaction) {
   forget(interaction.user.id);
 }
 
-/** 골드 한 줄. 못 받은 것도 오류가 아니다 — 사유가 둘이고 뜻이 서로 다르다. */
-function goldLine(res, me) {
-  if (res.refilled) return `💰 **${res.before}골드 → ${res.gold}골드**`;
-  if (res.reason === 'enough') {
-    return `💰 아직 **${res.gold}골드**나 있어요. ${res.floor}골드 아래로 내려가면 그때 채워 드릴게요.`
-      + ' _오늘 몫은 아직 안 쓴 거예요._';
-  }
-  return `💰 골드는 오늘 이미 받았어요. 지금 **${res.gold}골드**.`;
+/** 골드 한 줄 — 실제로 채운 날만. 넉넉하거나 이미 받은 날은 말하지 않는다. */
+function goldLine(res) {
+  return res.refilled ? `💰 **${res.before}골드 → ${res.gold}골드**` : null;
 }
 
 /** 체력 한 줄. 옛 서버(체력을 모르는)면 아무 말도 안 한다. */

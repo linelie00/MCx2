@@ -54,8 +54,9 @@ async function execute(interaction) {
 
   // 판에 앉아 있으면 그 판의 스택은 안 바뀐다 — 골드는 정산 전까지 인메모리 장부에만
   // 있다. 물어보기 전에 미리 말해 둔다(`/출첵` 과 같은 이유).
+  // `/일상` 은 판이 아니다 — 일당은 곧바로 지갑에 들어가고, 장보기도 그 지갑에서 낸다.
   const seated = seatedAt(id);
-  const note = seated
+  const note = seated && seated.mode !== 'daily'
     ? `\n\n_지금 <#${seated.channelId}> 의 ${seated.game} 판에 앉아 있어요 —_`
       + ' _그 판에 들고 간 골드는 그대로고, 받은 몫은 판이 끝난 뒤에 합쳐져요._'
     : '';

@@ -24,6 +24,7 @@
     "check-fishing": "node scripts/check-fishing.mjs",
     "check-showdown": "node scripts/check-showdown.mjs",
     "check-farm": "node scripts/check-farm.mjs",
+    "check-daily": "node scripts/check-daily.mjs",
     "simulate-farm": "node scripts/simulate-farm.mjs"
   },
   "dependencies": {

@@ -238,6 +238,13 @@ export const setTitle = (id, title) =>
 export const tryFish = (id, { peek = false } = {}) =>
   request('/api/accounts/fish', { method: 'POST', bot: true, json: { id, peek } });
 
+/**
+ * `/일상` 한 번을 쓴다. `{ ok, reason?, left, tries, today }` — 미겔·마티암마다 하루 세 번을
+ * **서버가** 센다. `reason` 은 `used`(다 씀) · `dead`(쓰러짐, 안 씀). 못 받는 것도 200 이다.
+ */
+export const tryNpcDay = (id) =>
+  request('/api/accounts/npc-day', { method: 'POST', bot: true, json: { id } });
+
 /** 출첵. 하루 한 번, 모자라면 채워 준다. 못 받는 것도 오류가 아니라 답이다. */
 export const claimDaily = (id, { heal = true } = {}) =>
   request('/api/accounts/claim', { method: 'POST', bot: true, json: { id, heal } });
@@ -355,7 +362,7 @@ export async function checkBotKey() {
 
 export default {
   abs, ApiError, getImages, getTags, getMovies, updateMovieRating, getPlaylists, checkOwnerKeys,
-  getAccounts, postAccountDeltas, claimDaily, tryFish, setTitle, checkBotKey,
+  getAccounts, postAccountDeltas, claimDaily, tryFish, tryNpcDay, setTitle, checkBotKey,
   getFarmCrops, getFarm, getFarmOf, registerFarm, abandonFarm, waterFarm, plantFarm, harvestFarm, clearFarm,
   fertilizeFarm, compostCrops, upgradePickaxe, getTools, getPreview, getBook, getWeather, getEquips, buyEquip, getBoard, deliverOrder,
 };

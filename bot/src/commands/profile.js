@@ -130,7 +130,9 @@ function cardTab(account, seated) {
     lines.push('_아직 한 판도 안 했어요._ `/블랙잭` 이나 `/홀덤` 으로 시작해 보세요.');
   }
 
-  if (seated) {
+  if (seated?.mode === 'daily') {
+    lines.push('', `_지금 <#${seated.channelId}> 에서 하루를 보내는 중이에요._`);
+  } else if (seated) {
     lines.push('', `_지금 <#${seated.channelId}> 의 ${seated.game} 판에 앉아 있어요 —_`
       + ' _판이 끝나야 이 숫자에 반영돼요._');
   }

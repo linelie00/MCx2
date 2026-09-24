@@ -10,7 +10,7 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, mt, hp, title, items, crafts, enemies, fish, stats, refilledAt, healedAt, checkinAt, checkinStreak, fishedAt, fishedCount, updatedAt }
+ * account shape: { gold, mt, hp, title, items, crafts, enemies, fish, stats, refilledAt, healedAt, checkinAt, checkinStreak, fishedAt, fishedCount, npcDayAt, npcDayCount, updatedAt }
  *
  * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
  * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
@@ -148,6 +148,8 @@ const blank = () => ({
   fish: {},             // 물고기 도감 { 아이템키: { caught, best } } — best 는 **큰 쪽만** 남는다
   fishedAt: null,       // 낚시 도장(한국 날짜). 하루 FISH_TRIES 번
   fishedCount: 0,       //
+  npcDayAt: null,       // 미겔·마티암의 /일상 도장(한국 날짜). 하루 NPC_DAY_TRIES 번
+  npcDayCount: 0,       //
   stats: {},
   refilledAt: null,
   healedAt: null,       // 오늘 체력을 되찾았는지. 골드 도장(refilledAt)과 **따로** 센다
@@ -178,6 +180,7 @@ const normalize = (raw) => {
   if (!acct.fish || typeof acct.fish !== 'object' || Array.isArray(acct.fish)) acct.fish = {};
   if (!Number.isSafeInteger(acct.fishedCount) || acct.fishedCount < 0) acct.fishedCount = 0;
   if (!Number.isSafeInteger(acct.checkinStreak) || acct.checkinStreak < 0) acct.checkinStreak = 0;
+  if (!Number.isSafeInteger(acct.npcDayCount) || acct.npcDayCount < 0) acct.npcDayCount = 0;
   return acct;
 };
 
@@ -683,10 +686,50 @@ exports.fishTry = (req, res) => {
   return res.json({ ok: true, left: FISH_TRIES - acct.fishedCount, tries: FISH_TRIES, today });
 };
 
+/** 미겔·마티암이 하루에 `/일상` 을 보낼 수 있는 횟수. 캐릭터마다 따로 센다. */
+const NPC_DAY_TRIES = 3;
+
+/**
+ * POST /api/accounts/npc-day — `{ id }`. `/일상` 이 스레드를 열기 **전에** 한 번 부른다.
+ *
+ * 낚시(`fishTry`)와 같은 모양이다. 남아 있으면 **그 자리에서 한 번 쓰고** 남은 횟수를 준다 —
+ * 두 사람이 같은 캐릭터를 동시에 눌러도 세 번을 넘지 않는다. 못 받는 것도 답이라 200 이다.
+ *
+ * **미겔·마티암만 받는다.** 사람의 하루는 사람이 보낸다.
+ * **쓰러져 있으면 안 쓴다**(`reason: 'dead'`). 봇이 먼저 막지만, 횟수를 헛되이 날리지
+ * 않도록 여기서도 본다.
+ */
+exports.npcDayTry = (req, res) => {
+  const id = String((req.body && req.body.id) || '').trim();
+  if (!ID_RE.test(id) || !isNpc(id)) return res.status(400).json({ error: '미겔·마티암의 id 가 아닙니다' });
+
+  const data = readOr503(res);
+  if (!data) return undefined;
+
+  const today = dayKey();
+  const acct = load(data, id, today);
+  const used = acct.npcDayAt === today ? acct.npcDayCount : 0;
+
+  if (acct.hp <= 0) return res.json({ ok: false, reason: 'dead', left: Math.max(0, NPC_DAY_TRIES - used), tries: NPC_DAY_TRIES, today });
+  if (used >= NPC_DAY_TRIES) return res.json({ ok: false, reason: 'used', left: 0, tries: NPC_DAY_TRIES, today });
+
+  acct.npcDayAt = today;
+  acct.npcDayCount = used + 1;
+  acct.updatedAt = now();
+  data.accounts[id] = acct;
+  try {
+    store.write(data);
+  } catch (e) {
+    return res.status(503).json({ error: `계정 데이터를 쓰지 못했습니다: ${e.message}` });
+  }
+  return res.json({ ok: true, left: NPC_DAY_TRIES - acct.npcDayCount, tries: NPC_DAY_TRIES, today });
+};
+
 // 농장(farmController)이 심기·수확에서 계정을 같이 고친다. 읽는 길을 하나로 두려고 내보낸다.
 module.exports.load = load;
 module.exports.publicView = publicView;
 module.exports.FISH_TRIES = FISH_TRIES;
+module.exports.NPC_DAY_TRIES = NPC_DAY_TRIES;
 module.exports.START_GOLD = START_GOLD;
 module.exports.DAILY_FLOOR = DAILY_FLOOR;
 module.exports.DAILY_HEAL = DAILY_HEAL;

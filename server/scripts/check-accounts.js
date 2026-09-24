@@ -409,6 +409,27 @@ const server = app.listen(0, async () => {
   eq('다 썼으면 엿보기도 ok 가 아니다', (await post('/fish', { id: FT, peek: true })).body.ok, false);
   eq('엿본 뒤에도 도장은 다섯 그대로', (await hit(`?ids=${FT}`)).body.accounts[FT].fishedCount, 5);
 
+  // --- /일상 — 미겔·마티암의 하루 세 번. 캐릭터마다 따로 센다
+  fs.writeFileSync(FILE, JSON.stringify({
+    accounts: {
+      'npc:migel': { gold: 1000, hp: 80 },
+      'npc:matiam': { gold: 1000, hp: 0 },               // 쓰러졌다
+    },
+  }), 'utf-8');
+  const days = [];
+  for (let i = 0; i < 4; i += 1) days.push((await post('/npc-day', { id: 'npc:migel' })).body);
+  eq('세 번까지 된다', days.slice(0, 3).map((d) => [d.ok, d.left]), [[true, 2], [true, 1], [true, 0]]);
+  eq('네 번째는 다 썼다고 거절', [days[3].ok, days[3].reason, days[3].left], [false, 'used', 0]);
+  const npcFile = () => JSON.parse(fs.readFileSync(FILE, 'utf-8')).accounts;
+  eq('도장이 찍혔다', npcFile()['npc:migel'].npcDayCount, 3);
+  const downed = (await post('/npc-day', { id: 'npc:matiam' })).body;
+  eq('쓰러졌으면 안 쓴다', [downed.ok, downed.reason, downed.left], [false, 'dead', 3]);
+  eq('쓰러진 날은 도장이 없다', npcFile()['npc:matiam'].npcDayCount, undefined);
+  await post('/deltas', { hp: { 'npc:matiam': 50 } });
+  eq('일어나면 마티암은 따로 세 번', (await post('/npc-day', { id: 'npc:matiam' })).body.left, 2);
+  eq('사람 id 는 400', (await post('/npc-day', { id: '1000001' })).status, 400);
+  eq('이상한 id 는 400', (await post('/npc-day', { id: 'npc:drop' })).status, 400);
+
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');
   const broken = await hit('?ids=1000001');

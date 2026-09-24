@@ -17,10 +17,16 @@
  */
 import * as blackjack from '../blackjack/state.js';
 import * as holdem from '../holdem/state.js';
+import * as daily from '../daily/busy.js';
 
+/**
+ * `/일상` 도 판으로 친다(`daily/busy.js`). 판은 아니지만 미겔·마티암의 골드·아이템·체력을
+ * 고치는 중이라, 그사이 다른 판에 앉거나 `/양도` 로 빠져나가면 똑같이 어긋난다.
+ */
 const GAMES = [
   { name: '블랙잭', mod: blackjack },
   { name: '홀덤', mod: holdem },
+  { name: '일상', mod: daily },
 ];
 
 /**
@@ -33,7 +39,9 @@ const GAMES = [
 export function seatedAt(id, { except = null } = {}) {
   for (const { name, mod } of GAMES) {
     for (const game of mod.openGames()) {
-      if (game.channelId === except) continue;
+      // `/일상` 은 빼지 않는다 — 판이 아니라서 그 채널의 판이 "같은 판" 일 수가 없다.
+      // 스레드를 못 만들면 일상이 판과 같은 채널에서 돌아, 빼면 그 판에 앉힐 수 있게 된다.
+      if (game.channelId === except && game.mode !== 'daily') continue;
       // 모브는 판마다 새로 생기므로 판을 건너 겹칠 일이 없다. id 도 mob:0 처럼
       // 판 안에서만 유일해서, 안 거르면 다른 판의 mob:0 과 헷갈린다.
       const at = { game: name, channelId: game.channelId, mode: game.mode };
@@ -51,8 +59,9 @@ export function seatedAt(id, { except = null } = {}) {
 }
 
 /** 거절 문구. **어디에 앉아 있는지** 알려 줘야 정리하러 갈 수 있다. */
-export const seatedMessage = (who, at) =>
-  `${who}은(는) 이미 <#${at.channelId}> 의 ${at.game} 판에 앉아 있어요.`
-  + ' 골드를 두 판에서 겹쳐 걸 수는 없어요.';
+export const seatedMessage = (who, at) => (at.mode === 'daily'
+  ? `${who}은(는) 지금 <#${at.channelId}> 에서 하루를 보내는 중이에요. 끝나면 다시 불러 주세요.`
+  : `${who}은(는) 이미 <#${at.channelId}> 의 ${at.game} 판에 앉아 있어요.`
+    + ' 골드를 두 판에서 겹쳐 걸 수는 없어요.');
 
 export default { seatedAt, seatedMessage };

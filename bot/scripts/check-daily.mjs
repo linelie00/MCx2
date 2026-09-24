@@ -16,7 +16,8 @@
  *      이기면 전리품·지면 쓰러짐으로 끝나는지. 쓰러진 상대에게는 부활의 영약을 사다 먹이는지
  *   8. 기록이 맞는 사람에게 맞는 칸으로 가고, 일상 칭호가 사람 명부에 안 섞이고, 많이 불려 다닌
  *      상대가 쉬고 싶어 하는지
- *   9. 일기가 둘이 한 날은 상대에게도 남고, 멘션을 이름으로 바꾸고, 새것이 위로 보이는지
+ *   9. 일기가 둘이 한 날은 상대에게도 남고, 멘션을 이름으로 바꾸고, 새것이 위로 보이는지.
+ *      장면마다 일기 글이 생기고(AI 가 막히면 사실을 이어 붙여서), 상대도 제 일기를 쓰는지
  */
 process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
@@ -310,7 +311,7 @@ const KEYS = ['muse', 'chat', 'bye', 'shopOpen', 'shopBrowse', 'shopAfter', 'pot
   'delveOpen', 'delveInvite', 'delveCome', 'delveFace', 'delveWin', 'delveHit', 'delveLow',
   'swapOut', 'swapIn', 'fleeLine', 'delveWon', 'delveFled', 'fallen', 'delveCheer', 'delveSigh', 'fallenCry',
   'avenge', 'carryOut',
-  'reviveOpen', 'reviveHand', 'revived', 'askJoin', 'decline', 'titleGot'];
+  'reviveOpen', 'reviveHand', 'revived', 'askJoin', 'decline', 'titleGot', 'diaryEnd'];
 for (const c of ['migel', 'matiam']) {
   eq(`${c}: 대목이 다 있다`, KEYS.filter((k) => !LINES[c][k]?.length), []);
   eq(`${c}: 혼잣말은 세 줄 한 벌`, LINES[c].muse.every((set) => set.length === 3), true);
@@ -390,6 +391,7 @@ function fakeIo({
     dungeon: fakeDungeon(log),
     embed: async (card) => { log.push(['embed', card]); },
     tryFish: async (id) => { log.push(['tryFish', id]); return fishLeft == null ? { ok: false, left: 0 } : { ok: true, left: fishLeft }; },
+    diary: async ({ character, facts }) => { log.push(['diary', character, facts]); return ai ? `AI 일기 ${character}` : null; },
     fishCard: async (round, extra) => { log.push(['fishCard', round.caught, extra]); },
     card: async (mode, craft, info) => { log.push(['card', mode.key, craft, info]); },
     recipe: async () => (recipeOut !== undefined ? recipeOut
@@ -672,7 +674,8 @@ console.log('\n기록 · 칭호');
   const out = await runDay(ctxOf({ kind: 'talk', duo: false, plan: {} }, { declined: true }), io);
   eq('거절: 부른 쪽이 먼저 청하고 상대가 쉬겠다고 한다', says(io.log).slice(0, 2).map(([, who, t]) => [who, LINES[who][who === 'migel' ? 'askJoin' : 'decline'].includes(t)]),
     [['migel', true], ['matiam', true]]);
-  eq('거절: 요약에 쉬고 싶대요', out.lines.at(-1).includes('쉬고 싶대요'), true);
+  eq('거절: 일기의 첫 사실이 거절', out.story[0].includes('쉬고 싶다며 거절했다'), true);
+  eq('거절: AI 가 막혀도 일기에 남는다', out.diary.includes('쉬고 싶다며 거절했다'), true);
 }
 {
   const io = fakeIo();
@@ -697,6 +700,27 @@ console.log('\n일기');
   eq('멘션은 이름으로 — 일기를 펼칠 때마다 불리면 안 된다', gift['npc:migel'].lines[0], '🎁 겨울에게 도토리 ×2');
   eq('혼자 한 날은 부른 쪽 일기에만', Object.keys(gift), ['npc:migel']);
   eq('긴 줄은 자른다', [...diaryOf(ctxDuo, { lines: ['가'.repeat(300)] }, { icon: 'x', label: 'y' })['npc:migel'].lines[0]].length, 200);
+  const written = diaryOf({ ...ctxDuo, setting: '가을 4일째, 날씨는 맑음' },
+    { lines: ['x'], diary: '미겔의 일기', partnerDiary: '마티암의 일기' }, { icon: '🛒', label: '장보기' });
+  eq('일기 글은 저마다 제 것', [written['npc:migel'].text, written['npc:matiam'].text], ['미겔의 일기', '마티암의 일기']);
+  eq('그날의 날씨도 싣는다', written['npc:migel'].setting, '가을 4일째, 날씨는 맑음');
+}
+{
+  // 장면마다 일기가 생긴다 — AI 가 쓰면 그 글, 막히면 사실을 이어 붙이고 맺음말.
+  const io = fakeIo({ ai: true });
+  const out = await runDay(ctxOf({ kind: 'talk', duo: true, plan: {} }), io);
+  eq('일기: 부른 쪽과 상대가 저마다 쓴다', [out.diary, out.partnerDiary], ['AI 일기 migel', 'AI 일기 matiam']);
+  const toPartner = io.log.find(([k, who]) => k === 'diary' && who === 'matiam')[2];
+  eq('일기: 상대에게는 누가 불렀는지 알려 준다', toPartner.some((f) => String(f).includes('미겔이 불러서 같이 한 일')), true);
+  eq('일기: 그 장면에서 오간 말이 메모에 실린다', toPartner.some((f) => String(f).startsWith('미겔이(가) 한 말:')), true);
+  const io2 = fakeIo();
+  const out2 = await runDay(ctxOf({ kind: 'shop', duo: false, plan: { key: 'salt', count: 2, cost: 40, drink: false } }), io2);
+  eq('일기: AI 가 막히면 사실을 이어 붙인다', out2.diary.startsWith('상점에서 소금 2개를 40골드에 샀다.'), true);
+  eq('일기: 맺음말은 미리 써 둔 줄', LINES.migel.diaryEnd.some((l) => out2.diary.endsWith(l)), true);
+  eq('일기: 혼자 한 날은 상대 일기가 없다', out2.partnerDiary, null);
+  const io3 = fakeIo();
+  const out3 = await runDay(ctxOf({ kind: 'gift', duo: true, plan: { key: 'acorn', count: 1 } }), io3);
+  eq('일기: 불려 간 쪽의 막힌 일기는 누가 불렀는지부터', out3.partnerDiary.startsWith('미겔이 불러서 같이 선물을 했다.'), true);
 }
 {
   const diary = [...Array(7)].map((_, i) => ({ day: `2026-09-${String(10 + i)}`, icon: '🎣', label: '낚시', lines: ['> 말', `${i}`], with: null, by: i === 6 ? 'npc:matiam' : null }));
@@ -704,8 +728,16 @@ console.log('\n일기');
   eq('일기: 새것이 위', first.text.split('\n')[0].startsWith('**9/16**'), true);
   eq('일기: 불려 간 날은 누가 불렀는지', first.text.split('\n')[0].includes('마티암이 불러서'), true);
   eq('일기: 인용 줄은 「」 로', first.text.includes('「말」'), true);
-  eq('일기: 다섯 날씩 넘긴다', [first.pages, diaryTab({ diary }, 1).text.split('\n\n').length], [2, 2]);
+  eq('일기: 네 날씩 넘긴다', [first.pages, diaryTab({ diary }, 1).text.split('\n\n').length], [2, 3]);
   eq('일기: 빈 일기', diaryTab({}, 0).text.includes('아직 적힌 날이 없어요'), true);
+  const page = diaryTab({ diary: [{
+    day: '2026-09-24', icon: '🎣', label: '낚시', lines: ['🎣 빈손으로 돌아왔어요.', '🎲 6번 모두 빗나갔어요.'],
+    text: '오늘은 마티암 씨와 낚시를 갔어요!', setting: '가을 4일째, 날씨는 맑음', with: 'npc:matiam', by: null,
+  }] }, 0).text.split('\n');
+  eq('일기: 머리 · 날씨 · 글 · 숫자', page, [
+    '**9/24** 🎣 낚시 · 마티암과 함께', '-# 가을 4일째, 날씨는 맑음', '오늘은 마티암 씨와 낚시를 갔어요!',
+    '-# 🎣 빈손으로 돌아왔어요. · 🎲 6번 모두 빗나갔어요.',
+  ]);
 }
 
 // ---------------------------------------------------------------- 자리

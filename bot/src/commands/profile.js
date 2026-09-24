@@ -310,8 +310,8 @@ function itemsTab(account, page) {
 
 // ---------------------------------------------------------------- 일기
 
-/** 일기 한 쪽에 보이는 날 수. */
-const DIARY_PER_PAGE = 5;
+/** 일기 한 쪽에 보이는 날 수. 일기 글이 두세 문장이라 넷이면 한 화면이다. */
+const DIARY_PER_PAGE = 4;
 
 const npcName = (id) => OWNER_META[String(id).replace(/^npc:/, '')]?.character ?? '누군가';
 /** `2026-09-24` → `9/24` */
@@ -320,9 +320,9 @@ const shortDay = (day) => String(day ?? '').split('-').slice(1).map(Number).join
 /**
  * 일기 — 미겔·마티암이 `/일상` 으로 보낸 날들. **새것이 위.** 서버가 스무 날까지 둔다.
  *
- * 한 날은 머리 한 줄(날짜 · 무엇을 했는지 · 누구와)과 그날의 요약 줄들이다. 요약 줄은
- * 스레드를 연 메시지에 적힌 그대로다(`daily/run.js` 의 diaryOf — 멘션은 이름으로 바꿔 두었다).
- * 상대의 일상에 불려 간 날은 누가 불렀는지 적는다.
+ * 한 날은 머리 한 줄(날짜 · 무엇을 했는지 · 누구와), 그날의 날씨, 그리고 **그 캐릭터가 쓴 일기 글**이다.
+ * 숫자가 든 요약 줄(`−40골드`)은 일기 밑에 작게 붙인다 — 일기는 읽는 것이고 숫자는 확인하는 것이다.
+ * 상대의 일상에 불려 간 날은 누가 불렀는지 적는다. 일기 글이 없는 예전 날은 요약 줄만 보여 준다.
  */
 export function diaryTab(account, page) {
   const days = [...(account.diary ?? [])].reverse();
@@ -336,7 +336,11 @@ export function diaryTab(account, page) {
   const blocks = days.slice(at * DIARY_PER_PAGE, (at + 1) * DIARY_PER_PAGE).map((d) => {
     const who = d.with ? ` · ${josa(npcName(d.with), ['과', '와'])} 함께` : '';
     const how = d.by ? ` _(${josa(npcName(d.by), ['이', '가'])} 불러서)_` : '';
-    return [`**${shortDay(d.day)}** ${d.icon} ${d.label}${who}${how}`, ...(d.lines ?? []).map((l) => `　${said(l)}`)].join('\n');
+    const head = `**${shortDay(d.day)}** ${d.icon} ${d.label}${who}${how}`;
+    if (!d.text) return [head, ...(d.lines ?? []).map((l) => `　${said(l)}`)].join('\n');
+    const numbers = (d.lines ?? []).filter((l) => !l.startsWith('> ')).join(' · ');
+    return [head, d.setting ? `-# ${d.setting}` : null, d.text, numbers ? `-# ${numbers}` : null]
+      .filter(Boolean).join('\n');
   });
   return {
     text: blocks.join('\n\n'),

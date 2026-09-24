@@ -739,7 +739,9 @@ const DIARY_MAX = 20;
  * **날짜와 시각은 서버가 찍는다** — 봇이 보낸 날짜를 믿지 않는다(하루의 경계는 한국 날짜다).
  *
  *   icon · label  장면의 꼬리표(`🛒 장보기`)
- *   lines         요약 줄 1~4개 — 봇이 요약 카드에 적은 그대로
+ *   lines         요약 줄 1~4개 — 숫자가 든 사실(`−40골드`). 일기 밑에 작게 붙는다
+ *   text          일기 글 — 그 캐릭터의 말투로 두세 문장(없어도 된다. 예전 일기에는 없다)
+ *   setting       그날의 계절·날씨 한 줄(없어도 된다)
  *   with          함께한 상대(미겔·마티암), by  누가 불러서 갔는지 — 상대의 일상에 불려 간 날
  */
 function diaryEntryOf(e, today) {
@@ -753,9 +755,12 @@ function diaryEntryOf(e, today) {
   for (const k of ['with', 'by']) {
     if (e[k] != null && !(typeof e[k] === 'string' && ID_RE.test(e[k]) && isNpc(e[k]))) return `${k} 는 미겔·마티암의 id 여야 합니다`;
   }
+  if (e.text != null && !str(e.text, 500)) return '일기 글은 500자까지입니다';
+  if (e.setting != null && !str(e.setting, 60)) return '그날의 날씨는 60자까지입니다';
   return {
     day: today, at: now(), icon: e.icon.trim(), label: e.label.trim(),
-    lines: e.lines.map((l) => l.trim()), with: e.with ?? null, by: e.by ?? null,
+    lines: e.lines.map((l) => l.trim()), text: e.text?.trim() ?? null, setting: e.setting?.trim() ?? null,
+    with: e.with ?? null, by: e.by ?? null,
   };
 }
 

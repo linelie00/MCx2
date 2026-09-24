@@ -450,6 +450,10 @@ const server = app.listen(0, async () => {
   eq('사람의 일기는 안 쓴다', (await post('/diary', { entries: { 1000001: page } })).status, 400);
   eq('모양이 틀리면 400', (await post('/diary', { entries: { 'npc:migel': { icon: '🛒', label: '', lines: [] } } })).status, 400);
   eq('함께한 상대는 미겔·마티암만', (await post('/diary', { entries: { 'npc:migel': { ...page, with: '1000001' } } })).status, 400);
+  const told = await post('/diary', { entries: { 'npc:matiam': { ...page, text: '오늘은 강가에 다녀왔다.', setting: '가을 4일째, 날씨는 맑음' } } });
+  eq('일기 글과 그날의 날씨를 싣는다', [told.status, told.body.accounts?.['npc:matiam']?.diary?.at(-1)?.text, told.body.accounts?.['npc:matiam']?.diary?.at(-1)?.setting],
+    [200, '오늘은 강가에 다녀왔다.', '가을 4일째, 날씨는 맑음']);
+  eq('일기 글이 너무 길면 400', (await post('/diary', { entries: { 'npc:matiam': { ...page, text: '가'.repeat(501) } } })).status, 400);
 
   // --- 손상 파일
   fs.writeFileSync(FILE, '{ "accounts": {"1000001": ', 'utf-8');

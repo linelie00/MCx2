@@ -128,7 +128,11 @@ async function runTalk(ctx, io) {
     // 한 줄이라도 빠지면 **세 줄을 통째로** 미리 써 둔 한 벌로 — 섞으면 생각이 중간에 끊긴다.
     const said = beats.every((b) => ai[b.key]) ? beats.map((b) => ai[b.key]) : canned(me, 'muse', ctx.rand);
     for (const text of said) await io.say(me, text);
-    return { lines: ['💭 혼자 느긋하게 보냈어요.', `> ${said[0]}`] };
+    return {
+      lines: ['💭 혼자 느긋하게 보냈어요.', `> ${said[0]}`],
+      story: ['혼자 느긋하게 하루를 보냈다', `${topic}에 대해 이런저런 생각을 했다`],
+      quotes: said.slice(0, 2).map((text) => ({ who: me, text })),
+    };
   }
 
   const partner = ctx.partner;
@@ -168,6 +172,8 @@ async function runTalk(ctx, io) {
   return {
     lines: [`💬 ${josa(NAME[partner], ['과', '와'])} 이야기를 나눴어요.`, `> ${transcript[0]?.text ?? ''}`],
     marks: { chat: true },
+    story: [`${josa(NAME[partner], ['과', '와'])} 수다를 떨었다`, `이야깃거리는 ${topic}`],
+    quotes: transcript.slice(0, 4),
   };
 }
 
@@ -230,7 +236,10 @@ async function runShop(ctx, io) {
   });
   if (!saved.ok) {
     await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
-    return { lines: [`${plan.drink ? '🍶' : '🛒'} 사려던 ${obj} 못 샀어요 — 저장이 안 됐어요.`] };
+    return {
+      lines: [`${plan.drink ? '🍶' : '🛒'} 사려던 ${obj} 못 샀어요 — 저장이 안 됐어요.`],
+      story: [`상점에 갔지만 ${obj} 사지 못했다`],
+    };
   }
 
   const before = Number((duo ? ctx.partnerAccount : ctx.me)?.hp ?? MAX_HP);
@@ -249,6 +258,10 @@ async function runShop(ctx, io) {
       lines: plan.drink
         ? [`🍶 ${obj} 사서 마셨어요 · −${num(plan.cost)}골드`, `❤️ ${hpText}`]
         : [`🛒 ${bought}`, goldLeft != null ? `💰 남은 골드 ${num(goldLeft)}` : null].filter(Boolean),
+      story: plan.drink
+        ? [`몸이 무거워서 ${obj} 사 마셨다`, `체력이 ${after}까지 올랐다`]
+        : [`상점에서 ${things} ${num(plan.cost)}골드에 샀다`],
+      quotes: [{ who: me, text: said.after }],
     };
   }
 
@@ -275,6 +288,12 @@ async function runShop(ctx, io) {
       plan.drink ? `❤️ ${NAME[partner]} ${hpText}` : null,
     ].filter(Boolean),
     marks: { care: true },
+    story: [revive
+      ? `쓰러져 있던 ${NAME[partner]}에게 부활의 영약을 사다 먹여 일으켰다`
+      : plan.drink
+        ? `다친 ${NAME[partner]}에게 ${obj} 사다 먹였다`
+        : `${NAME[partner]} 몫으로 ${things} 사다 줬다`],
+    quotes: [{ who: me, text: said.hand }, { who: receiver, text: thanks }],
   };
 }
 
@@ -317,13 +336,17 @@ async function runGift(ctx, io) {
     : { items: { [meId]: { [plan.key]: -plan.count }, [toId]: { [plan.key]: plan.count } } });
   if (!saved.ok) {
     await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
-    return { lines: [`🎁 주려던 ${obj} 못 건넸어요 — 저장이 안 됐어요.`] };
+    return {
+      lines: [`🎁 주려던 ${obj} 못 건넸어요 — 저장이 안 됐어요.`],
+      story: [`${target}에게 ${obj} 주려 했지만 건네지 못했다`],
+    };
   }
 
   const to = duo ? NAME[partner] : `<@${ctx.human.id}>`;
   await io.note(`🎁 ${josa(NAME[me], ['이', '가'])} ${to}에게 ${josa(craft ? name : `${name} ${plan.count}개`, ['을', '를'])} 건넸다`);
+  let thanks = null;
   if (duo) {
-    const thanks = await answer(ctx, io, {
+    thanks = await answer(ctx, io, {
       who: partner,
       from: me,
       heard: said.hand,
@@ -335,7 +358,12 @@ async function runGift(ctx, io) {
   } else {
     await io.say(me, said.after);
   }
-  return { lines: [`🎁 ${to}에게 ${shown}`], marks: duo ? { care: true } : { giftHuman: true } };
+  return {
+    lines: [`🎁 ${to}에게 ${shown}`],
+    marks: duo ? { care: true } : { giftHuman: true },
+    story: [`${target}에게 ${josa(what, ['을', '를'])} 선물했다`],
+    quotes: [{ who: me, text: said.hand }, thanks ? { who: partner, text: thanks } : { who: me, text: said.after }],
+  };
 }
 
 // ---------------------------------------------------------------- 🍳 요리 · 🔨 제작
@@ -399,7 +427,10 @@ async function runMake(ctx, io) {
   if (!answered?.ok) {
     // 판정을 못 받았으면 **아무것도 안 쓴다** — `/요리` 와 같다. 재료는 그대로다.
     await io.say(me, fill(canned(me, 'makeGiveUp', ctx.rand), vars));
-    return { lines: [`${mode.icon} 만들다 말았어요 — 재료는 그대로예요.`] };
+    return {
+      lines: [`${mode.icon} 만들다 말았어요 — 재료는 그대로예요.`],
+      story: [`${mode.verb}를 하려다 손이 안 가서 그만뒀다`],
+    };
   }
 
   const { judged } = answered;
@@ -433,7 +464,10 @@ async function runMake(ctx, io) {
   });
   if (!saved.ok) {
     await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
-    return { lines: [`${mode.icon} 만든 것을 저장하지 못했어요 — 재료는 그대로예요.`] };
+    return {
+      lines: [`${mode.icon} 만든 것을 저장하지 못했어요 — 재료는 그대로예요.`],
+      story: [`${mode.verb}를 했지만 일이 꼬였다`],
+    };
   }
 
   await io.card(mode, { ...craft, verdict: judged.verdict }, {
@@ -454,8 +488,9 @@ async function runMake(ctx, io) {
     });
     const sighLine = sigh || fill(canned(me, `${kind}Broke`, ctx.rand), vars);
     await io.say(me, sighLine);
+    let laugh = null;
     if (duo) {
-      const laugh = await answer(ctx, io, {
+      laugh = await answer(ctx, io, {
         who: partner,
         from: me,
         heard: sighLine,
@@ -466,7 +501,11 @@ async function runMake(ctx, io) {
       });
       await io.say(partner, laugh);
     }
-    return { lines: [title, '🪨 망가져서 버렸어요.'] };
+    return {
+      lines: [title, '🪨 망가져서 버렸어요.'],
+      story: [`${josa(name, ['을', '를'])} 만들다 망쳐서 버렸다 (재료: ${names.join(', ')})`],
+      quotes: [{ who: me, text: sighLine }, ...(laugh ? [{ who: partner, text: laugh }] : [])],
+    };
   }
 
   if (!duo) {
@@ -477,8 +516,17 @@ async function runMake(ctx, io) {
       ask: eat ? '혼잣말 — 먹고 나서 하는 말.' : '혼잣말 — 다 만든 것을 보고 하는 말.',
     });
     const good = grade.rank >= GRADE_BY_KEY.gold.rank;
-    await io.say(me, line || fill(canned(me, eat ? 'eatAfter' : `${kind}${good ? 'Good' : 'Meh'}`, ctx.rand), vars));
-    return { lines: [title, eat ? `🍽️ 바로 먹었어요 · ${hpText}` : `📦 ${NAME[me]}의 만든 것에 넣었어요.`] };
+    const saidLine = line || fill(canned(me, eat ? 'eatAfter' : `${kind}${good ? 'Good' : 'Meh'}`, ctx.rand), vars);
+    await io.say(me, saidLine);
+    return {
+      lines: [title, eat ? `🍽️ 바로 먹었어요 · ${hpText}` : `📦 ${NAME[me]}의 만든 것에 넣었어요.`],
+      story: [
+        `${josa(name, ['을', '를'])} 만들었다 (재료: ${names.join(', ')})`,
+        `솜씨는 ${QUALITY[grade.key]}`,
+        eat ? '다쳐 있어서 바로 먹었다' : null,
+      ].filter(Boolean),
+      quotes: [{ who: me, text: saidLine }],
+    };
   }
 
   const hand = await io.reply({
@@ -507,6 +555,12 @@ async function runMake(ctx, io) {
   return {
     lines: [title, eat ? `🍽️ ${josa(NAME[partner], ['이', '가'])} 바로 먹었어요 · ${hpText}` : `🎁 ${NAME[partner]}에게 건넸어요.`],
     marks: { care: true },
+    story: [
+      `${NAME[partner]}에게 주려고 ${josa(name, ['을', '를'])} 만들었다`,
+      `솜씨는 ${QUALITY[grade.key]}`,
+      eat ? `${josa(NAME[partner], ['이', '가'])} 받자마자 먹었다` : `${NAME[partner]}에게 건넸다`,
+    ],
+    quotes: [{ who: me, text: handLine }, { who: partner, text: thanks }],
   };
 }
 
@@ -530,7 +584,10 @@ async function runFish(ctx, io) {
   const quota = await io.tryFish(meId);
   if (!quota?.ok) {
     await io.say(me, fill(canned(me, 'fishClosed', ctx.rand), vars));
-    return { lines: ['🎣 오늘은 낚싯대를 못 던졌어요 — 하루 낚시를 다 썼어요.'] };
+    return {
+      lines: ['🎣 오늘은 낚싯대를 못 던졌어요 — 하루 낚시를 다 썼어요.'],
+      story: ['낚시를 가려 했지만 오늘은 낚싯대를 더 던질 수 없었다'],
+    };
   }
 
   const beats = [
@@ -573,7 +630,10 @@ async function runFish(ctx, io) {
   const saved = await io.apply(fishing.rewardOf(round, meId));
   if (!saved.ok) {
     await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
-    return { lines: ['🎣 건져 올린 것을 놓쳤어요 — 저장이 안 됐어요.'] };
+    return {
+      lines: ['🎣 건져 올린 것을 놓쳤어요 — 저장이 안 됐어요.'],
+      story: ['낚시를 했지만 건져 올린 것을 놓쳤다'],
+    };
   }
   await io.fishCard(round, { book: saved.accounts?.[meId]?.fish ?? null });
 
@@ -597,8 +657,9 @@ async function runFish(ctx, io) {
   const lastLine = line || fill(canned(me, !c ? 'fishNone' : legend ? 'fishLegendGot' : junk ? 'fishJunk' : 'fishGot', ctx.rand), vars);
   await io.say(me, lastLine);
 
+  let cheer = null;
   if (duo) {
-    const cheer = await answer(ctx, io, {
+    cheer = await answer(ctx, io, {
       who: partner,
       from: me,
       heard: lastLine,
@@ -618,6 +679,13 @@ async function runFish(ctx, io) {
     lines: c
       ? [`🎣 ${what}${legend ? ' ✦ 전설 · MT +1' : ''}`, `🎲 ${round.turn}번째에 낚았어요.`]
       : ['🎣 빈손으로 돌아왔어요.', `🎲 ${round.tries}번 모두 빗나갔어요.`],
+    story: [
+      duo ? `${josa(NAME[partner], ['과', '와'])} 함께 강가에서 낚시를 했다` : '강가에서 낚시를 했다',
+      c
+        ? `${round.turn}번째 던진 끝에 ${josa(what, ['을', '를'])} 낚았다${legend ? ' — 전설이었다' : junk ? ' — 물고기는 아니었다' : ''}`
+        : `${round.tries}번을 던졌지만 한 마리도 못 낚았다`,
+    ],
+    quotes: [{ who: me, text: lastLine }, ...(cheer ? [{ who: partner, text: cheer }] : [])],
   };
 }
 
@@ -721,7 +789,10 @@ async function runDungeon(ctx, io) {
   await io.say(me, said.open);
   if (opened.error) {
     await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
-    return { lines: [`⚔️ 던전에 못 들어갔어요 — ${opened.error}`] };
+    return {
+      lines: [`⚔️ 던전에 못 들어갔어요 — ${opened.error}`],
+      story: ['던전에 가려 했지만 들어가지 못했다'],
+    };
   }
   const { game } = opened;
   if (duo) {
@@ -884,6 +955,7 @@ async function runDungeon(ctx, io) {
       });
 
   // 끝의 말 — 서 있는 쪽이 한다. 다 쓰러졌으면 쓰러질 때 한 말이 마지막이다.
+  const quotes = [];
   if (standing.length) {
     const speaker = charOf(standing[0]);
     const other = charOf(standing[1] ?? '');
@@ -902,6 +974,7 @@ async function runDungeon(ctx, io) {
     });
     const last = line || fill(canned(speaker, fallen.length ? 'fallenCry' : won ? 'delveWon' : 'delveFled', ctx.rand), vars);
     await io.say(speaker, last);
+    quotes.push({ who: speaker, text: last });
     if (other) {
       const r = await answer(ctx, io, {
         who: other,
@@ -913,6 +986,7 @@ async function runDungeon(ctx, io) {
         ask: '같이 던전을 나서며 하는 한마디.',
       });
       await io.say(other, r);
+      quotes.push({ who: other, text: r });
     }
   }
 
@@ -929,6 +1003,15 @@ async function runDungeon(ctx, io) {
       unsaved ? '_저장하지 못한 것이 있어요._' : null,
     ].filter(Boolean),
     marks: { carry: carrier, avenge: avenger },
+    story: [
+      duo ? `${josa(NAME[partner], ['과', '와'])} 함께 던전에 내려가 ${josa(foe, ['과', '와'])} 싸웠다` : `던전에 내려가 ${josa(foe, ['과', '와'])} 싸웠다`,
+      won ? `${hands} 만에 쓰러뜨렸다` : wiped ? `${hands} 만에 졌다` : `${hands} 만에 물러났다`,
+      won ? `주운 것: ${plainDrops(drops)}` : null,
+      fallen.length ? `${josa(namesOf(fallen), ['이', '가'])} 쓰러졌다 — 부활의 영약으로만 일어난다` : null,
+      carrier ? `${josa(nameOfId(carrier), ['이', '가'])} 쓰러진 동료를 업고 나왔다` : null,
+      avenger ? `${josa(nameOfId(avenger), ['이', '가'])} 쓰러진 동료 대신 이어 싸웠다` : null,
+    ].filter(Boolean),
+    quotes,
   };
 }
 
@@ -957,11 +1040,13 @@ export function recordOf(ctx, result) {
   return bump;
 }
 
-/** 일기 한 줄의 길이 상한 — 서버와 같다(`accountController` 의 diaryEntryOf). */
+/** 일기 한 줄 · 한 편의 길이 상한 — 서버와 같다(`accountController` 의 diaryEntryOf). */
 const DIARY_LINE = 200;
+const DIARY_TEXT = 500;
 
 /**
- * 그 장면을 일기에 적을 모양 — `{ id: { icon, label, lines, with, by } }`(`api.writeDiary`).
+ * 그 장면을 일기에 적을 모양 — `{ id: { icon, label, lines, text, setting, with, by } }`(`api.writeDiary`).
+ * `text` 가 일기 글(`runDay` 가 쓴 것), `lines` 는 숫자가 든 요약 줄 — 일기 밑에 작게 붙는다.
  * `/프로필` 의 일기 탭이 읽는다.
  *
  * **둘이 한 날은 상대의 일기에도 적는다** — `by` 가 누가 불러서 갔는지다. 쓰러진 상대를 일으키러
@@ -978,8 +1063,14 @@ export function diaryOf(ctx, result, { icon, label }) {
     .slice(0, 4)
     .map((l) => ([...l].length > DIARY_LINE ? `${[...l].slice(0, DIARY_LINE - 1).join('')}…` : l));
   if (!lines.length) return {};
-  const out = { [me]: { icon, label, lines, with: together ? other : null, by: null } };
-  if (ctx.choice.duo) out[other] = { icon, label, lines, with: together ? me : null, by: me };
+  const clip = (t) => (t && [...t].length > DIARY_TEXT ? `${[...t].slice(0, DIARY_TEXT - 1).join('')}…` : t || null);
+  const setting = ctx.setting ?? null;
+  const out = {
+    [me]: { icon, label, lines, text: clip(result?.diary), setting, with: together ? other : null, by: null },
+  };
+  if (ctx.choice.duo) {
+    out[other] = { icon, label, lines, text: clip(result?.partnerDiary), setting, with: together ? me : null, by: me };
+  }
   return out;
 }
 
@@ -1001,9 +1092,45 @@ export async function runDay(ctx, io) {
     await io.say(full.partner, fill(canned(full.partner, 'decline', full.rand), vars));
   }
   const result = await run(full, io);
-  return full.declined
-    ? { ...result, lines: [...result.lines, `_${josa(NAME[full.partner], ['은', '는'])} 오늘 쉬고 싶대요._`] }
-    : result;
+
+  // 일기 — 그날을 그 사람의 말투로. 둘이 한 날은 상대도 제 일기를 쓴다(누가 불렀는지 알고서).
+  const story = [
+    ...(full.declined ? [`${josa(NAME[full.partner], ['을', '를'])} 불렀지만 오늘은 쉬고 싶다며 거절했다`] : []),
+    ...(result.story ?? []),
+  ];
+  const quotes = (result.quotes ?? []).filter((q) => q?.text);
+  const { label } = labelOf(full.choice);
+  const diary = await diaryText(full, io, { who: full.character, story, quotes, label });
+  const partnerDiary = full.choice.duo
+    ? await diaryText(full, io, { who: full.partner, story, quotes, label, by: full.character })
+    : null;
+  return { ...result, story, quotes, diary, partnerDiary };
+}
+
+/**
+ * 일기 한 편 — AI 가 **그 사람의 말투로** 두세 문장(`talk.diary`). 요약 카드와 `/프로필` 의 일기 탭이 쓴다.
+ *
+ * 메모는 장면이 돌려준 사실(`story`)과 그 장면에서 실제로 오간 말 몇 마디(`quotes`)다. 상대의 일상에
+ * 불려 간 쪽(`by`)은 메모가 부른 쪽에서 적힌 것이라 그렇다고 알려 주고 제 쪽에서 쓰게 한다.
+ * 막히면 사실을 이어 붙이고 미리 써 둔 맺음말(`diaryEnd`)을 단다.
+ */
+async function diaryText(ctx, io, {
+  who, story, quotes, label, by = null,
+}) {
+  const facts = [
+    ctx.setting ? `오늘: ${ctx.setting}` : null,
+    `나: ${NAME[who]}`,
+    by ? `${josa(NAME[by], ['이', '가'])} 불러서 같이 한 일이다 — 아래 메모는 ${NAME[by]} 쪽에서 적은 것이다` : null,
+    ...story,
+    ...quotes.slice(0, 4).map((q) => `${NAME[q.who] ?? q.who}이(가) 한 말: "${q.text}"`),
+  ];
+  const text = io.diary ? await io.diary({ character: who, facts }) : null;
+  if (text) return text;
+  const end = (line) => (/[.!?…~]$/.test(line) ? line : `${line}.`);
+  const body = by
+    ? [`${josa(NAME[by], ['이', '가'])} 불러서 같이 ${josa(label, ['을', '를'])} 했다`]
+    : story;
+  return [...body.map(end), fill(canned(who, 'diaryEnd', ctx.rand), {})].join(' ');
 }
 
 export default { runDay, labelOf, recordOf, diaryOf };

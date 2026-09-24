@@ -11,6 +11,7 @@
  *                   말투가 섞인다 — 가장 눈에 띄는 고장이다(`voice.js` 의 SPEECH 머리말)
  *   요리·제작       무엇을 어떻게 만들지와 그 사이 혼잣말을 한 번에(`recipe`), 채점은 `/요리` 의
  *                   심사관 그대로(`judgeMade`)
+ *   일기            그날 있었던 일을 그 사람의 말투로 두세 문장(`diary`) — 요약 카드와 일기 탭
  *
  * 분당 한도는 계량의 70% 까지만 — 사람이 `/캐입` 을 칠 몫을 남긴다(요트와 같다).
  * **절대 던지지 않는다.** 못 하면 null 이고, 부르는 쪽이 `daily/lines.js` 로 물러선다.
@@ -76,6 +77,12 @@ function tidy(text) {
   return [...line.replace(/\([^)]*\)/g, '').trim()].length >= 4 ? line : null;
 }
 
+/**
+ * 웃음소리를 제 것으로. **"하하" 는 마티암의 웃음이다**(`voice.js` 의 SPEECH) — 규칙에 적어 둬도 미겔이
+ * 일기 끝에 "하하!" 를 붙인 적이 있다. 미겔의 것이면 "후후" 로 바꾼다. 틀린 채로 두는 것보다 낫다.
+ */
+const ownLaugh = (character, text) => (character === 'migel' && text ? text.replace(/하하(?:하)*/g, '후후') : text);
+
 /** 모델이 코드펜스나 설명을 붙여도 JSON 객체 하나만 꺼낸다. */
 function parseObject(text) {
   const raw = String(text || '');
@@ -115,7 +122,7 @@ export async function monologue({ character, facts, beats, variant = Math.random
     const obj = parseObject(res.text);
     if (!obj) return null;
     return Object.fromEntries(beats
-      .map((b) => [b.key, tidy(obj[b.key])])
+      .map((b) => [b.key, ownLaugh(character, tidy(obj[b.key]))])
       .filter(([, line]) => line));
   } catch (err) {
     console.warn(`[일상] ${NAME[character]} 혼잣말 실패:`, err.message?.slice(0, 120));
@@ -147,7 +154,7 @@ export async function reply({ character, facts, transcript = [], ask, variant = 
       temperature: 1.1,
       maxOutputTokens: 1200,
     });
-    return tidy(String(res.text || '').split('\n').map(clean).find(Boolean));
+    return ownLaugh(character, tidy(String(res.text || '').split('\n').map(clean).find(Boolean)));
   } catch (err) {
     console.warn(`[일상] ${NAME[character]} 대사 실패:`, err.message?.slice(0, 120));
     return null;
@@ -199,7 +206,9 @@ export async function recipe({ character, mode, facts, forWhom = null, variant =
     const name = clean(String(obj?.name ?? '')).replace(/[<>"“”]/g, '').trim();
     const process = String(obj?.process ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
     if (!name || [...name].length > 40 || [...process].length < 10) return null;
-    return { name, process: process.slice(0, 500), open: tidy(obj.open), during: tidy(obj.during) };
+    return {
+      name, process: process.slice(0, 500), open: ownLaugh(character, tidy(obj.open)), during: ownLaugh(character, tidy(obj.during)),
+    };
   } catch (err) {
     console.warn(`[일상] ${NAME[character]} 조리법 실패:`, err.message?.slice(0, 120));
     return null;
@@ -215,4 +224,52 @@ export async function judgeMade(mode, input) {
   return judge(mode, input);
 }
 
-export default { monologue, reply, canJudge, recipe, judgeMade };
+// ---------------------------------------------------------------- 일기
+
+/** 일기 한 편의 길이 상한 — 서버가 받는 만큼(`accountController` 의 diaryEntryOf). */
+const DIARY_MAX = 500;
+
+/**
+ * 오늘 있었던 일을 **그 사람의 일기**로 두세 문장. 요약 카드와 `/프로필` 의 일기 탭이 쓴다.
+ * 말투는 평소 그대로다(시스템 프롬프트의 어미) — 미겔은 존댓말로, 마티암은 반말로 쓴다.
+ * 못 쓰면 null — 부르는 쪽이 메모를 이어 붙여 적는다(`run.diaryText`).
+ */
+export async function diary({ character, facts, variant = Math.random() * VARIANTS }) {
+  if (!allowed()) return null;
+  const text = [
+    memo(facts),
+    '',
+    '## 쓸 것',
+    '오늘 있었던 일을 **일기**로 적는다. 두세 문장, 많아야 네 문장.',
+    '혼자 쓰는 글이다 — 누구에게 말을 걸지 않는다. 그래도 어미와 말버릇은 평소 나답게.',
+    '메모에 있는 일만 적는다. 없는 일을 지어내지 않는다. 숫자는 꼭 필요할 때만.',
+    '그날의 기분이나 한 줄 감상을 곁들여도 좋다. 메모에 적힌 말을 그대로 옮겨 적지는 않는다.',
+    '날짜 · 제목 · 따옴표 · (괄호 행동)은 붙이지 않는다. 일기 글만 한 문단으로.',
+  ].join('\n');
+
+  try {
+    const res = await generate({
+      system: systemOf(character, variant),
+      contents: [{ role: 'user', parts: [{ text }] }],
+      temperature: 1.0,
+      maxOutputTokens: 1500,
+    });
+    const out = ownLaugh(character, clean(String(res.text || '')))
+      .replace(/\([^)]*\)/g, '')
+      .replace(/^["“]|["”]$/g, '')
+      .replace(/\s*\n+\s*/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if ([...out].length < 10) return null;
+    if ([...out].length <= DIARY_MAX) return out;
+    // 넘치면 문장 끝에서 자른다 — 말 중간에 끊긴 일기는 어색하다.
+    const cut = [...out].slice(0, DIARY_MAX).join('');
+    const at = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '), cut.lastIndexOf('~ '));
+    return at > 40 ? cut.slice(0, at + 1) : `${cut.slice(0, DIARY_MAX - 1)}…`;
+  } catch (err) {
+    console.warn(`[일상] ${NAME[character]} 일기 실패:`, err.message?.slice(0, 120));
+    return null;
+  }
+}
+
+export default { monologue, reply, canJudge, recipe, judgeMade, diary };

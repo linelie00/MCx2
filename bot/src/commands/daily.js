@@ -43,7 +43,7 @@ import {
   runDay, labelOf, recordOf, diaryOf,
 } from '../daily/run.js';
 import {
-  monologue, reply, recipe, judgeMade, canJudge,
+  monologue, reply, recipe, judgeMade, canJudge, diary,
 } from '../daily/talk.js';
 import { resultEmbed } from './make.js';
 import { resultEmbed as fishResultEmbed } from '../yacht/fishRender.js';
@@ -244,6 +244,7 @@ async function spend(interaction, day, { id, character, name }) {
     reply,
     recipe,
     judge: judgeMade,
+    diary,
   };
 
   const { icon, label } = labelOf(choice);
@@ -276,17 +277,44 @@ async function spend(interaction, day, { id, character, name }) {
     await announceTitles(room, io, involved, titlesBefore);
   }
 
+  // 요약 카드는 **그 사람의 일기**처럼 — 날짜·날씨 한 줄, 일기 글. 숫자가 든 사실은 바닥에 작게.
   // 둘이 한 날은 제목에 같이 적는다. 쓰러진 상대를 일으키러 간 날은 "함께" 가 아니다.
   const together = choice.duo && !choice.plan?.revive
     ? ` · ${josa(OWNER_META[partner].character, ['과', '와'])} 함께` : '';
+  const heading = `_${dateLabel()}${today?.text ? ` · ${today.text}` : ''}_`;
   await interaction.editReply({
     embeds: [base({
       title: `${icon} ${name}의 하루 · ${label}${together}`,
-      description: result.lines.join('\n'),
+      description: result.diary ? `${heading}\n\n${result.diary}` : result.lines.join('\n'),
       color,
-      footer: `오늘 남은 일상 ${quota.left}번 · 한국 시간 0시에 다시 세 번`,
+      footer: [
+        result.diary ? plainFacts(result.lines, ctx.human) : null,
+        `오늘 남은 일상 ${quota.left}번 · 한국 시간 0시에 다시 세 번`,
+      ].filter(Boolean).join('\n'),
     })],
   }).catch((err) => console.warn('[일상] 요약 실패:', err.message));
+}
+
+/** `9월 24일` — 한국 날짜. */
+function dateLabel() {
+  const [, m, d] = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date()).split('-');
+  return `${Number(m)}월 ${Number(d)}일`;
+}
+
+/**
+ * 요약 줄을 카드 바닥(푸터)에 적을 모양으로. 푸터는 마크다운을 안 그려서 굵은 글씨·기울임 표시를
+ * 걷어 내고, 인용 줄(수다의 첫 마디)은 일기에 이미 녹아 있으니 뺀다. 멘션은 이름으로.
+ */
+function plainFacts(lines, human) {
+  return (lines ?? [])
+    .filter((l) => !String(l).startsWith('> '))
+    .map((l) => String(l)
+      .replace(/<@!?(\d+)>/g, (_, uid) => (uid === human?.id ? human.name : '누군가'))
+      .replace(/\*\*/g, '')
+      .replace(/^_|_$/g, '')
+      .trim())
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /**

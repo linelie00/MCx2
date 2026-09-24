@@ -4,8 +4,9 @@
  *   /일상 캐릭터:미겔
  *
  * 명령한 사람은 **누구의 하루인지만** 고른다. 무엇을 할지는 캐릭터가 정한다(`daily/pick.js`) —
- * 장을 보거나, 누군가에게 선물을 하거나, 가진 재료로 요리·제작을 하거나, 혼잣말을 하거나,
- * 상대를 불러 수다를 떤다. 요리·제작은 `/요리` 와 같은 심사관이 채점하고 같은 결과 카드를 낸다.
+ * 장을 보거나, 누군가에게 선물을 하거나, 가진 재료로 요리·제작을 하거나, 낚시·던전에 가거나,
+ * 혼잣말을 하거나, 상대를 불러 수다를 떤다. 요리·제작은 `/요리` 와, 낚시는 `/요트 낚시` 와,
+ * 던전은 `/홀덤 던전` 과 같은 규칙·같은 정산이다. **던전에서는 쓰러질 수 있다.**
  * 스레드를 하나 열고 그 안에서 한 장면을 진행한다(`daily/run.js`). 모든 일은 혼잣말로 시작한다.
  *
  * **하루 세 번, 캐릭터마다 따로** — 서버가 센다(`POST /api/accounts/npc-day`). 둘이 하는 일은
@@ -38,6 +39,7 @@ import {
 } from '../daily/talk.js';
 import { resultEmbed } from './make.js';
 import { resultEmbed as fishResultEmbed } from '../yacht/fishRender.js';
+import * as payout from '../holdem/payout.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
@@ -132,7 +134,12 @@ async function spend(interaction, day, { id, character, name }) {
   const choice = choose({
     character,
     me,
-    partner: { account: accounts[partnerId], free: !isDead(accounts[partnerId]) && !seatedAt(partnerId) },
+    // 쓰러진 상대는 부를 수 없다 — 대신 골드가 넉넉하면 부활의 영약을 사다 먹일 수 있다(`dead`).
+    partner: {
+      account: accounts[partnerId],
+      free: !isDead(accounts[partnerId]) && !seatedAt(partnerId),
+      dead: isDead(accounts[partnerId]) && !seatedAt(partnerId),
+    },
     human: interaction.user.bot ? null : {
       free: !seatedAt(interaction.user.id),
       crafts: accounts[interaction.user.id]?.crafts?.length ?? 0,
@@ -178,6 +185,25 @@ async function spend(interaction, day, { id, character, name }) {
       await room.send({ embeds: [resultEmbed(mode, craft, info)] })
         .catch((err) => console.warn('[일상] 결과 카드 실패:', err.message));
       await sleep(2500);
+    },
+    embed: async (card) => {
+      await room.send({ embeds: [base(card)] })
+        .catch((err) => console.warn('[일상] 카드 실패:', err.message));
+      await sleep(2500);
+    },
+    // 던전의 저장 — `/홀덤 던전` 과 같은 길(`holdem/payout.js`). 체력은 핸드마다, 끝에 넘친 기운·전리품.
+    dungeon: {
+      met: (who, foe) => payout.metEnemy(who, foe),
+      hand: (game) => payout.hand(game).catch((err) => {
+        console.warn('[일상] 던전 체력 저장 실패:', err.message);
+        return { ok: false };
+      }),
+      overflow: (game) => payout.settleOverflow(game).catch((err) => {
+        console.warn('[일상] 넘친 기운 정산 실패:', err.message);
+        return null;
+      }),
+      won: (who, drops, opts) => payout.dungeonWon(who, drops, opts),
+      lost: (who, died) => payout.dungeonLost(who, died),
     },
     fishCard: async (round, extra) => {
       await room.send({ embeds: [fishResultEmbed(round, extra)] })

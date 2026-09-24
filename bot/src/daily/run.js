@@ -20,6 +20,7 @@
  *   io.say(who, text)   캐릭터로 한 줄      io.note(text)   작은 글씨 한 줄
  *   io.apply(moves)     계정 쓰기          io.card(mode, craft, info)   `/요리` 의 결과 카드
  *   io.tryFish(id)      하루 낚시 한 번    io.fishCard(round, extra)    `/요트 낚시` 의 결과 카드
+ *   io.embed(card)      카드 한 장         io.dungeon.{met,hand,overflow,won,lost}   `holdem/payout.js` 의 것
  *   io.monologue · io.reply · io.recipe · io.judge   `daily/talk.js` 의 것
  *
  * ctx 에 `die`(주사위 한 개, 1~6)를 주면 낚시 주사위를 그걸로 굴린다 — 검사용. 없으면 요트와 같은 굴림.
@@ -38,6 +39,11 @@ import { josa } from '../farm/requesters.js';
 import { canned, fill } from './lines.js';
 import { HURT } from './pick.js';
 import { candidatesOf, narrow, takeTurn } from './angler.js';
+import * as delve from './delve.js';
+import * as holdem from '../holdem/state.js';
+import { drawEnemy } from '../holdem/mobs.js';
+import { roll as rollLoot, listText } from '../casino/loot.js';
+import { describe } from '../casino/poker.js';
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 const itemOf = (key) => ITEM_BY_KEY[key];
@@ -47,7 +53,9 @@ const pickOne = (list, rand) => list[Math.floor(rand() * list.length)];
 /** 스레드 이름과 요약 카드의 꼬리표. */
 export function labelOf({ kind, duo, plan }) {
   if (kind === 'talk') return duo ? { icon: '💬', label: '수다' } : { icon: '💭', label: '혼잣말' };
+  if (kind === 'shop' && plan?.revive) return { icon: '💫', label: '부활의 영약' };
   if (kind === 'shop') return plan?.drink ? { icon: '🍶', label: '약 사러' } : { icon: '🛒', label: '장보기' };
+  if (kind === 'dungeon') return { icon: '⚔️', label: '던전' };
   if (kind === 'cook' || kind === 'craft') return { icon: MODE_OF[kind].icon, label: MODE_OF[kind].verb };
   if (kind === 'fish') return { icon: '🎣', label: '낚시' };
   return { icon: '🎁', label: '선물' };
@@ -173,21 +181,28 @@ async function runShop(ctx, io) {
   const vars = { item: item.name, count: plan.count, partner: NAME[partner], giver: NAME[me] };
   const obj = josa(item.name, ['을', '를']);
 
+  // 쓰러진 상대에게 부활의 영약 — 장보기의 한 갈래다(`pick.js`). 상대가 쓰러져 있어서 부를 수는 없고, 찾아간다.
+  const revive = Boolean(plan.revive);
   const facts = [
     ...factsOf(ctx, me),
+    revive ? `${josa(NAME[partner], ['이', '가'])} 쓰러져 있다(체력 0). 부활의 영약으로만 일어난다` : null,
     plan.drink
-      ? `상점에서 ${obj} ${num(plan.cost)}골드에 사서 ${duo ? `다친 ${NAME[partner]}에게 먹일` : '바로 마실'} 참이다.`
+      ? `상점에서 ${obj} ${num(plan.cost)}골드에 사서 ${duo ? `${revive ? '쓰러진' : '다친'} ${NAME[partner]}에게 먹일` : '바로 마실'} 참이다.`
       : `상점에서 ${item.name} ${plan.count}개를 ${num(plan.cost)}골드에 ${duo ? `${NAME[partner]}에게 줄 셈으로 ` : ''}살 참이다.`,
     duo ? `${NAME[partner]}의 체력 ${num(ctx.partnerAccount?.hp ?? MAX_HP)}/${MAX_HP}` : null,
   ];
   const beats = duo
     ? [
-      plan.drink
-        ? { key: 'open', canned: 'potionForOpen', ask: `혼잣말 — 다친 ${NAME[partner]}에게 줄 회복약을 사러 가기로 하는 말. **약을 사러 간다는 것이 드러나게.**` }
-        : { key: 'open', canned: 'shopForOpen', ask: `혼잣말 — ${NAME[partner]}에게 줄 것을 사러 가기로 하는 말. **${NAME[partner]} 몫을 사러 간다는 것이 드러나게.**` },
-      plan.drink
-        ? { key: 'hand', canned: 'potionForHand', ask: `${NAME[partner]}에게 회복약을 건네며 마시라고 하는 말.` }
-        : { key: 'hand', canned: 'shopForHand', ask: `${NAME[partner]}에게 사 온 ${obj} 건네며 하는 말.` },
+      revive
+        ? { key: 'open', canned: 'reviveOpen', ask: `혼잣말 — 쓰러진 ${josa(NAME[partner], ['을', '를'])} 일으키려고 부활의 영약을 사러 가기로 하는 말. **영약을 사러 간다는 것이 드러나게.**` }
+        : plan.drink
+          ? { key: 'open', canned: 'potionForOpen', ask: `혼잣말 — 다친 ${NAME[partner]}에게 줄 회복약을 사러 가기로 하는 말. **약을 사러 간다는 것이 드러나게.**` }
+          : { key: 'open', canned: 'shopForOpen', ask: `혼잣말 — ${NAME[partner]}에게 줄 것을 사러 가기로 하는 말. **${NAME[partner]} 몫을 사러 간다는 것이 드러나게.**` },
+      revive
+        ? { key: 'hand', canned: 'reviveHand', ask: `쓰러져 있는 ${NAME[partner]}에게 부활의 영약을 먹이며 하는 말.` }
+        : plan.drink
+          ? { key: 'hand', canned: 'potionForHand', ask: `${NAME[partner]}에게 회복약을 건네며 마시라고 하는 말.` }
+          : { key: 'hand', canned: 'shopForHand', ask: `${NAME[partner]}에게 사 온 ${obj} 건네며 하는 말.` },
     ]
     : [
       plan.drink
@@ -207,6 +222,8 @@ async function runShop(ctx, io) {
   const saved = await io.apply({
     deltas: { [meId]: -plan.cost },
     ...(plan.drink ? { hp: { [toId]: heal } } : { items: { [toId]: { [plan.key]: plan.count } } }),
+    // 「힐러」 — 쓰러진 이에게 부활의 영약을 먹였다. `/사용` 으로 먹였을 때와 같은 칸이다.
+    ...(revive ? { bump: { [meId]: { reviveGiven: 1 } } } : {}),
   });
   if (!saved.ok) {
     await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
@@ -234,21 +251,24 @@ async function runShop(ctx, io) {
 
   await io.note(`🛒 ${josa(NAME[me], ['이', '가'])} ${NAME[partner]} 몫으로 ${plan.drink ? obj : things} 샀다 · −${num(plan.cost)}골드`);
   await io.say(me, said.hand);
-  if (plan.drink) await io.note(`🍶 ${josa(NAME[partner], ['이', '가'])} 약을 마셨다 · ${hpText}`);
+  if (revive) await io.note(`💫 ${josa(NAME[partner], ['이', '가'])} 일어났다 · ${hpText}`);
+  else if (plan.drink) await io.note(`🍶 ${josa(NAME[partner], ['이', '가'])} 약을 마셨다 · ${hpText}`);
   const thanks = await answer(ctx, io, {
     who: receiver,
     from: me,
     heard: said.hand,
-    facts: [plan.drink
-      ? `${josa(NAME[me], ['이', '가'])} 사 온 ${obj} 받아 마셨다. 체력 ${before} → ${after}`
-      : `${josa(NAME[me], ['이', '가'])} 상점에서 사 온 ${item.name} ${plan.count}개를 나에게 줬다`],
-    fallback: plan.drink ? 'drinkThanks' : 'thanks',
+    facts: [revive
+      ? `쓰러져 있다가 ${josa(NAME[me], ['이', '가'])} 먹여 준 부활의 영약으로 일어났다. 체력 ${before} → ${after}`
+      : plan.drink
+        ? `${josa(NAME[me], ['이', '가'])} 사 온 ${obj} 받아 마셨다. 체력 ${before} → ${after}`
+        : `${josa(NAME[me], ['이', '가'])} 상점에서 사 온 ${item.name} ${plan.count}개를 나에게 줬다`],
+    fallback: revive ? 'revived' : plan.drink ? 'drinkThanks' : 'thanks',
     vars,
   });
   await io.say(receiver, thanks);
   return {
     lines: [
-      `${plan.drink ? '🍶' : '🛒'} ${NAME[partner]}에게 ${bought}`,
+      `${revive ? '💫' : plan.drink ? '🍶' : '🛒'} ${NAME[partner]}에게 ${bought}`,
       plan.drink ? `❤️ ${NAME[partner]} ${hpText}` : null,
     ].filter(Boolean),
   };
@@ -596,6 +616,314 @@ async function runFish(ctx, io) {
   };
 }
 
+// ---------------------------------------------------------------- ⚔️ 던전
+
+/**
+ * `/홀덤 던전` 과 **같은 판**을 버튼 없이 돈다(`daily/delve.js`). 체력은 핸드마다 저장하고
+ * (`payout.hand` — 봇이 재시작해도 그 핸드까지는 남는다), 끝나면 넘친 기운·전리품·전적을 정산한다.
+ * **쓰러질 수 있다.** 쓰러지면 부활의 영약으로만 일어난다.
+ *
+ * 둘이 갔으면 **교대로** 싸운다 — 싸우던 쪽이 바닥나면 쉬던 쪽이 나서고, **쓰러져도 쉬던 쪽이
+ * 이어 싸운다**(올인 한 번에 바닥을 건너뛰고 쓰러지는 일이 흔해서다). 쓰러진 쪽은 그대로 쓰러져
+ * 있다. 둘 다 쓰러질 수도 있다.
+ *
+ * 중계는 **굵직한 것만** — 체력이 크게 오간 핸드·올인·쇼다운·끝난 핸드만 한 줄씩, 잔잔한 핸드는
+ * 모아 두었다가 다음 굵은 줄 앞에 한 줄로 적는다. 판 도중의 중얼거림은 미리 써 둔 줄이다 —
+ * 한 판에 핸드가 스물을 넘기도 해서, 그걸 다 AI 로 부르면 한도를 혼자 쓴다.
+ */
+
+/** 크게 딴·잃은 핸드 — 한 번씩 중얼거린다. */
+const BIG = 15;
+/** 이 아래로 떨어지면 한 번 중얼거린다. */
+const LOW_SAY = 25;
+/** 이만큼(핸드 전 체력의 몫) 오가면 굵은 핸드다. 적어도 6. */
+const LOUD_SHARE = 0.15;
+
+const sign = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '±0');
+const charOf = (id) => String(id).replace(/^npc:/, '');
+const nameOfId = (id) => NAME[charOf(id)] ?? id;
+/** `미겔·마티암` */
+const namesOf = (ids) => ids.map(nameOfId).join('·');
+
+/** 굵은 핸드 한 줄. 쇼다운이면 서로의 족보를 붙인다. */
+function handLine(game, row, results, allIn) {
+  const f = delve.fighterOf(game);
+  const m = delve.mobOf(game);
+  const shown = new Map((results.shown ?? []).map((x) => [x.seatIndex, x.hand]));
+  const fi = game.seats.indexOf(f);
+  const mi = game.seats.indexOf(m);
+  const vs = shown.has(fi) && shown.has(mi) ? ` (${describe(shown.get(fi))} vs ${describe(shown.get(mi))})` : '';
+  return `🃏 ${game.handNo}핸드${allIn ? ' · 올인' : ''} · ${row.name} ${sign(row.net)}${vs} → 체력 ${f.gold} · ${m.name} ${m.gold}`;
+}
+
+/** 넘친 기운의 정산을 한두 줄로(`payout.settleOverflow` 의 결과). */
+function overflowText(done) {
+  if (!done) return '';
+  const lines = [];
+  for (const h of done.heal ?? []) {
+    lines.push(h.from === done.to
+      ? `💚 **${nameOfId(h.from)}** — 넘친 기운으로 체력을 **${h.hp}** 되찾았어요`
+      : `💚 **${nameOfId(h.from)}** — 넘친 기운으로 ${nameOfId(done.to)}의 체력을 **${h.hp}** 고쳤어요`);
+  }
+  for (const [id, got] of Object.entries(done.items ?? {})) {
+    if (!Object.keys(got).length) continue;
+    lines.push(`🎒 **${nameOfId(id)}** — 남은 기운 **${done.spare?.[id] ?? '?'}** → ${listText({ items: got }, ITEM_BY_KEY)}`);
+  }
+  if (!lines.length) return '';
+  if (!done.ok) lines.push('_저장하지 못했어요._');
+  return `\n\n${lines.join('\n')}`;
+}
+
+/** 전리품을 대사 메모에 쓸 모양으로 — 굵은 글씨 없이. */
+const plainDrops = (drops) => [
+  ...Object.entries(drops.items ?? {}).map(([k, n]) => `${itemOf(k)?.name ?? k}${n > 1 ? ` ${n}개` : ''}`),
+  drops.gold ? `${num(drops.gold)}골드` : null,
+  drops.mt ? `MT ${drops.mt}` : null,
+].filter(Boolean).join(', ');
+
+/** 쓰러진 이를 일으키는 법 — 캐릭터마다 한 줄. */
+const reviveHow = (ids) => ids.map((id) => `\`/사용 이름:부활의 영약 캐릭터:${nameOfId(id)}\``).join(' · ');
+
+async function runDungeon(ctx, io) {
+  const me = ctx.character;
+  const partner = ctx.partner;
+  const { duo } = ctx.choice;
+  const meId = NPC_ID[me];
+  const partnerId = NPC_ID[partner];
+  const vars = { partner: NAME[partner], giver: NAME[me] };
+  const mob = drawEnemy(ctx.rand);
+  const foe = mob.name;
+
+  const beats = [
+    { key: 'open', canned: 'delveOpen', ask: '혼잣말 — 오늘은 던전에 내려가기로 정하는 말. **던전에 간다는 것이 드러나게.**' },
+    ...(duo ? [{ key: 'invite', canned: 'delveInvite', ask: `${NAME[partner]}에게 같이 던전에 가자고 하는 말.` }] : []),
+    { key: 'face', canned: 'delveFace', ask: `혼잣말 — 던전에서 ${josa(foe, ['을', '를'])} 마주하고 하는 말.` },
+  ];
+  const said = await scripted(ctx, io, me, [
+    ...factsOf(ctx, me),
+    `던전에서 마주칠 적: ${foe}${mob.elite ? ' (엘리트 — 훨씬 세다)' : ''} — ${mob.note}`,
+    '던전에서는 체력을 걸고 싸운다. 쓰러지면 부활의 영약으로만 일어난다',
+  ], beats, vars);
+
+  const opened = delve.open({
+    owner: meId,
+    partner: duo ? partnerId : null,
+    hp: Number(ctx.me?.hp ?? MAX_HP),
+    partnerHp: duo ? Number(ctx.partnerAccount?.hp ?? MAX_HP) : 0,
+    mob,
+    rand: ctx.rand,
+  });
+  await io.say(me, said.open);
+  if (opened.error) {
+    await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
+    return { lines: [`⚔️ 던전에 못 들어갔어요 — ${opened.error}`] };
+  }
+  const { game } = opened;
+  if (duo) {
+    await io.say(me, said.invite);
+    await io.note(`${josa(NAME[partner], ['이', '가'])} 뒤를 받친다.`);
+    await io.say(partner, fill(canned(partner, 'delveCome', ctx.rand), vars));
+  }
+  // 체력은 **들어올 때 값**으로 적는다 — 자리의 값은 이미 첫 블라인드를 낸 뒤다.
+  await io.note(`⚔️ ${mob.elite ? '엘리트 · ' : ''}${foe} — 체력 ${game.cap[delve.mobOf(game).id]}`
+    + ` · 블라인드 ${game.stakes.sb}/${game.stakes.bb}\n${mob.note}`);
+  await io.say(me, said.face);
+  // 도감 — 만났다. 판을 막지 않는다(`/홀덤 던전` 과 같다).
+  await io.dungeon.met(meId, foe);
+
+  const quiet = { n: 0, net: 0 };
+  const flush = async () => {
+    if (!quiet.n) return;
+    await io.note(`· 잔잔한 핸드 ${quiet.n}번 (${sign(quiet.net)})`);
+    quiet.n = 0;
+    quiet.net = 0;
+  };
+  // 중얼거림은 사람·갈래마다 한 번 — 같은 말을 핸드마다 하면 중계가 대사에 묻힌다.
+  const once = new Set();
+  const mutter = async (who, key) => {
+    if (once.has(`${who}:${key}`)) return;
+    once.add(`${who}:${key}`);
+    await io.say(who, fill(canned(who, key, ctx.rand), vars));
+  };
+  const fallen = [];                 // 쓰러진 순서
+  let carrier = null;                // 쓰러진 쪽을 업고 나온 쪽
+  let level = game.stakes.level ?? 0;
+  let unsaved = false;
+  const nextHand = async () => {
+    if (!holdem.nextHand(game)) return false;
+    if ((game.stakes.level ?? 0) !== level) {
+      level = game.stakes.level ?? 0;
+      await io.note(`📈 블라인드가 ${game.stakes.sb}/${game.stakes.bb}로 올랐다`);
+    }
+    return true;
+  };
+
+  for (;;) {
+    const results = delve.playHand(game, ctx.rand);
+    const f = delve.fighterOf(game);
+    const m = delve.mobOf(game);
+    const row = results.rows.find((r) => r.seat === f);
+    const net = row?.net ?? 0;
+    const allIn = game.seats.some((s) => s.allIn);
+    const saved = await io.dungeon.hand(game);
+    if (!saved?.ok) unsaved = true;
+
+    const over = f.gold <= 0 || m.gold <= 0;
+    if (over || allIn || Math.abs(net) >= Math.max(6, Math.round((f.gold - net) * LOUD_SHARE))) {
+      await flush();
+      await io.note(handLine(game, row, results, allIn));
+    } else {
+      quiet.n += 1;
+      quiet.net += net;
+    }
+
+    if (f.gold <= 0) {
+      // 쓰러졌다. 마지막 말을 하고 — 같이 온 쪽이 있으면 성격대로 이어 싸우거나 업고 물러난다.
+      fallen.push(f.id);
+      await io.say(f.character, fill(canned(f.character, 'fallen', ctx.rand), vars));
+      const after = delve.afterFall(game, ctx.rand);
+      if (after.step === 'avenge') {
+        delve.swap(game, after.to);
+        const now = delve.fighterOf(game);
+        await io.say(now.character, fill(canned(now.character, 'avenge', ctx.rand), vars));
+        await io.note(`🔁 ${josa(now.name, ['이', '가'])} 나섰다 · 체력 ${now.gold}`);
+        if (!(await nextHand())) break;
+        continue;
+      }
+      if (after.step === 'carry') {
+        carrier = after.by;
+        await io.say(charOf(carrier), fill(canned(charOf(carrier), 'carryOut', ctx.rand), vars));
+        await io.note(`🏃 ${josa(nameOfId(carrier), ['이', '가'])} ${josa(f.name, ['을', '를'])} 업고 물러났다`);
+        holdem.end(game, 'fled');
+      }
+      break;
+    }
+    if (!over) {
+      if (net >= BIG) await mutter(f.character, 'delveWin');
+      else if (net <= -BIG) await mutter(f.character, 'delveHit');
+      if (f.gold <= LOW_SAY) await mutter(f.character, 'delveLow');
+    }
+
+    const next = delve.between(game, ctx.rand);
+    if (next.step === 'end') break;
+    if (next.step === 'flee') {
+      await flush();
+      await io.say(f.character, fill(canned(f.character, 'fleeLine', ctx.rand), vars));
+      holdem.end(game, 'fled');
+      break;
+    }
+    if (next.step === 'swap') {
+      await flush();
+      await io.say(f.character, fill(canned(f.character, 'swapOut', ctx.rand), vars));
+      delve.swap(game, next.to);
+      const now = delve.fighterOf(game);
+      await io.note(`🔁 ${josa(now.name, ['이', '가'])} 나섰다 · 체력 ${now.gold}`);
+      await io.say(now.character, fill(canned(now.character, 'swapIn', ctx.rand), vars));
+    }
+    if (!(await nextHand())) break;
+  }
+  await flush();
+
+  const f = delve.fighterOf(game);
+  const m = delve.mobOf(game);
+  const wiped = f.gold <= 0;              // 마지막으로 싸우던 쪽까지 쓰러졌다
+  const won = !wiped && m.gold <= 0;
+  const hands = `${game.handNo}핸드`;
+  const standing = [meId, ...(duo ? [partnerId] : [])].filter((id) => !fallen.includes(id));
+
+  // 넘친 기운은 **끝날 때 한 번** — 이기든 지든 물러나든(`/홀덤 던전` 과 같다).
+  const cashed = await io.dungeon.overflow(game);
+  let drops = null;
+  if (won) {
+    drops = rollLoot(ctx.rand, { elite: Boolean(mob.elite) });
+    const r = await io.dungeon.won(meId, drops, {
+      foe, elite: Boolean(mob.elite), solo: !game.allyUsed, quick: game.handNo === 1, trio: false,
+    });
+    if (!r?.ok) unsaved = true;
+  }
+  // 쓰러짐 — 판을 진 것은 한 번(마지막으로 쓰러진 쪽과 함께), 그 앞에 쓰러진 쪽은 쓰러짐만 센다.
+  if (wiped) await io.dungeon.lost(meId, f.id);
+  const earlier = fallen.filter((id) => !(wiped && id === f.id));
+  if (earlier.length) {
+    const r = await io.apply({ bump: Object.fromEntries(earlier.map((id) => [id, { dungeonDied: 1 }])) });
+    if (!r?.ok) unsaved = true;
+  }
+  const hpNow = f.gold;
+  const down = (fallen.length
+    ? `\n💀 **${namesOf(fallen)}** — 쓰러졌어요. 부활의 영약을 먹이면 일어나요: ${reviveHow(fallen)}`
+    : '') + (carrier ? `\n🏃 **${nameOfId(carrier)}** 이(가) 업고 나왔어요.` : '');
+  const hope = fallen.length && standing.length
+    ? `\n_${namesOf(standing)}의 일상에서 영약을 사다 먹일 수도 있어요._`
+    : '';
+
+  await io.embed(won
+    ? {
+      title: mob.elite ? '⚔️ 엘리트를 쓰러뜨렸어요' : '⚔️ 쓰러뜨렸어요',
+      description: `**${foe}** 을(를) 눕혔어요. ${hands}.${down}${hope}`
+        + `\n\n**주운 것** — ${listText(drops, ITEM_BY_KEY)}${overflowText(cashed)}`,
+      color: mob.elite ? 0xc9a227 : 0x8a7a5c,
+      footer: `${f.name} 남은 체력 ${hpNow} · /에너미 도감 에 ${foe}의 성향이 적혔어요`,
+    }
+    : wiped
+      ? {
+        title: '💀 쓰러졌어요',
+        description: `**${foe}** 에게 졌어요. ${hands}.${down}${hope}${overflowText(cashed)}`,
+        color: 0x6b5b5b,
+      }
+      : {
+        title: '🏃 물러났어요',
+        description: `**${foe}** 을(를) 두고 물러났어요. ${hands}.\n${f.name} 남은 체력 **${hpNow}**.${down}${hope}${overflowText(cashed)}`,
+        color: 0x8a7a5c,
+      });
+
+  // 끝의 말 — 서 있는 쪽이 한다. 다 쓰러졌으면 쓰러질 때 한 말이 마지막이다.
+  if (standing.length) {
+    const speaker = charOf(standing[0]);
+    const other = charOf(standing[1] ?? '');
+    const outcome = won
+      ? [`${josa(foe, ['을', '를'])} 쓰러뜨렸다(${hands})`, `주운 것: ${plainDrops(drops)}`]
+      : wiped
+        ? [`${foe}에게 졌다(${hands})`]
+        : [`${foe}에게서 물러났다(${hands})`];
+    const downFacts = fallen.map((id) => `${josa(nameOfId(id), ['이', '가'])} 쓰러져 있다. 부활의 영약으로만 일어난다`);
+    const line = await io.reply({
+      character: speaker,
+      facts: [...factsOf(ctx, speaker).slice(0, 1), ...outcome, ...downFacts],
+      ask: fallen.length
+        ? '혼잣말 — 쓰러진 동료를 부축해 던전을 나서며 하는 말.'
+        : won ? '혼잣말 — 던전을 나서며 하는 말.' : '혼잣말 — 도망쳐 나와 숨을 고르며 하는 말.',
+    });
+    const last = line || fill(canned(speaker, fallen.length ? 'fallenCry' : won ? 'delveWon' : 'delveFled', ctx.rand), vars);
+    await io.say(speaker, last);
+    if (other) {
+      const r = await answer(ctx, io, {
+        who: other,
+        from: speaker,
+        heard: last,
+        facts: [`${josa(NAME[speaker], ['과', '와'])} 같이 던전에 갔다`, ...outcome.slice(0, 1)],
+        fallback: won ? 'delveCheer' : 'delveSigh',
+        vars,
+        ask: '같이 던전을 나서며 하는 한마디.',
+      });
+      await io.say(other, r);
+    }
+  }
+
+  const head = won
+    ? `⚔️ ${josa(foe, ['을', '를'])} 쓰러뜨렸어요 · ${hands}`
+    : wiped ? `💀 ${foe}에게 졌어요 · ${hands}` : `🏃 ${foe}에게서 물러났어요 · ${hands}`;
+  return {
+    lines: [
+      head,
+      won ? `🎒 ${listText(drops, ITEM_BY_KEY)}` : null,
+      !won && !wiped ? `❤️ ${f.name} 남은 체력 ${hpNow}` : null,
+      fallen.length ? `💀 ${namesOf(fallen)} 쓰러짐 — 부활의 영약이 있어야 일어나요.` : null,
+      carrier ? `🏃 ${josa(nameOfId(carrier), ['이', '가'])} 업고 나왔어요.` : null,
+      unsaved ? '_저장하지 못한 것이 있어요._' : null,
+    ].filter(Boolean),
+  };
+}
+
 /**
  * 한 장면을 진행한다. `{ lines }` — 요약 카드에 적을 줄들.
  *
@@ -604,7 +932,7 @@ async function runFish(ctx, io) {
  */
 export async function runDay(ctx, io) {
   const run = {
-    talk: runTalk, shop: runShop, gift: runGift, cook: runMake, craft: runMake, fish: runFish,
+    talk: runTalk, shop: runShop, gift: runGift, cook: runMake, craft: runMake, fish: runFish, dungeon: runDungeon,
   }[ctx.choice.kind];
   return run({ rand: Math.random, ...ctx }, io);
 }

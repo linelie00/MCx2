@@ -42,6 +42,12 @@ export const HUMAN_GIFT_CAP = 200;
  */
 export const POTIONS = ['potionSmall', 'potionMedium', 'potionLarge'];
 
+/** 부활의 영약 — 쓰러진 상대에게 사다 먹인다(장보기의 한 갈래). 쓰러진 쪽은 부를 수 없어 찾아간다. */
+const REVIVE = ITEM_BY_KEY.potionRevive;
+
+/** 던전에 들어갈 수 있는 최소 체력 — `/홀덤 던전` 의 DUNGEON_FLOOR 와 같다. 이 아래로는 안 간다. */
+export const DUNGEON_FLOOR = 30;
+
 /** 장바구니 — 상점이 파는 재료(`shop: true`). 상점의 진열대(SHELVES)를 짓는 규칙과 같다. */
 const GROCERIES = ITEMS.filter((i) => i.kind === '재료' && i.shop);
 
@@ -62,12 +68,12 @@ const HANDY = {
 
 /** 하고 싶은 일의 무게 — 성격이다. 미겔은 말하고 주는 쪽, 마티암은 챙겨 두고 손으로 만드는 쪽. */
 const LIKES = {
-  migel: { talk: 3, shop: 2, gift: 3, cook: 2, craft: 1, fish: 2 },
-  matiam: { talk: 2, shop: 3, gift: 2, cook: 2, craft: 3, fish: 2 },
+  migel: { talk: 3, shop: 2, gift: 3, cook: 2, craft: 1, fish: 2, dungeon: 2 },
+  matiam: { talk: 2, shop: 3, gift: 2, cook: 2, craft: 3, fish: 2, dungeon: 1.5 },
 };
 
 /** 혼자도 둘이도 할 수 있을 때 둘이 할 확률. */
-const DUO = { talk: 0.6, shop: 0.35, gift: 0.5, cook: 0.4, craft: 0.3, fish: 0.35 };
+const DUO = { talk: 0.6, shop: 0.35, gift: 0.5, cook: 0.4, craft: 0.3, fish: 0.35, dungeon: 0.4 };
 
 export const PARTNER = { migel: 'matiam', matiam: 'migel' };
 
@@ -77,6 +83,17 @@ const isPotion = (key) => POTIONS.includes(key) || key === 'potionRevive';
 const hurt = (acct) => hpOf(acct) < HURT;
 /** 만든 것 칸이 남았는지. */
 const room = (acct) => (acct?.crafts?.length ?? 0) < MAX_CRAFTS;
+
+/**
+ * 던전에 갈 기운 — 체력이 넉넉할수록 크다. **쓰러질 수 있는 곳**이라, 다친 채로는 좀처럼 안 간다.
+ * 바닥(`DUNGEON_FLOOR`) 아래면 0 이다.
+ */
+export function delveWill(acct) {
+  const hp = hpOf(acct);
+  if (hp < DUNGEON_FLOOR) return 0;
+  if (hp >= 70) return 1;
+  return hp >= 50 ? 0.5 : 0.25;
+}
 
 /** `[값, 무게]` 목록에서 무게대로 하나. 무게가 다 0 이면 null. */
 export function weighted(list, rand) {
@@ -192,16 +209,19 @@ export function planGift(giver, to, rand) {
 }
 
 /**
- * 오늘 할 일. `{ kind, duo, plan }` — kind 는 `talk` · `shop` · `gift` · `cook` · `craft` · `fish`.
+ * 오늘 할 일. `{ kind, duo, plan }` — kind 는 `talk` · `shop` · `gift` · `cook` · `craft` · `fish` · `dungeon`.
  *
  *   me       부른 캐릭터의 계정
- *   partner  `{ account, free }` — free 는 쓰러지지 않았고 판에도 다른 일상에도 없는 것
+ *   partner  `{ account, free, dead }` — free 는 쓰러지지 않았고 판에도 다른 일상에도 없는 것,
+ *            dead 는 쓰러져 있는 것(판에도 다른 일상에도 없이). 쓰러졌으면 부를 수는 없고, 골드가
+ *            넉넉하면 **부활의 영약을 사다 먹인다** — 장보기의 한 갈래로, 다른 무엇보다 먼저 한다
  *   human    `{ free, crafts }` — 명령한 사람이 선물을 받을 수 있는지(판에 앉아 있지 않은지)와
  *            그 사람이 가진 만든 것 수. 없으면 null
  *   canMake  심사관(제미나이)을 부를 수 있는지. 아니면 요리·제작을 안 한다
  *
  * 둘이 하는 선물·장보기·요리·제작은 **상대 몫**이다. 혼자 하는 선물은 명령한 사람에게 간다.
  * 낚시는 늘 할 수 있다 — 둘이면 상대가 옆에서 구경한다. 하루 낚시(다섯 번)는 일상(세 번)보다 많다.
+ * 던전은 체력이 30 은 있어야 간다(`delveWill`). 둘이면 교대로 싸운다 — 상대도 30 은 있어야 한다.
  */
 export function choose({
   character, me, partner = null, human = null, canMake = false, rand = Math.random,
@@ -224,7 +244,15 @@ export function choose({
     cook: { solo: make('cook', me, character), duo: free ? make('cook', partner.account, other) : null },
     craft: { solo: make('craft', me, character), duo: free ? make('craft', partner.account, other) : null },
     fish: { solo: {}, duo: free ? {} : null },
+    dungeon: {
+      solo: delveWill(me) > 0 ? {} : null,
+      duo: free && delveWill(me) > 0 && hpOf(partner.account) >= DUNGEON_FLOOR ? {} : null,
+    },
   };
+  // 쓰러진 상대 — 부를 수는 없고, 골드가 넉넉하면 부활의 영약을 사다 먹인다.
+  if (partner?.dead && goldOf(me) - KEEP >= buyPrice(REVIVE)) {
+    options.shop.duo = { key: REVIVE.key, count: 1, cost: buyPrice(REVIVE), drink: true, revive: true };
+  }
 
   /** 누가 다쳤는지 — `[나, 상대]`. 약이나 먹을 것은 다친 쪽 몫이 먼저다. */
   const needs = (kind, o) => {
@@ -239,6 +267,8 @@ export function choose({
     let w = LIKES[character][kind];
     const [mine, theirs] = needs(kind, o);
     if (kind === 'shop' && (mine || theirs)) w *= 3;
+    if (kind === 'shop' && o.duo?.revive) w *= 4;
+    if (kind === 'dungeon') w *= delveWill(me);
     if (kind === 'cook' && ((mine && o.solo) || (theirs && o.duo))) w *= 2;
     if (kind === 'gift' && o.duo && hurt(partner.account) && (isPotion(o.duo.key) || o.duo.craft?.kind === '요리')) w *= 2;
     return w;
@@ -250,7 +280,8 @@ export function choose({
   if (o.solo && o.duo) {
     // 한쪽만 다쳤으면 다친 쪽 몫이 먼저다. 나머지는 성격대로 굴린다.
     const [mine, theirs] = needs(kind, o);
-    duo = mine !== theirs ? theirs : rand() < DUO[kind];
+    if (kind === 'shop' && o.duo.revive) duo = true;       // 쓰러진 쪽이 먼저다
+    else duo = mine !== theirs ? theirs : rand() < DUO[kind];
   } else {
     duo = Boolean(o.duo);
   }
@@ -258,5 +289,5 @@ export function choose({
 }
 
 export default {
-  HURT, KEEP, HUMAN_GIFT_CAP, POTIONS, PARTNER, weighted, planShop, planMake, planGift, choose,
+  HURT, KEEP, HUMAN_GIFT_CAP, POTIONS, PARTNER, DUNGEON_FLOOR, delveWill, weighted, planShop, planMake, planGift, choose,
 };

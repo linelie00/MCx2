@@ -12,6 +12,8 @@
  *   5. 요리·제작이 독을 안 넣고, `/요리` 와 같은 셈으로 저장하고, 망가진 것은 버리고,
  *      다친 쪽은 바로 먹고, 심사관이 막히면 재료를 안 쓰는지
  *   6. 낚시꾼이 기척을 바르게 읽고(숨은 줄을 후보에서 안 지운다), `/요트 낚시` 와 같은 셈으로 정산하는지
+ *   7. 던전이 체력을 한 톨도 새지 않고, 들어올 때 체력을 넘겨 저장하지 않고, 성격대로 교대·도망하고,
+ *      이기면 전리품·지면 쓰러짐으로 끝나는지. 쓰러진 상대에게는 부활의 영약을 사다 먹이는지
  */
 process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
@@ -24,6 +26,9 @@ const { MAX_CRAFTS, MODES } = await import('../src/casino/crafts.js');
 const fishing = await import('../src/yacht/fishing.js');
 const { candidatesOf, narrow, holdFor, takeTurn } = await import('../src/daily/angler.js');
 const { COMMON_ROWS } = await import('../src/casino/fish.js');
+const delve = await import('../src/daily/delve.js');
+const holdem = await import('../src/holdem/state.js');
+const { DUNGEON_FLOOR } = await import('../src/daily/pick.js');
 const { LINES, fill, canned } = await import('../src/daily/lines.js');
 const { runDay, labelOf } = await import('../src/daily/run.js');
 const busy = await import('../src/daily/busy.js');
@@ -96,7 +101,7 @@ eq('가진 게 없으면 선물을 못 한다', planGift(broke, { kind: 'human' 
   const runs = [...Array(2000)].map(() => choose({
     character: 'matiam', me: broke, partner: { account: broke, free: true }, human: { free: true }, rand: r,
   }));
-  eq('골드도 가진 것도 없으면 이야기와 낚시만', runs.every((c) => ['talk', 'fish'].includes(c.kind)), true);
+  eq('골드도 가진 것도 없으면 이야기·낚시·던전만', runs.every((c) => ['talk', 'fish', 'dungeon'].includes(c.kind)), true);
   eq('낚시도 혼자도 둘이도', [true, false].every((d) => runs.some((c) => c.kind === 'fish' && c.duo === d)), true);
   eq('이야기는 혼자도 둘이도', [true, false].every((d) => runs.some((c) => c.duo === d)), true);
 }
@@ -221,6 +226,72 @@ eq('기척 좁히기: 아무 기척 없으면 세 칸 이상', narrow(COMMON_ROW
   eq('판을 짓기만 하면 채널에 안 걸린다', fishing.get('x'), null);
 }
 
+// ---------------------------------------------------------------- 던전 고르기 · 판
+console.log('\n던전');
+{
+  const r = seeded(30);
+  const pickN = (opts) => [...Array(1500)].map(() => choose({ character: 'migel', rand: r, ...opts }));
+  eq('체력이 30 아래면 던전에 안 간다', pickN({ me: { gold: 0, hp: DUNGEON_FLOOR - 1 } }).some((c) => c.kind === 'dungeon'), false);
+  const runs = pickN({ me: { gold: 0, hp: 100 }, partner: { account: { hp: 20 }, free: true } });
+  eq('상대가 30 아래면 혼자 간다', runs.filter((c) => c.kind === 'dungeon').every((c) => !c.duo), true);
+  eq('상대가 멀쩡하면 둘이도 간다', pickN({ me: { gold: 0, hp: 100 }, partner: { account: { hp: 90 }, free: true } })
+    .some((c) => c.kind === 'dungeon' && c.duo), true);
+  const fallen = pickN({ me: { gold: 1500, hp: 100 }, partner: { account: { hp: 0 }, free: false, dead: true } });
+  const revives = fallen.filter((c) => c.kind === 'shop' && c.plan.revive);
+  eq('쓰러진 상대가 있고 골드가 넉넉하면 부활의 영약을 사다 먹인다', revives.length > 500, true);
+  eq('부활의 영약은 상대 몫이다', revives.every((c) => c.duo && c.plan.key === 'potionRevive' && c.plan.drink), true);
+  eq('골드가 모자라면 영약은 없다', pickN({ me: { gold: 1100, hp: 100 }, partner: { account: { hp: 0 }, dead: true } })
+    .some((c) => c.plan?.revive), false);
+}
+{
+  const mob = { name: '적', seen: 1, loose: 0, bluff: 0.1, raise: 0.5, note: '', elite: false };
+  const { game } = delve.open({ owner: 'npc:matiam', hp: 80, mob });
+  eq('던전은 체력 장부로 연다', game.gold.unit, 'hp');
+  eq('짓기만 하고 채널에 안 건다', holdem.get(game.channelId), null);
+  eq('부른 쪽이 먼저 싸운다', delve.fighterOf(game).id, 'npc:matiam');
+  game.gold.reconcile('npc:matiam', 10);
+  delve.fighterOf(game).gold = 10;
+  eq('마티암은 바닥나면 대개 물러선다', delve.between(game, () => 0.5).step, 'flee');
+  const { game: g2 } = delve.open({ owner: 'npc:migel', hp: 80, mob });
+  g2.gold.reconcile('npc:migel', 10);
+  delve.fighterOf(g2).gold = 10;
+  eq('미겔은 바닥나도 거의 안 물러선다', delve.between(g2, () => 0.5).step, 'next');
+  const { game: g3 } = delve.open({ owner: 'npc:migel', partner: 'npc:matiam', hp: 100, partnerHp: 90, mob });
+  g3.gold.reconcile('npc:migel', 30);
+  delve.fighterOf(g3).gold = 30;
+  eq('둘이면 바닥나기 전에 교대한다', delve.between(g3, () => 0.99), { step: 'swap', to: 'npc:matiam' });
+  delve.swap(g3, 'npc:matiam');
+  eq('교대하면 상대가 싸우고, 물러난 쪽은 쉰다', [delve.fighterOf(g3).id, g3.reserves, g3.allyUsed], ['npc:matiam', ['npc:migel'], true]);
+  // 싸우던 마티암이 쓰러졌다 — 쉬던 미겔(체력 30)이 성격대로.
+  g3.gold.reconcile('npc:matiam', 0);
+  delve.fighterOf(g3).gold = 0;
+  eq('쓰러지면 미겔은 곧잘 이어 싸운다', delve.afterFall(g3, () => 0.3), { step: 'avenge', to: 'npc:migel' });
+  eq('아니면 업고 물러난다', delve.afterFall(g3, () => 0.9), { step: 'carry', by: 'npc:migel' });
+  g3.gold.reconcile('npc:migel', 10);
+  eq('바닥난 채로는 복수하러 안 나선다', delve.afterFall(g3, () => 0), { step: 'carry', by: 'npc:migel' });
+  eq('혼자 왔으면 쓰러짐으로 끝', delve.afterFall(game, () => 0), { step: 'end' });
+}
+{
+  // 판을 끝까지 — 체력 총합(흩어진 몫 포함)이 처음과 같아야 한다.
+  let leaked = 0;
+  for (let i = 0; i < 30; i += 1) {
+    const mob = { name: '적', seen: 1, loose: 0, bluff: 0.1, raise: 0.5, note: '', elite: i % 3 === 0 };
+    const duo = i % 2 === 0;
+    const { game } = delve.open({ owner: 'npc:migel', partner: duo ? 'npc:matiam' : null, hp: 70, partnerHp: duo ? 60 : 0, mob });
+    const start = Object.values(game.gold.snapshot()).reduce((a, n) => a + n, 0);
+    for (let h = 0; h < 200; h += 1) {
+      delve.playHand(game);
+      const step = delve.between(game);
+      if (step.step === 'end' || step.step === 'flee') break;
+      if (step.step === 'swap') delve.swap(game, step.to);
+      if (!holdem.nextHand(game)) break;
+    }
+    const total = Object.values(game.gold.snapshot()).reduce((a, n) => a + n, 0) + (game.burned ?? 0);
+    if (total !== start) leaked += 1;
+  }
+  eq('던전 30판 — 체력이 한 톨도 안 샌다', leaked, 0);
+}
+
 // ---------------------------------------------------------------- 미리 써 둔 대사
 console.log('\n미리 써 둔 대사');
 const KEYS = ['muse', 'chat', 'bye', 'shopOpen', 'shopBrowse', 'shopAfter', 'potionOpen', 'potionAfter',
@@ -230,7 +301,11 @@ const KEYS = ['muse', 'chat', 'bye', 'shopOpen', 'shopBrowse', 'shopAfter', 'pot
   'craftOpen', 'craftForOpen', 'craftDuring', 'craftGood', 'craftMeh', 'craftBroke', 'craftHand',
   'eatAfter', 'eatThanks', 'laugh', 'makeGiveUp',
   'fishOpen', 'fishInvite', 'watchCome', 'fishCast', 'fishNear', 'fishLegend',
-  'fishGot', 'fishLegendGot', 'fishJunk', 'fishNone', 'fishCheer', 'fishTease', 'fishClosed'];
+  'fishGot', 'fishLegendGot', 'fishJunk', 'fishNone', 'fishCheer', 'fishTease', 'fishClosed',
+  'delveOpen', 'delveInvite', 'delveCome', 'delveFace', 'delveWin', 'delveHit', 'delveLow',
+  'swapOut', 'swapIn', 'fleeLine', 'delveWon', 'delveFled', 'fallen', 'delveCheer', 'delveSigh', 'fallenCry',
+  'avenge', 'carryOut',
+  'reviveOpen', 'reviveHand', 'revived'];
 for (const c of ['migel', 'matiam']) {
   eq(`${c}: 대목이 다 있다`, KEYS.filter((k) => !LINES[c][k]?.length), []);
   eq(`${c}: 혼잣말은 세 줄 한 벌`, LINES[c].muse.every((set) => set.length === 3), true);
@@ -268,6 +343,38 @@ const JUDGED = {
   judged: { fit: 25, craft: 24, harmony: 8, heal: 20, detox: 10, desc: '노릇하게 잘 익었다.', verdict: '정성이 보인다.' },
 };
 
+/**
+ * 가짜 던전 서버 — `payout.dungeonHand` 가 하는 일 그대로. **상한(들어올 때 체력)까지만** 저장하고,
+ * 넘긴 몫은 판 안에 남긴다. 서버가 들고 있는 값을 `server` 에 적어 둔다.
+ */
+function fakeDungeon(log) {
+  const server = {};
+  return {
+    server,
+    met: async (id, foe) => { log.push(['met', id, foe]); return { ok: true }; },
+    hand: async (game) => {
+      const want = game.gold.snapshot();
+      for (const [id, n] of Object.entries(want)) {
+        if (id.startsWith('mob:')) continue;
+        const cap = Math.min(game.cap[id], 100);
+        server[id] ??= game.stored[id];
+        const d = Math.min(n, cap) - game.stored[id];
+        if (!d) continue;
+        server[id] = Math.max(0, Math.min(100, server[id] + d));
+        game.stored[id] = server[id];
+        game.gold.reconcile(id, server[id] + Math.max(0, n - cap));
+      }
+      for (const seat of game.seats) if (seat.kind !== 'mob') seat.gold = game.gold.get(seat.id);
+      game.gold.rebase();
+      log.push(['hand', { ...server }]);
+      return { ok: true };
+    },
+    overflow: async (game) => { log.push(['overflow']); return { ok: true, gold: {}, heal: [], items: {}, spare: {}, to: game.owner }; },
+    won: async (id, drops, opts) => { log.push(['won', id, drops, opts]); return { ok: true }; },
+    lost: async (id, died) => { log.push(['lost', id, died]); return { ok: true }; },
+  };
+}
+
 function fakeIo({
   ai = null, saveOk = true, replies = null, judged = JUDGED, recipeOut = undefined, fishLeft = 4,
 } = {}) {
@@ -275,6 +382,8 @@ function fakeIo({
   let turn = 0;
   return {
     log,
+    dungeon: fakeDungeon(log),
+    embed: async (card) => { log.push(['embed', card]); },
     tryFish: async (id) => { log.push(['tryFish', id]); return fishLeft == null ? { ok: false, left: 0 } : { ok: true, left: fishLeft }; },
     fishCard: async (round, extra) => { log.push(['fishCard', round.caught, extra]); },
     card: async (mode, craft, info) => { log.push(['card', mode.key, craft, info]); },
@@ -461,6 +570,61 @@ const applies = (log) => log.filter(([k]) => k === 'apply').map(([, m]) => m);
   eq('빈손 낚시: 상대가 옆에 앉는다', io.log.some(([k, t]) => k === 'note' && t.includes('옆에 앉았다')), true);
   eq('빈손 낚시: 마지막은 구경하던 상대', says(io.log).at(-1)[1], 'matiam');
   eq('빈손 낚시: 요약', out.lines[0], '🎣 빈손으로 돌아왔어요.');
+}
+
+{
+  const io = fakeIo();
+  const out = await runDay(ctxOf({ kind: 'shop', duo: true, plan: { key: 'potionRevive', count: 1, cost: 1000, drink: true, revive: true } },
+    { partnerAccount: { gold: 500, hp: 0, items: {} } }), io);
+  eq('부활의 영약: 골드를 내고 상대를 일으키고 「힐러」 를 센다', applies(io.log),
+    [{ deltas: { 'npc:migel': -1000 }, hp: { 'npc:matiam': 100 }, bump: { 'npc:migel': { reviveGiven: 1 } } }]);
+  eq('부활의 영약: 사러 가는 혼잣말로 시작', LINES.migel.reviveOpen.includes(io.log[0][2]), true);
+  eq('부활의 영약: 일어났다고 적는다', io.log.some(([k, t]) => k === 'note' && t.includes('일어났다')), true);
+  eq('부활의 영약: 일어난 상대가 맺는다', says(io.log).at(-1)[1], 'matiam');
+  eq('부활의 영약: 요약', out.lines[0].startsWith('💫 마티암에게'), true);
+  eq('꼬리표: 부활의 영약', labelOf({ kind: 'shop', duo: true, plan: { revive: true, drink: true } }), { icon: '💫', label: '부활의 영약' });
+}
+{
+  // 던전을 끝까지 여러 판 — 혼자·둘이 섞어서. 결과는 셋 중 하나이고, 그에 맞는 정산이 한 번씩 나가야 한다.
+  const seen = { won: 0, dead: 0, fled: 0 };
+  let bad = [];
+  for (let i = 0; i < 16; i += 1) {
+    const io = fakeIo();
+    const duo = i % 2 === 1;
+    const out = await runDay(ctxOf({ kind: 'dungeon', duo, plan: {} }, {
+      me: { gold: 0, hp: 70, items: {} }, partnerAccount: { gold: 0, hp: 60, items: {} }, rand: seeded(40 + i),
+    }), io);
+    const won = io.log.filter(([k]) => k === 'won');
+    const lost = io.log.filter(([k]) => k === 'lost');
+    const hands = io.log.filter(([k]) => k === 'hand');
+    const kind = won.length ? 'won' : lost.length ? 'dead' : 'fled';
+    seen[kind] += 1;
+    const first = io.log.find(([k]) => k === 'say');
+    if (!(first[1] === 'migel' && LINES.migel.delveOpen.includes(first[2]))) bad.push(`${i}: 첫 마디 ${first}`);
+    if (won.length + lost.length > 1) bad.push(`${i}: 정산이 두 번`);
+    if (io.log.filter(([k]) => k === 'met').length !== 1) bad.push(`${i}: 도감이 한 번이 아니다`);
+    if (io.log.filter(([k]) => k === 'overflow').length !== 1) bad.push(`${i}: 넘친 기운 정산이 한 번이 아니다`);
+    if (hands.some(([, srv]) => (srv['npc:migel'] ?? 0) > 70 || (srv['npc:matiam'] ?? 0) > 60)) bad.push(`${i}: 들어올 때 체력을 넘겨 저장했다`);
+    if (!duo && hands.some(([, srv]) => 'npc:matiam' in srv)) bad.push(`${i}: 혼자 갔는데 상대 체력을 건드렸다`);
+    const icon = { won: '⚔️', dead: '💀', fled: '🏃' }[kind];
+    if (!out.lines[0].startsWith(icon)) bad.push(`${i}: 요약 ${out.lines[0]}`);
+    if (io.log.filter(([k]) => k === 'embed').length !== 1) bad.push(`${i}: 결과 카드가 한 장이 아니다`);
+    const notes = io.log.filter(([k]) => k === 'note').length;
+    if (notes > hands.length + 8) bad.push(`${i}: 중계가 ${notes}줄 — 잔잔한 핸드가 안 묶였다`);
+    // 쓰러진 쪽(판을 진 쪽 + 그 앞에 쓰러진 쪽)은 저마다 마지막 말을 한다.
+    const died = [
+      ...lost.map(([, , who]) => who),
+      ...applies(io.log).flatMap((m) => Object.keys(m.bump ?? {}).filter((id) => m.bump[id].dungeonDied)),
+    ];
+    for (const id of died) {
+      const who = id.slice(4);
+      if (!says(io.log).some(([, w, t]) => w === who && LINES[who].fallen.includes(t))) bad.push(`${i}: ${who} 가 쓰러지며 말을 안 했다`);
+    }
+    if (!duo && died.length > 1) bad.push(`${i}: 혼자 갔는데 둘이 쓰러졌다`);
+  }
+  eq('던전 16판 — 정산·저장·중계가 결과와 맞는다', bad, []);
+  eq('던전 16판 — 이긴 판이 있다', seen.won > 0, true);
+  eq('꼬리표: 던전', labelOf({ kind: 'dungeon', duo: false, plan: {} }), { icon: '⚔️', label: '던전' });
 }
 
 // ---------------------------------------------------------------- 자리

@@ -87,7 +87,18 @@ export function npcSeat(character) {
 
 // ---------------------------------------------------------------- 판
 
-export function create({
+export function create(opts) {
+  const game = build(opts);
+  games.set(game.channelId, game);
+  return game;
+}
+
+/**
+ * 판을 **짓기만** 한다 — 채널에 걸지 않는다. `/일상` 의 미겔·마티암이 버튼 없이 던전을
+ * 이것으로 돈다(`daily/delve.js`). 걸면 방치 청소(`expired`)가 그 판을 주워 `/홀덤` 의
+ * 마무리를 한 번 더 태우고, 그 스레드에서 사람이 `/홀덤` 을 못 연다.
+ */
+export function build({
   channelId, homeChannelId, guildId, starterId, stakes = DEFAULT_STAKES, mode = 'cash',
 }) {
   // 판돈은 판을 열 때 정하고 **끝날 때까지 안 바뀐다.** 도중에 바뀌면 이미 건 돈의 뜻이 달라진다.
@@ -145,7 +156,6 @@ export function create({
     saveFailed: false,  // 직전 정산에서 골드를 못 저장했는지 (판에 한 줄 띄운다)
     endedReason: null,
   };
-  games.set(channelId, game);
   return game;
 }
 
@@ -597,7 +607,7 @@ export function expired(now = Date.now()) {
 
 export default {
   MAX_SEATS, IDLE_MS,
-  create, get, remove, forChannel, touch, seatOf, seatIndexOf, hasNpc,
+  create, build, get, remove, forChannel, touch, seatOf, seatIndexOf, hasNpc,
   humanSeat, npcSeat, addSeat, swapFighter, start, beginHand, currentSeat, pot,
   actionsFor, raisesFor, toCallFor, act, advance, settle, nextHand, end,
   standings, expired,

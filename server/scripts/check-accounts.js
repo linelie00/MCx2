@@ -92,6 +92,22 @@ const server = app.listen(0, async () => {
   await post('/deltas', { deltas: { 1000003: -1000 } });
   eq('그날 파산하면 받을 수 있다', (await post('/claim', { id: '1000003' })).body.refilled, true);
 
+  // --- 연속 출첵 — 받은 게 없어도 센다
+  eq('첫 출첵은 1일째', c1.body.streak, 1);
+  eq('같은 날 또 눌러도 그대로', c2.body.streak, 1);
+  eq('넉넉해서 못 받은 날도 센다', rich.body.streak, 1);
+  {
+    const { dayKey } = require('../src/services/dayKey');
+    const ago = (n) => dayKey(new Date(Date.now() - n * 864e5));
+    const d = JSON.parse(fs.readFileSync(FILE, 'utf-8'));
+    d.accounts['1000006'] = { gold: 5000, checkinAt: ago(1), checkinStreak: 6 };
+    d.accounts['1000007'] = { gold: 5000, checkinAt: ago(2), checkinStreak: 6 };
+    fs.writeFileSync(FILE, JSON.stringify(d), 'utf-8');
+  }
+  eq('어제 눌렀으면 이어진다', (await post('/claim', { id: '1000006' })).body.streak, 7);
+  eq('하루 거르면 1부터', (await post('/claim', { id: '1000007' })).body.streak, 1);
+  eq('연속 일수가 저장됐다', JSON.parse(fs.readFileSync(FILE, 'utf-8')).accounts['1000006'].checkinStreak, 7);
+
   // --- NPC 는 자동으로 안 채워진다. `/급여` 가 delta 로 넣어 준다.
   await post('/deltas', { deltas: { 'npc:migel': -1000 } });
   eq('미겔 파산', (await hit('?ids=npc:migel')).body.accounts['npc:migel'].gold, 0);

@@ -10,7 +10,7 @@
  * 그래서 모든 쓰기는 `read() → 고치기 → write()` 를 **한 동기 블록**으로 한다.
  * 중간에 `await` 이 하나라도 끼면 다른 요청이 그 사이에 끼어들어 갱신이 유실된다.
  *
- * account shape: { gold, mt, hp, title, items, crafts, enemies, fish, stats, refilledAt, healedAt, fishedAt, fishedCount, updatedAt }
+ * account shape: { gold, mt, hp, title, items, crafts, enemies, fish, stats, refilledAt, healedAt, checkinAt, checkinStreak, fishedAt, fishedCount, updatedAt }
  *
  * **재화가 둘이다.** `gold` 는 걸고 쓰는 돈, `mt` 는 모으는 것(요트 1위·홀덤 토너먼트
  * 우승으로만 는다). 둘 다 천장이 없어서 범위를 벗어나면 버그이므로 **거절**한다.
@@ -151,6 +151,8 @@ const blank = () => ({
   stats: {},
   refilledAt: null,
   healedAt: null,       // 오늘 체력을 되찾았는지. 골드 도장(refilledAt)과 **따로** 센다
+  checkinAt: null,      // 마지막으로 /출첵 을 누른 날. 받은 게 없어도 찍는다
+  checkinStreak: 0,     // 며칠 연속 눌렀는지
   updatedAt: null,
 });
 
@@ -175,6 +177,7 @@ const normalize = (raw) => {
   if (!acct.enemies || typeof acct.enemies !== 'object' || Array.isArray(acct.enemies)) acct.enemies = {};
   if (!acct.fish || typeof acct.fish !== 'object' || Array.isArray(acct.fish)) acct.fish = {};
   if (!Number.isSafeInteger(acct.fishedCount) || acct.fishedCount < 0) acct.fishedCount = 0;
+  if (!Number.isSafeInteger(acct.checkinStreak) || acct.checkinStreak < 0) acct.checkinStreak = 0;
   return acct;
 };
 
@@ -233,6 +236,25 @@ function healRule(acct, today) {
   acct.healedAt = today;
   acct.updatedAt = now();
   return { healed: true, before, hp: acct.hp };
+}
+
+/** `YYYY-MM-DD` 의 전날. */
+const dayBefore = (key) => {
+  const [y, m, d] = String(key).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+};
+
+/**
+ * 출첵 연속 일수. 골드·체력과 달리 **누르기만 하면 센다** — 받은 게 없는 날도 온 날이다.
+ * 같은 날 또 누르면 그대로, 어제 눌렀으면 +1, 하루라도 걸렀으면 1부터.
+ * 바뀌었으면 `changed` 가 참이라 claim 이 저장한다.
+ */
+function streakRule(acct, today) {
+  if (acct.checkinAt === today) return { streak: acct.checkinStreak, changed: false };
+  acct.checkinStreak = acct.checkinAt === dayBefore(today) ? acct.checkinStreak + 1 : 1;
+  acct.checkinAt = today;
+  acct.updatedAt = now();
+  return { streak: acct.checkinStreak, changed: true };
 }
 
 /**
@@ -583,7 +605,7 @@ exports.setTitle = (req, res) => {
 /**
  * POST /api/accounts/claim — `{ id, heal? }`. 사람이 `/출첵` 으로 부른다.
  *
- * 골드와 체력을 **한 번의 쓰기로** 같이 준다. 둘의 도장은 따로라 한쪽만 받을 수도 있다.
+ * 골드와 체력을 **한 번의 쓰기로** 같이 준다. 연속 출첵 일수(`streak`)도 여기서 센다. 둘의 도장은 따로라 한쪽만 받을 수도 있다.
  *
  * `heal: false` 면 체력은 건너뛴다(도장도 안 찍는다). 봇이 **던전에 앉아 있는 사람**에게
  * 그렇게 보낸다 — 판이 도는 동안 체력은 판의 장부에 있어서, 여기서 고치면 다음 핸드의
@@ -601,8 +623,9 @@ exports.claim = (req, res) => {
   const acct = load(data, id, today);
   const out = dailyRule(acct, today);
   const heal = wantHeal ? healRule(acct, today) : { healed: false, reason: 'skipped', hp: acct.hp };
+  const streak = streakRule(acct, today);
 
-  if (out.refilled || heal.healed) {
+  if (out.refilled || heal.healed || streak.changed) {
     data.accounts[id] = acct;
     try {
       store.write(data);
@@ -613,7 +636,7 @@ exports.claim = (req, res) => {
 
   // 못 받은 것도 **200 이다.** "오늘 이미 받았다" 와 "아직 넉넉하다" 는 오류가 아니라
   // 답이다. 봇이 사유를 그대로 읽어 다른 말을 하면 된다.
-  return res.json({ ...out, heal: { ...heal, amount: DAILY_HEAL, max: MAX_HP }, floor: DAILY_FLOOR, today });
+  return res.json({ ...out, heal: { ...heal, amount: DAILY_HEAL, max: MAX_HP }, floor: DAILY_FLOOR, streak: streak.streak, today });
 };
 
 /** 하루에 낚을 수 있는 횟수. 낚시는 아이템이 **새로 생기는** 길이라 여기서만 막는다. */

@@ -17,6 +17,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { ITEM_BY_KEY } from './items.js';
+import { isLegend } from './fish.js';
 
 /**
  * 등급. 낮은 것부터.
@@ -217,8 +218,28 @@ export function effectOf(mode, grade, judged, keys, rand = Math.random) {
 /** 만든 것의 id. 서버가 `^[a-z0-9]{8,16}$` 를 본다. */
 export const newId = () => randomBytes(8).toString('hex').slice(0, 12);
 
+/**
+ * 만들고 나서 올릴 전적. 칭호가 읽는다(`casino/titles.js` 의 요리·제작).
+ * `/요리`·`/제작` 과 `/일상` 이 같이 쓴다 — 따로 세면 같은 요리가 한쪽에서만 칭호에 닿는다.
+ */
+export function bumpOf(mode, grade, keys) {
+  const stone = grade.key === 'stone';
+  const bump = mode.key === 'cook'
+    ? {
+      cooked: 1,
+      bestCook: grade.rank,
+      ...(stone ? { burnt: 1 } : {}),
+      // 「던전밥」 — 괴식으로 실버 이상. 골드였을 때는 주사위 하나에 너무 많이 걸려 있었다.
+      ...(monstrous(keys) && grade.rank >= GRADE_BY_KEY.silver.rank ? { monsterDish: 1 } : {}),
+    }
+    : { crafted: 1, bestCraft: grade.rank, ...(stone ? { craftBroke: 1 } : {}) };
+  // 「만찬」 — 전설 물고기를 재료로 썼다. 등급은 안 따진다. 전설을 먹어 치우는 것 자체가 조건이다.
+  if (keys.some(isLegend)) bump.legendDish = 1;
+  return bump;
+}
+
 export default {
   GRADES, GRADE_BY_KEY, MODES, POISON, POISON_CAP, poisonOf, monstrous, PART_LABEL, partLabel,
   MAX_CRAFTS, DICE, roll, diceMeaning, dicePoints, scoreOf, gradeOf, worthOf, FLAT_FULL, flatShare,
-  priceOf, effectOf, newId,
+  priceOf, effectOf, newId, bumpOf,
 };

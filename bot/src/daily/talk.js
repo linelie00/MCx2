@@ -9,6 +9,8 @@
  *                   섞일 걱정이 없고, 앞뒤 줄이 이어진다
  *   둘이 나누는 말   **말하는 사람의 프롬프트로 한 줄씩**(`reply`). 한 번에 두 사람 몫을 쓰게 하면
  *                   말투가 섞인다 — 가장 눈에 띄는 고장이다(`voice.js` 의 SPEECH 머리말)
+ *   요리·제작       무엇을 어떻게 만들지와 그 사이 혼잣말을 한 번에(`recipe`), 채점은 `/요리` 의
+ *                   심사관 그대로(`judgeMade`)
  *
  * 분당 한도는 계량의 70% 까지만 — 사람이 `/캐입` 을 칠 몫을 남긴다(요트와 같다).
  * **절대 던지지 않는다.** 못 하면 null 이고, 부르는 쪽이 `daily/lines.js` 로 물러선다.
@@ -16,6 +18,7 @@
 import { generate, checkRate, noteCall } from '../ai/client.js';
 import { voicePromptFor, NAME } from '../ai/persona.js';
 import { SPEECH, clean } from '../ai/voice.js';
+import { judge } from '../ai/judge.js';
 import config from '../config.js';
 
 const RESERVE = 0.3;
@@ -151,4 +154,65 @@ export async function reply({ character, facts, transcript = [], ask, variant = 
   }
 }
 
-export default { monologue, reply };
+// ---------------------------------------------------------------- 요리·제작
+
+/**
+ * 판정(`ai/judge.js` 의 심사관)까지 부를 수 있는지. 요리·제작은 한 장면에 서너 번을 부르므로
+ * 시작하기 전에 본다 — 막혔으면 `daily/pick.js` 가 후보에서 뺀다.
+ */
+export const canJudge = () => Boolean(config.gemini.apiKey) && !checkRate({ reserve: RESERVE });
+
+/**
+ * 무엇을 어떻게 만들지 짓고, 그 사이의 혼잣말도 같이 받는다. `{ open, name, process, during }`.
+ *
+ * **이름과 과정은 대사가 아니라 적어 둘 글이다** — 심사관이 그대로 읽고 채점한다(`/요리` 에서
+ * 사람이 쓰는 칸과 같다). 둘이 모양에 안 맞으면 **통째로 null** 이고, 부르는 쪽이 미리 써 둔
+ * 조리법으로 물러선다. 혼잣말 둘은 따로 본다 — 빠지면 그 줄만 미리 써 둔 줄로.
+ *
+ * 꺾쇠(`<` `>`)는 걷어 낸다. 심사관은 사람의 글을 `<<< >>>` 안에 가둬 읽는데, 그 울타리를
+ * 흉내 낸 글이 들어가면 가둔 것이 풀린다.
+ */
+export async function recipe({ character, mode, facts, forWhom = null, variant = Math.random() * VARIANTS }) {
+  if (!allowed()) return null;
+  const thing = mode.edible ? '요리' : '물건';
+  const text = [
+    memo(facts),
+    '',
+    '## 쓸 것',
+    'JSON 객체 하나로만 답한다. 다른 말은 붙이지 않는다.',
+    `- "open": 혼잣말 — 오늘은 ${mode.verb}를 하기로 정하는 말. **${forWhom ? `${forWhom}에게 줄 ${thing}을 만들려는` : `${mode.verb}를 하려는`} 것이 드러나게.**`,
+    `- "name": 만들 ${thing}의 이름. 대사가 아니라 이름만, 스무 자 안팎.`,
+    '- "process": 어떻게 만드는지 두세 문장. 대사가 아니라 과정을 담담하게 적는다.',
+    `  메모의 재료만 쓰고, ${mode.edible ? '손질·익힘·간' : '다듬기·가공·엮기'} 같은 핵심 공정을 짚는다.`,
+    '- "during": 혼잣말 — 만드는 도중에 하는 말.',
+  ].join('\n');
+
+  try {
+    const res = await generate({
+      system: systemOf(character, variant),
+      contents: [{ role: 'user', parts: [{ text }] }],
+      temperature: 1.0,
+      maxOutputTokens: 1800,
+      json: true,
+    });
+    const obj = parseObject(res.text);
+    const name = clean(String(obj?.name ?? '')).replace(/[<>"“”]/g, '').trim();
+    const process = String(obj?.process ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
+    if (!name || [...name].length > 40 || [...process].length < 10) return null;
+    return { name, process: process.slice(0, 500), open: tidy(obj.open), during: tidy(obj.during) };
+  } catch (err) {
+    console.warn(`[일상] ${NAME[character]} 조리법 실패:`, err.message?.slice(0, 120));
+    return null;
+  }
+}
+
+/**
+ * 채점. `/요리` 와 **같은 심사관**이다 — 캐릭터가 만든다고 후하게 매기지 않는다.
+ * 한도에 막히면 부르지 않고 `{ ok: false }`. 심사관이 한도를 한 칸 쓴다(`judge` 가 센다).
+ */
+export async function judgeMade(mode, input) {
+  if (!canJudge()) return { ok: false, error: '지금은 심사관을 부를 수 없어요' };
+  return judge(mode, input);
+}
+
+export default { monologue, reply, canJudge, recipe, judgeMade };

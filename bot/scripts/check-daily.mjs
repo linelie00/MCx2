@@ -9,14 +9,17 @@
  *   2. 사람에게 가는 선물이 값 상한을 넘지 않는지
  *   3. 미리 써 둔 대사가 **모든 대목에** 있고, 마티암이 "요"·"씨" 를 쓰지 않는지
  *   4. 장면이 **혼잣말로 시작하고**, 한 번의 쓰기로 맞는 것을 옮기고, 실패하면 `oops` 로 맺는지
+ *   5. 요리·제작이 독을 안 넣고, `/요리` 와 같은 셈으로 저장하고, 망가진 것은 버리고,
+ *      다친 쪽은 바로 먹고, 심사관이 막히면 재료를 안 쓰는지
  */
 process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
 process.env.DISCORD_GUILD_ID ||= 'x';
 
 const {
-  choose, planShop, planGift, weighted, HURT, KEEP, HUMAN_GIFT_CAP, POTIONS,
+  choose, planShop, planGift, planMake, weighted, HURT, KEEP, HUMAN_GIFT_CAP, POTIONS,
 } = await import('../src/daily/pick.js');
+const { MAX_CRAFTS, MODES } = await import('../src/casino/crafts.js');
 const { LINES, fill, canned } = await import('../src/daily/lines.js');
 const { runDay, labelOf } = await import('../src/daily/run.js');
 const busy = await import('../src/daily/busy.js');
@@ -111,11 +114,70 @@ eq('가진 게 없으면 선물을 못 한다', planGift(broke, { kind: 'human' 
   eq('선물은 둘이면 상대에게, 혼자면 사람에게 — 둘 다 나온다', [true, false].every((d) => runs.some((c) => c.kind === 'gift' && c.duo === d)), true);
 }
 
+// ---------------------------------------------------------------- 요리·제작 고르기
+console.log('\n요리·제작 고르기');
+const pantry = {
+  gold: 1000,
+  hp: 100,
+  items: {
+    acorn: 2, driedMeat: 1, redApple: 1, prettyMushroom: 3, waterCentipede: 1, // 재료(독 둘)
+    leatherScrap: 1, fadedRibbon: 1, fertilizer: 2, potionSmall: 1, // 잡화 · 거름 · 약
+  },
+  crafts: [],
+};
+{
+  const r = seeded(10);
+  const cooks = [...Array(300)].map(() => planMake('cook', pantry, {}, r));
+  const keysOf = (plans) => plans.flatMap((p) => Object.keys(p.counts));
+  eq('요리에는 독을 안 넣는다', keysOf(cooks).filter((k) => ITEM_BY_KEY[k].poison), []);
+  eq('요리에는 재료만', keysOf(cooks).every((k) => ITEM_BY_KEY[k].kind === '재료'), true);
+  eq('요리 재료는 두세 가지, 하나씩', cooks.every((p) => [2, 3].includes(Object.keys(p.counts).length) && Object.values(p.counts).every((n) => n === 1)), true);
+  const crafts = [...Array(300)].map(() => planMake('craft', pantry, {}, r));
+  eq('제작에는 잡화만 — 거름은 빼고', keysOf(crafts).every((k) => ITEM_BY_KEY[k].kind === '잡화' && k !== 'fertilizer'), true);
+  eq('재료가 하나뿐이면 하나로', planMake('cook', { items: { acorn: 1 } }, {}, r)?.counts, { acorn: 1 });
+  eq('쓸 재료가 없으면 null', planMake('cook', { items: { prettyMushroom: 3 } }, {}, r), null);
+}
+{
+  const r = seeded(11);
+  const pick = (opts) => [...Array(1500)].map(() => choose({
+    character: 'matiam', me: pantry, partner: { account: pantry, free: true }, human: { free: true, crafts: 0 }, rand: r, ...opts,
+  }));
+  eq('심사관을 못 부르면 요리·제작이 없다', pick({ canMake: false }).some((c) => ['cook', 'craft'].includes(c.kind)), false);
+  const runs = pick({ canMake: true });
+  eq('부를 수 있으면 요리도 제작도 나온다', ['cook', 'craft'].every((k) => runs.some((c) => c.kind === k)), true);
+  const full = { ...pantry, crafts: Array(MAX_CRAFTS).fill({ id: 'x', name: 'x', grade: 'bronze', kind: '요리', price: 1 }) };
+  const packed = [...Array(1500)].map(() => choose({
+    character: 'matiam', me: full, partner: { account: full, free: true }, canMake: true, rand: r,
+  }));
+  eq('둘 다 만든 것이 가득이면 요리·제작이 없다', packed.some((c) => ['cook', 'craft'].includes(c.kind)), false);
+}
+{
+  const r = seeded(12);
+  const made = {
+    items: {},
+    crafts: [
+      { id: 'cheap0001', kind: '요리', name: '도토리 수프', grade: 'silver', price: 30, mt: 0, heal: 10 },
+      { id: 'dear00001', kind: '제작', name: '루비 반지', grade: 'gold', price: 500, mt: 0, heal: 0 },
+      { id: 'mtmt00001', kind: '요리', name: '황금 스튜', grade: 'platinum', price: 150, mt: 5, heal: 40 },
+      { id: 'burnt0001', kind: '요리', name: '숯', grade: 'stone', price: 0, mt: 0, heal: -10 },
+    ],
+  };
+  const toHuman = [...Array(200)].map(() => planGift(made, { kind: 'human', crafts: 0 }, r));
+  eq('사람에게는 싸고 MT 없는 만든 것만', [...new Set(toHuman.map((g) => g?.craft?.id))], ['cheap0001']);
+  eq('사람의 만든 것 칸이 차면 만든 것은 못 준다', planGift(made, { kind: 'human', crafts: MAX_CRAFTS }, r), null);
+  eq('칸 수를 모르면 준다고 치지 않는다', planGift(made, { kind: 'human' }, r), null);
+  const toNpc = [...Array(300)].map(() => planGift(made, { kind: 'npc', account: { hp: 100, crafts: [] } }, r));
+  eq('상대에게는 비싼 것도 주되 망가진 것은 안 준다', [...new Set(toNpc.map((g) => g.craft.id))].sort(), ['cheap0001', 'dear00001', 'mtmt00001']);
+}
+
 // ---------------------------------------------------------------- 미리 써 둔 대사
 console.log('\n미리 써 둔 대사');
 const KEYS = ['muse', 'chat', 'bye', 'shopOpen', 'shopBrowse', 'shopAfter', 'potionOpen', 'potionAfter',
   'shopForOpen', 'shopForHand', 'potionForOpen', 'potionForHand', 'giftOpen', 'giftHand', 'giftAfter',
-  'thanks', 'drinkThanks', 'oops'];
+  'thanks', 'drinkThanks', 'oops',
+  'cookOpen', 'cookForOpen', 'cookDuring', 'cookGood', 'cookMeh', 'cookBroke', 'cookHand',
+  'craftOpen', 'craftForOpen', 'craftDuring', 'craftGood', 'craftMeh', 'craftBroke', 'craftHand',
+  'eatAfter', 'eatThanks', 'laugh', 'makeGiveUp'];
 for (const c of ['migel', 'matiam']) {
   eq(`${c}: 대목이 다 있다`, KEYS.filter((k) => !LINES[c][k]?.length), []);
   eq(`${c}: 혼잣말은 세 줄 한 벌`, LINES[c].muse.every((set) => set.length === 3), true);
@@ -147,11 +209,21 @@ eq('미겔은 "하하!" 로 웃지 않는다(마티암 웃음)', migelSays.filte
 console.log('\n장면');
 
 /** 가짜 io. AI 는 `ai` 가 주는 대로(기본은 막힘 → 미리 써 둔 줄), 저장은 `saveOk` 대로. */
-function fakeIo({ ai = null, saveOk = true, replies = null } = {}) {
+/** 심사관의 답 — 무난히 잘 만든 것. */
+const JUDGED = {
+  ok: true,
+  judged: { fit: 25, craft: 24, harmony: 8, heal: 20, detox: 10, desc: '노릇하게 잘 익었다.', verdict: '정성이 보인다.' },
+};
+
+function fakeIo({ ai = null, saveOk = true, replies = null, judged = JUDGED, recipeOut = undefined } = {}) {
   const log = [];
   let turn = 0;
   return {
     log,
+    card: async (mode, craft, info) => { log.push(['card', mode.key, craft, info]); },
+    recipe: async () => (recipeOut !== undefined ? recipeOut
+      : ai ? { open: 'AI 시작', name: 'AI 요리', process: '씻고 썰어 약불에 익히고 간을 맞췄다.', during: 'AI 도중' } : null),
+    judge: async (mode, input) => { log.push(['judge', mode.key, input]); return judged; },
     say: async (who, text) => { log.push(['say', who, text]); },
     note: async (text) => { log.push(['note', text]); },
     apply: async (moves) => {
@@ -238,6 +310,67 @@ const applies = (log) => log.filter(([k]) => k === 'apply').map(([, m]) => m);
   const choice = { kind: 'talk', duo: true, plan: {} };
   await runDay(ctxOf(choice), io);
   eq('수다: 처음부터 막히면 미리 써 둔 한 벌', says(io.log).length, 4);
+}
+
+{
+  const io = fakeIo({ ai: true });
+  const choice = { kind: 'cook', duo: false, plan: { counts: { acorn: 1, redApple: 1 } } };
+  const out = await runDay(ctxOf(choice, { rand: () => 0.9 }), io);
+  eq('요리: 첫 마디는 AI 가 지은 혼잣말', io.log[0], ['say', 'migel', 'AI 시작']);
+  eq('요리: 심사관은 캐릭터가 지은 이름·과정을 읽는다', [io.log.find(([k]) => k === 'judge')[2].name, io.log.find(([k]) => k === 'judge')[2].counts], ['AI 요리', { acorn: 1, redApple: 1 }]);
+  const [moves] = applies(io.log);
+  eq('요리: 재료를 빼고 내 만든 것에 넣는다', [moves.items, moves.crafts['npc:migel'].add.length, moves.hp], [{ 'npc:migel': { acorn: -1, redApple: -1 } }, 1, undefined]);
+  const craft = moves.crafts['npc:migel'].add[0];
+  eq('요리: 🎲 19 · 점수 85 면 플래티넘(`/요리` 와 같은 셈)', [craft.dice, craft.score, craft.grade, craft.mt], [19, 85, 'platinum', 5]);
+  eq('요리: 전적은 `/요리` 와 같은 칸', moves.bump, { 'npc:migel': { cooked: 1, bestCook: 4 } });
+  eq('요리: 결과 카드가 나간다', io.log.some(([k, mode]) => k === 'card' && mode === 'cook'), true);
+  eq('요리: 요약 첫 줄이 등급', out.lines[0], '💠 플래티넘 — AI 요리');
+  eq('꼬리표: 요리', labelOf(choice), { icon: '🍳', label: '요리' });
+}
+{
+  const io = fakeIo({ ai: true });
+  const choice = { kind: 'cook', duo: true, plan: { counts: { driedMeat: 1 } } };
+  const out = await runDay(ctxOf(choice, { rand: () => 0.9 }), io);
+  const [moves] = applies(io.log);
+  eq('다친 상대 몫 요리: 받자마자 먹는다 — 만든 것에는 안 넣는다', [Boolean(moves.hp?.['npc:matiam'] > 0), moves.crafts], [true, undefined]);
+  eq('다친 상대 몫 요리: 재료는 부른 쪽에서', moves.items, { 'npc:migel': { driedMeat: -1 } });
+  eq('다친 상대 몫 요리: 마지막은 마티암', says(io.log).at(-1)[1], 'matiam');
+  eq('다친 상대 몫 요리: 요약에 먹었다', out.lines[1].includes('바로 먹었어요'), true);
+}
+{
+  const io = fakeIo({ ai: true });
+  const choice = { kind: 'craft', duo: true, plan: { counts: { leatherScrap: 1 } } };
+  await runDay(ctxOf(choice, { rand: () => 0.5 }), io);
+  const [moves] = applies(io.log);
+  eq('상대 몫 제작: 상대의 만든 것에 넣는다', [moves.crafts['npc:matiam']?.add?.[0]?.kind, moves.hp], ['제작', undefined]);
+  eq('상대 몫 제작: 전적은 제작 칸', Object.keys(moves.bump['npc:migel']), ['crafted', 'bestCraft']);
+}
+{
+  const io = fakeIo();
+  const choice = { kind: 'cook', duo: true, plan: { counts: { acorn: 1 } } };
+  const out = await runDay(ctxOf(choice, { rand: () => 0 }), io);
+  const [moves] = applies(io.log);
+  eq('🎲 1: 스톤 — 재료는 쓰고 만든 것은 버린다', [moves.items, moves.crafts, moves.hp], [{ 'npc:migel': { acorn: -1 } }, undefined, undefined]);
+  eq('🎲 1: 탄 것도 전적에 남는다', moves.bump['npc:migel'].burnt, 1);
+  eq('🎲 1: 버렸다고 적는다', io.log.some(([k, t]) => k === 'note' && t.includes('버렸다')), true);
+  eq('🎲 1: 상대가 한마디 한다(미리 써 둔 줄)', LINES.matiam.laugh.includes(says(io.log).at(-1)[2]), true);
+  eq('🎲 1: 요약', out.lines[1], '🪨 망가져서 버렸어요.');
+  eq('AI 가 조리법을 못 지으면 첫 재료로 이름을 짓는다', io.log.find(([k]) => k === 'judge')[2].name.startsWith('도토리 '), true);
+}
+{
+  const io = fakeIo({ judged: { ok: false, error: '한도' } });
+  const choice = { kind: 'craft', duo: false, plan: { counts: { leatherScrap: 1 } } };
+  const out = await runDay(ctxOf(choice), io);
+  eq('심사관이 막히면 아무것도 안 쓴다', applies(io.log), []);
+  eq('심사관이 막히면 만들다 만다', LINES.migel.makeGiveUp.includes(says(io.log).at(-1)[2]), true);
+  eq('심사관이 막히면 요약이 재료는 그대로라고', out.lines[0].includes('재료는 그대로'), true);
+}
+{
+  const io = fakeIo();
+  const craft = { id: 'soup00001', kind: '요리', name: '도토리 수프', grade: 'silver', price: 30, mt: 0, heal: 10 };
+  const out = await runDay(ctxOf({ kind: 'gift', duo: true, plan: { craft } }), io);
+  eq('만든 것 선물: 통째로 옮긴다', applies(io.log), [{ crafts: { 'npc:migel': { remove: ['soup00001'] }, 'npc:matiam': { add: [craft] } } }]);
+  eq('만든 것 선물: 요약에 등급 이모지', out.lines[0], '🎁 마티암에게 🥈 도토리 수프');
 }
 
 // ---------------------------------------------------------------- 자리

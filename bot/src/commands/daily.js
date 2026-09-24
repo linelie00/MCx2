@@ -4,7 +4,8 @@
  *   /일상 캐릭터:미겔
  *
  * 명령한 사람은 **누구의 하루인지만** 고른다. 무엇을 할지는 캐릭터가 정한다(`daily/pick.js`) —
- * 장을 보거나, 누군가에게 선물을 하거나, 혼잣말을 하거나, 상대를 불러 수다를 떤다.
+ * 장을 보거나, 누군가에게 선물을 하거나, 가진 재료로 요리·제작을 하거나, 혼잣말을 하거나,
+ * 상대를 불러 수다를 떤다. 요리·제작은 `/요리` 와 같은 심사관이 채점하고 같은 결과 카드를 낸다.
  * 스레드를 하나 열고 그 안에서 한 장면을 진행한다(`daily/run.js`). 모든 일은 혼잣말로 시작한다.
  *
  * **하루 세 번, 캐릭터마다 따로** — 서버가 센다(`POST /api/accounts/npc-day`). 둘이 하는 일은
@@ -32,7 +33,10 @@ import { josa } from '../farm/requesters.js';
 import * as busy from '../daily/busy.js';
 import { choose, PARTNER } from '../daily/pick.js';
 import { runDay, labelOf } from '../daily/run.js';
-import { monologue, reply } from '../daily/talk.js';
+import {
+  monologue, reply, recipe, judgeMade, canJudge,
+} from '../daily/talk.js';
+import { resultEmbed } from './make.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
@@ -96,7 +100,8 @@ async function spend(interaction, day, { id, character, name }) {
   let accounts;
   let today;
   try {
-    [{ accounts }, today] = await Promise.all([getAccounts([id, partnerId]), todayOf()]);
+    // 명령한 사람의 계정도 읽는다 — 선물로 만든 것을 받을 칸이 남았는지 봐야 한다.
+    [{ accounts }, today] = await Promise.all([getAccounts([id, partnerId, interaction.user.id]), todayOf()]);
   } catch (err) {
     await refuse(`계정을 읽지 못했어요. ${err.message}`);
     return;
@@ -127,7 +132,12 @@ async function spend(interaction, day, { id, character, name }) {
     character,
     me,
     partner: { account: accounts[partnerId], free: !isDead(accounts[partnerId]) && !seatedAt(partnerId) },
-    human: interaction.user.bot ? null : { free: !seatedAt(interaction.user.id) },
+    human: interaction.user.bot ? null : {
+      free: !seatedAt(interaction.user.id),
+      crafts: accounts[interaction.user.id]?.crafts?.length ?? 0,
+    },
+    // 요리·제작은 심사관까지 서너 번을 부른다. 지금 막혀 있으면 후보에서 뺀다.
+    canMake: canJudge(),
   });
   if (choice.duo) busy.join(day, partnerId);
 
@@ -161,9 +171,16 @@ async function spend(interaction, day, { id, character, name }) {
         .catch((err) => console.warn('[일상] 안내 실패:', err.message));
       await sleep(900);
     },
+    card: async (mode, craft, info) => {
+      await room.send({ embeds: [resultEmbed(mode, craft, info)] })
+        .catch((err) => console.warn('[일상] 결과 카드 실패:', err.message));
+      await sleep(2500);
+    },
     apply,
     monologue,
     reply,
+    recipe,
+    judge: judgeMade,
   };
 
   const { icon, label } = labelOf(choice);

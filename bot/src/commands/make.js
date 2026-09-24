@@ -27,7 +27,7 @@ import { apply } from '../casino/wallet.js';
 import { ITEMS, ITEM_BY_KEY, findItem } from '../casino/items.js';
 import {
   MODES, GRADE_BY_KEY, MAX_CRAFTS, POISON, POISON_CAP, partLabel, roll as rollDice, scoreOf, gradeOf,
-  priceOf, effectOf, poisonOf, monstrous, newId,
+  priceOf, effectOf, poisonOf, newId, bumpOf,
 } from '../casino/crafts.js';
 import { earned, gained } from '../casino/titles.js';
 import { awardCard } from '../casino/titleCard.js';
@@ -36,7 +36,6 @@ import { checkRate } from '../ai/client.js';
 import { base, fail, trunc } from '../embeds.js';
 import { displayOf } from '../casino/accounts.js';
 import { forgetCrafts, itemsFor } from '../casino/bag.js';
-import { isLegend } from '../casino/fish.js';
 
 const SLOTS = 5;
 
@@ -319,19 +318,8 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
     score: total,
   };
 
-  // 전적. 칭호가 읽는다(casino/titles.js 의 요리·제작).
-  const stone = grade.key === 'stone';
-  const bump = mode.key === 'cook'
-    ? {
-      cooked: 1,
-      bestCook: grade.rank,
-      ...(stone ? { burnt: 1 } : {}),
-      // 「던전밥」 — 괴식으로 실버 이상. 골드였을 때는 주사위 하나에 너무 많이 걸려 있었다.
-      ...(monstrous(keys) && grade.rank >= GRADE_BY_KEY.silver.rank ? { monsterDish: 1 } : {}),
-    }
-    : { crafted: 1, bestCraft: grade.rank, ...(stone ? { craftBroke: 1 } : {}) };
-  // 「만찬」 — 전설 물고기를 재료로 썼다. 등급은 안 따진다. 전설을 먹어 치우는 것 자체가 조건이다.
-  if (keys.some(isLegend)) bump.legendDish = 1;
+  // 전적. 칭호가 읽는다(casino/titles.js 의 요리·제작). `/일상` 과 같은 셈이다.
+  const bump = bumpOf(mode, grade, keys);
 
   const saved = await apply({
     items: { [me]: Object.fromEntries(Object.entries(counts).map(([k, n]) => [k, -n])) },

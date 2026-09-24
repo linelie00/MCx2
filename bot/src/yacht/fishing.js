@@ -23,7 +23,7 @@ import {
   UPPER_KEYS, MAX_ROLLS, BONUS_NEED,
 } from './rules.js';
 import {
-  BONUS_ROW, distance, hide, lengthOf, BY_KEY,
+  BONUS_ROW, distance, hide, lengthOf, BY_KEY, isFish, isLegend,
 } from '../casino/fish.js';
 
 /** 한 판에 던질 수 있는 횟수. 무료 판과 일반 미끼가 이것을 쓴다. */
@@ -197,11 +197,21 @@ export function touch(round) {
  * `serial` 은 `f` 로 시작한다. 버튼의 customId 를 요트와 같은 `yacht:` 로 쓰면서도 라우터가
  * 첫 글자만 보고 갈라낼 수 있게 하려는 것이다(요트 쪽은 `y`).
  */
-export function create({
+export function create(opts) {
+  const round = build(opts);
+  rounds.set(round.channelId, round);
+  return round;
+}
+
+/**
+ * 판을 **짓기만** 한다 — 채널에 걸지 않는다. `/일상` 의 미겔·마티암이 버튼 없이 이것을 둔다
+ * (`daily/angler.js`). 채널에 걸면 그 스레드에서 사람이 `/요트 낚시` 를 못 연다.
+ */
+export function build({
   channelId, homeChannelId, guildId, userId, name, color, rand = Math.random,
   tries = TRIES,
 }) {
-  const round = {
+  return {
     serial: `f${randomBytes(3).toString('hex')}`,
     rev: 0,
     channelId,
@@ -229,8 +239,6 @@ export function create({
     rewarded: false,
     lastAt: Date.now(),
   };
-  rounds.set(channelId, round);
-  return round;
 }
 
 /** 다음 기회. 남은 것이 없으면 판이 끝난다. */
@@ -312,9 +320,38 @@ export function expired(now = Date.now()) {
 /** 낚은 것의 표시 이름·갈래. 화면과 정산이 같이 쓴다. */
 export const caughtInfo = (round) => (round.caught ? BY_KEY[round.caught.key] ?? null : null);
 
+/**
+ * 끝난 판이 계정에 남기는 것 — `wallet.apply` 에 그대로 넘길 모양. `/요트 낚시` 와 `/일상` 이
+ * 같이 쓴다(따로 세면 같은 낚시가 한쪽에서만 칭호에 닿는다).
+ *
+ *   items  낚은 것 하나      fish  도감 — **잡동사니도 적는다**(`/물고기 도감` 에 잡동사니 탭이 있다)
+ *   mt     전설이면 +1       bump  전적. 칭호가 읽는다(`casino/titles.js` 의 낚시 갈래)
+ *
+ * **낚았거나 기회를 다 쓴 판만** 부른다 — 접거나 방치한 판은 안 센다(부르는 쪽이 거른다).
+ */
+export function rewardOf(round, id) {
+  const c = round.caught;
+  const legend = Boolean(c && isLegend(c.key));
+  const bump = {
+    fishRounds: 1,
+    ...(c ? { fishCaught: 1 } : { fishEmpty: 1 }),
+    ...(c && round.firstTry ? { fishFirstTry: 1 } : {}),
+    ...(c && c.cm ? { bestFishCm: c.cm } : {}),
+    ...(c && !isFish(c.key) && !legend ? { fishJunk: 1 } : {}),
+    ...(c && c.key === 'waterCentipede' ? { fishCentipede: 1 } : {}),
+    ...(legend ? { fishLegend: 1 } : {}),
+  };
+  return {
+    items: c ? { [id]: { [c.key]: 1 } } : {},
+    fish: c ? { [id]: { [c.key]: { caught: 1, best: c.cm ?? 0 } } } : {},
+    mt: legend ? { [id]: 1 } : {},
+    bump: { [id]: bump },
+  };
+}
+
 export default {
   TRIES, BAITS, BAIT_KEYS, triesFor, CHOICE_NEED, UPPER_NEED, IDLE_MS,
   canWrite, writable, bonusLegend, hintFor, openingLine, legendNeed, legendBanner, isCatch,
-  create, get, forChannel, remove, touch, writeTo, skipTurn, nextTurn, land, end, expired,
-  caughtInfo,
+  create, build, get, forChannel, remove, touch, writeTo, skipTurn, nextTurn, land, end, expired,
+  caughtInfo, rewardOf,
 };

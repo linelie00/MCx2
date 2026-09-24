@@ -20,7 +20,7 @@
  * 명령한 사람의 몸은 필요 없다 — 쓰러져 있어도 부를 수 있다(`allowDead`).
  */
 import { SlashCommandBuilder, MessageFlags } from 'discord.js';
-import { getAccounts, getWeather, tryNpcDay } from '../api.js';
+import { getAccounts, getWeather, tryNpcDay, tryFish } from '../api.js';
 import { base, fail } from '../embeds.js';
 import { NPC_CHOICES, NPC_ID, characterOf, displayOf } from '../casino/accounts.js';
 import { OWNER_META } from '../owners.js';
@@ -37,6 +37,7 @@ import {
   monologue, reply, recipe, judgeMade, canJudge,
 } from '../daily/talk.js';
 import { resultEmbed } from './make.js';
+import { resultEmbed as fishResultEmbed } from '../yacht/fishRender.js';
 
 const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
@@ -166,8 +167,10 @@ async function spend(interaction, day, { id, character, name }) {
       await sayAsOrPlain(room, who, text, '일상');
       await sleep(pauseFor(text));
     },
+    // 여러 줄이면 줄마다 작은 글씨로 — `-#` 는 그 줄에만 걸린다.
     note: async (text) => {
-      await room.send({ content: `-# ${text}`, allowedMentions: { parse: [] } })
+      const small = String(text).split('\n').map((l) => `-# ${l}`).join('\n');
+      await room.send({ content: small, allowedMentions: { parse: [] } })
         .catch((err) => console.warn('[일상] 안내 실패:', err.message));
       await sleep(900);
     },
@@ -176,6 +179,16 @@ async function spend(interaction, day, { id, character, name }) {
         .catch((err) => console.warn('[일상] 결과 카드 실패:', err.message));
       await sleep(2500);
     },
+    fishCard: async (round, extra) => {
+      await room.send({ embeds: [fishResultEmbed(round, extra)] })
+        .catch((err) => console.warn('[일상] 낚시 카드 실패:', err.message));
+      await sleep(2500);
+    },
+    // 하루 무료 낚시 한 번 — 그 캐릭터 몫에서 쓴다. 못 물어보면 못 던진 것으로 친다.
+    tryFish: (who) => tryFish(who).catch((err) => {
+      console.warn('[일상] 낚시 횟수를 못 받았어요:', err.message);
+      return null;
+    }),
     apply,
     monologue,
     reply,

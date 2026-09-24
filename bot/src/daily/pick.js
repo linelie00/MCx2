@@ -62,12 +62,12 @@ const HANDY = {
 
 /** 하고 싶은 일의 무게 — 성격이다. 미겔은 말하고 주는 쪽, 마티암은 챙겨 두고 손으로 만드는 쪽. */
 const LIKES = {
-  migel: { talk: 3, shop: 2, gift: 3, cook: 2, craft: 1 },
-  matiam: { talk: 2, shop: 3, gift: 2, cook: 2, craft: 3 },
+  migel: { talk: 3, shop: 2, gift: 3, cook: 2, craft: 1, fish: 2 },
+  matiam: { talk: 2, shop: 3, gift: 2, cook: 2, craft: 3, fish: 2 },
 };
 
 /** 혼자도 둘이도 할 수 있을 때 둘이 할 확률. */
-const DUO = { talk: 0.6, shop: 0.35, gift: 0.5, cook: 0.4, craft: 0.3 };
+const DUO = { talk: 0.6, shop: 0.35, gift: 0.5, cook: 0.4, craft: 0.3, fish: 0.35 };
 
 export const PARTNER = { migel: 'matiam', matiam: 'migel' };
 
@@ -192,7 +192,7 @@ export function planGift(giver, to, rand) {
 }
 
 /**
- * 오늘 할 일. `{ kind, duo, plan }` — kind 는 `talk` · `shop` · `gift` · `cook` · `craft`.
+ * 오늘 할 일. `{ kind, duo, plan }` — kind 는 `talk` · `shop` · `gift` · `cook` · `craft` · `fish`.
  *
  *   me       부른 캐릭터의 계정
  *   partner  `{ account, free }` — free 는 쓰러지지 않았고 판에도 다른 일상에도 없는 것
@@ -201,6 +201,7 @@ export function planGift(giver, to, rand) {
  *   canMake  심사관(제미나이)을 부를 수 있는지. 아니면 요리·제작을 안 한다
  *
  * 둘이 하는 선물·장보기·요리·제작은 **상대 몫**이다. 혼자 하는 선물은 명령한 사람에게 간다.
+ * 낚시는 늘 할 수 있다 — 둘이면 상대가 옆에서 구경한다. 하루 낚시(다섯 번)는 일상(세 번)보다 많다.
  */
 export function choose({
   character, me, partner = null, human = null, canMake = false, rand = Math.random,
@@ -222,6 +223,7 @@ export function choose({
     },
     cook: { solo: make('cook', me, character), duo: free ? make('cook', partner.account, other) : null },
     craft: { solo: make('craft', me, character), duo: free ? make('craft', partner.account, other) : null },
+    fish: { solo: {}, duo: free ? {} : null },
   };
 
   /** 누가 다쳤는지 — `[나, 상대]`. 약이나 먹을 것은 다친 쪽 몫이 먼저다. */

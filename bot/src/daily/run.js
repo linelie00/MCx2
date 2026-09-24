@@ -19,17 +19,25 @@
  * 입출력은 `io` 로 받는다 — 검사(`scripts/check-daily.mjs`)가 디스코드와 서버 없이 돌린다.
  *   io.say(who, text)   캐릭터로 한 줄      io.note(text)   작은 글씨 한 줄
  *   io.apply(moves)     계정 쓰기          io.card(mode, craft, info)   `/요리` 의 결과 카드
+ *   io.tryFish(id)      하루 낚시 한 번    io.fishCard(round, extra)    `/요트 낚시` 의 결과 카드
  *   io.monologue · io.reply · io.recipe · io.judge   `daily/talk.js` 의 것
+ *
+ * ctx 에 `die`(주사위 한 개, 1~6)를 주면 낚시 주사위를 그걸로 굴린다 — 검사용. 없으면 요트와 같은 굴림.
  */
 import { ITEM_BY_KEY, MAX_HP, healOf } from '../casino/items.js';
 import {
   MODES, GRADE_BY_KEY, roll, scoreOf, gradeOf, priceOf, effectOf, newId, bumpOf,
 } from '../casino/crafts.js';
 import { NPC_ID } from '../casino/accounts.js';
+import { isFish, isLegend } from '../casino/fish.js';
+import * as fishing from '../yacht/fishing.js';
+import { categoryOf } from '../yacht/rules.js';
+import { faces } from '../yacht/render.js';
 import { NAME } from '../ai/persona.js';
 import { josa } from '../farm/requesters.js';
 import { canned, fill } from './lines.js';
 import { HURT } from './pick.js';
+import { candidatesOf, narrow, takeTurn } from './angler.js';
 
 const num = (n) => Number(n ?? 0).toLocaleString('ko-KR');
 const itemOf = (key) => ITEM_BY_KEY[key];
@@ -41,6 +49,7 @@ export function labelOf({ kind, duo, plan }) {
   if (kind === 'talk') return duo ? { icon: '💬', label: '수다' } : { icon: '💭', label: '혼잣말' };
   if (kind === 'shop') return plan?.drink ? { icon: '🍶', label: '약 사러' } : { icon: '🛒', label: '장보기' };
   if (kind === 'cook' || kind === 'craft') return { icon: MODE_OF[kind].icon, label: MODE_OF[kind].verb };
+  if (kind === 'fish') return { icon: '🎣', label: '낚시' };
   return { icon: '🎁', label: '선물' };
 }
 
@@ -476,6 +485,117 @@ async function runMake(ctx, io) {
   };
 }
 
+// ---------------------------------------------------------------- 🎣 낚시
+
+/**
+ * `/요트 낚시` 와 **같은 판**을 버튼 없이 둔다(`daily/angler.js`). 하루 무료 낚시(다섯 번)도
+ * 그 캐릭터 몫에서 쓴다 — 일상이 하루 세 번이라 모자랄 일은 없지만, 모자라면 못 던진다.
+ *
+ * 한 기회마다 작은 글씨 한 줄 — 굴린 눈, 적은 칸, 기척. 아깝게 빗나가면 한 번 중얼거린다.
+ * 둘이면 상대가 옆에서 구경하다 끝에 한마디 한다. 정산·도감·전적·MT 는 `/요트 낚시` 와 같다
+ * (`fishing.rewardOf`), 결과 카드도 같다.
+ */
+async function runFish(ctx, io) {
+  const me = ctx.character;
+  const partner = ctx.partner;
+  const { duo } = ctx.choice;
+  const meId = NPC_ID[me];
+  const vars = { partner: NAME[partner], giver: NAME[me] };
+
+  const quota = await io.tryFish(meId);
+  if (!quota?.ok) {
+    await io.say(me, fill(canned(me, 'fishClosed', ctx.rand), vars));
+    return { lines: ['🎣 오늘은 낚싯대를 못 던졌어요 — 하루 낚시를 다 썼어요.'] };
+  }
+
+  const beats = [
+    { key: 'open', canned: 'fishOpen', ask: '혼잣말 — 오늘은 낚시를 하러 가기로 정하는 말. **낚시하러 간다는 것이 드러나게.**' },
+    ...(duo ? [{ key: 'invite', canned: 'fishInvite', ask: `${NAME[partner]}에게 낚시 구경을 오라고 부르는 말.` }] : []),
+    { key: 'cast', canned: 'fishCast', ask: '혼잣말 — 찌를 던지며 하는 말.' },
+  ];
+  const said = await scripted(ctx, io, me, factsOf(ctx, me), beats, vars);
+
+  await io.say(me, said.open);
+  if (duo) {
+    await io.say(me, said.invite);
+    await io.note(`${josa(NAME[partner], ['이', '가'])} 옆에 앉았다.`);
+    await io.say(partner, fill(canned(partner, 'watchCome', ctx.rand), vars));
+  }
+
+  const round = fishing.build({ channelId: 'daily', userId: meId, name: NAME[me], color: null, rand: ctx.rand });
+  round.left = quota.left;
+  if (round.hidden.legend) {
+    await io.note(fishing.openingLine(round.hidden).replace(/\*\*/g, ''));
+    await io.say(me, fill(canned(me, 'fishLegend', ctx.rand), vars));
+  }
+  await io.say(me, said.cast);
+
+  let cands = candidatesOf(round);
+  let muttered = false;
+  while (round.phase === 'fishing') {
+    const out = takeTurn(round, cands, { die: ctx.die, rand: ctx.rand });
+    const at = out.key ? ` → ${categoryOf(out.key).short}` : '';
+    await io.note(`🎲 ${faces(out.dice)}${at} · ${out.caught ? '🎣 찌가 쑥 들어갔다!' : out.hint}`);
+    if (out.caught) break;
+    if (out.key && !round.hidden.legend) cands = narrow(cands, out.key, out.gap);
+    // 아깝게 빗나가면 한 번만 중얼거린다 — 매번 하면 기척 줄이 대사에 묻힌다.
+    if (out.gap === 1 && !round.hidden.legend && !muttered) {
+      muttered = true;
+      await io.say(me, fill(canned(me, 'fishNear', ctx.rand), vars));
+    }
+  }
+
+  const saved = await io.apply(fishing.rewardOf(round, meId));
+  if (!saved.ok) {
+    await io.say(me, fill(canned(me, 'oops', ctx.rand), vars));
+    return { lines: ['🎣 건져 올린 것을 놓쳤어요 — 저장이 안 됐어요.'] };
+  }
+  await io.fishCard(round, { book: saved.accounts?.[meId]?.fish ?? null });
+
+  const c = round.caught;
+  const item = c ? itemOf(c.key) : null;
+  const legend = Boolean(c && isLegend(c.key));
+  const junk = Boolean(c && !legend && !isFish(c.key));
+  const what = c ? `${item.name}${c.cm ? ` ${c.cm}cm` : ''}` : null;
+  if (legend) await io.note(`✦ 전설의 값 · ${josa(NAME[me], ['이', '가'])} MT 1을 받았다`);
+
+  const line = await io.reply({
+    character: me,
+    facts: [
+      ...factsOf(ctx, me),
+      ...(c
+        ? [`낚은 것: ${what}`, `어떤 것: ${item.desc}`, legend ? '전설이다. 평생 한 번 볼까 말까 한 것' : junk ? '물고기가 아니라 잡동사니다' : null]
+        : ['여섯 번을 던졌지만 아무것도 못 낚았다. 빈손이다']),
+    ],
+    ask: c ? '혼잣말 — 방금 건져 올린 것을 보고 하는 말.' : '혼잣말 — 빈손으로 낚싯대를 거두며 하는 말.',
+  });
+  const lastLine = line || fill(canned(me, !c ? 'fishNone' : legend ? 'fishLegendGot' : junk ? 'fishJunk' : 'fishGot', ctx.rand), vars);
+  await io.say(me, lastLine);
+
+  if (duo) {
+    const cheer = await answer(ctx, io, {
+      who: partner,
+      from: me,
+      heard: lastLine,
+      facts: [
+        `옆에서 ${josa(NAME[me], ['이', '가'])} 낚시하는 것을 구경했다`,
+        c ? `${josa(NAME[me], ['이', '가'])} 낚은 것: ${what}` : `${josa(NAME[me], ['은', '는'])} 아무것도 못 낚았다`,
+        legend ? '전설이다. 평생 한 번 볼까 말까 한 것' : junk ? '물고기가 아니라 잡동사니다' : null,
+      ],
+      fallback: c && !junk ? 'fishCheer' : 'fishTease',
+      vars,
+      ask: '옆에서 구경하다가 하는 한마디.',
+    });
+    await io.say(partner, cheer);
+  }
+
+  return {
+    lines: c
+      ? [`🎣 ${what}${legend ? ' ✦ 전설 · MT +1' : ''}`, `🎲 ${round.turn}번째에 낚았어요.`]
+      : ['🎣 빈손으로 돌아왔어요.', `🎲 ${round.tries}번 모두 빗나갔어요.`],
+  };
+}
+
 /**
  * 한 장면을 진행한다. `{ lines }` — 요약 카드에 적을 줄들.
  *
@@ -483,7 +603,9 @@ async function runMake(ctx, io) {
  *      human 은 `{ id, name }`(명령한 사람), setting 은 "가을 4일째, 날씨는 맑음" 같은 한 줄(없으면 null)
  */
 export async function runDay(ctx, io) {
-  const run = { talk: runTalk, shop: runShop, gift: runGift, cook: runMake, craft: runMake }[ctx.choice.kind];
+  const run = {
+    talk: runTalk, shop: runShop, gift: runGift, cook: runMake, craft: runMake, fish: runFish,
+  }[ctx.choice.kind];
   return run({ rand: Math.random, ...ctx }, io);
 }
 

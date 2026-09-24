@@ -11,6 +11,7 @@
  *   4. 장면이 **혼잣말로 시작하고**, 한 번의 쓰기로 맞는 것을 옮기고, 실패하면 `oops` 로 맺는지
  *   5. 요리·제작이 독을 안 넣고, `/요리` 와 같은 셈으로 저장하고, 망가진 것은 버리고,
  *      다친 쪽은 바로 먹고, 심사관이 막히면 재료를 안 쓰는지
+ *   6. 낚시꾼이 기척을 바르게 읽고(숨은 줄을 후보에서 안 지운다), `/요트 낚시` 와 같은 셈으로 정산하는지
  */
 process.env.DISCORD_TOKEN ||= 'x';
 process.env.DISCORD_CLIENT_ID ||= 'x';
@@ -20,6 +21,9 @@ const {
   choose, planShop, planGift, planMake, weighted, HURT, KEEP, HUMAN_GIFT_CAP, POTIONS,
 } = await import('../src/daily/pick.js');
 const { MAX_CRAFTS, MODES } = await import('../src/casino/crafts.js');
+const fishing = await import('../src/yacht/fishing.js');
+const { candidatesOf, narrow, holdFor, takeTurn } = await import('../src/daily/angler.js');
+const { COMMON_ROWS } = await import('../src/casino/fish.js');
 const { LINES, fill, canned } = await import('../src/daily/lines.js');
 const { runDay, labelOf } = await import('../src/daily/run.js');
 const busy = await import('../src/daily/busy.js');
@@ -92,7 +96,8 @@ eq('가진 게 없으면 선물을 못 한다', planGift(broke, { kind: 'human' 
   const runs = [...Array(2000)].map(() => choose({
     character: 'matiam', me: broke, partner: { account: broke, free: true }, human: { free: true }, rand: r,
   }));
-  eq('골드도 가진 것도 없으면 이야기만', runs.every((c) => c.kind === 'talk'), true);
+  eq('골드도 가진 것도 없으면 이야기와 낚시만', runs.every((c) => ['talk', 'fish'].includes(c.kind)), true);
+  eq('낚시도 혼자도 둘이도', [true, false].every((d) => runs.some((c) => c.kind === 'fish' && c.duo === d)), true);
   eq('이야기는 혼자도 둘이도', [true, false].every((d) => runs.some((c) => c.duo === d)), true);
 }
 {
@@ -170,6 +175,52 @@ const pantry = {
   eq('상대에게는 비싼 것도 주되 망가진 것은 안 준다', [...new Set(toNpc.map((g) => g.craft.id))].sort(), ['cheap0001', 'dear00001', 'mtmt00001']);
 }
 
+// ---------------------------------------------------------------- 낚시꾼
+console.log('\n낚시꾼');
+eq('남길 것: 위칸은 그 눈', holdFor('threes', [3, 1, 3, 6, 2]), [true, false, true, false, false]);
+eq('남길 것: L스트는 창 안의 눈을 하나씩', holdFor('lStraight', [2, 3, 3, 5, 6]), [true, true, false, true, true]);
+eq('남길 것: 초이스는 4 이상', holdFor('choice', [1, 4, 6, 3, 5]), [false, true, true, false, true]);
+eq('남길 것: 포카드는 가장 많은 눈', holdFor('fourKind', [2, 5, 5, 1, 5]), [false, true, true, false, true]);
+eq('기척 좁히기: 가까우면 한 칸 옆만', narrow(COMMON_ROWS, 'threes', 1).sort(), ['deuces', 'fours']);
+eq('기척 좁히기: 아무 기척 없으면 세 칸 이상', narrow(COMMON_ROWS, 'aces', 3).includes('threes'), false);
+{
+  const die = seeded(20);
+  const d6 = () => 1 + Math.floor(die() * 6);
+  let lost = 0; let caught = 0; let bad = 0;
+  for (let i = 0; i < 300; i += 1) {
+    const round = fishing.build({ channelId: 'x', userId: 'npc:migel', name: '미겔', rand: die });
+    let cands = candidatesOf(round);
+    while (round.phase === 'fishing') {
+      const out = takeTurn(round, cands, { die: d6, rand: die });
+      if (out.key && !out.caught && !fishing.canWrite({ ...round.sheet, [out.key]: null }, out.key, out.dice, round.hidden)) bad += 1;
+      if (out.caught) break;
+      if (out.key && !round.hidden.legend) cands = narrow(cands, out.key, out.gap);
+      if (!round.hidden.legend && !cands.includes(round.hidden.row)) lost += 1;
+    }
+    if (round.caught) caught += 1;
+  }
+  eq('기척을 읽어도 숨은 줄은 후보에서 안 빠진다', lost, 0);
+  eq('적을 수 없는 칸에는 안 적는다', bad, 0);
+  eq('웬만큼은 낚는다(300판 중 절반 넘게)', caught > 150, true);
+}
+{
+  const round = fishing.build({ channelId: 'x', userId: 'npc:matiam', name: '마티암' });
+  round.hidden = { key: 'goldChipShark', row: 'yacht', legend: true };
+  eq('전설 판은 그 자리 하나만 후보', candidatesOf(round), ['yacht']);
+  const out = takeTurn(round, candidatesOf(round), { die: () => 4 });
+  eq('전설(요트): 같은 눈 다섯이면 요트 칸에 적어 낚는다', [out.key, Boolean(out.caught)], ['yacht', true]);
+  const reward = fishing.rewardOf(round, 'npc:matiam');
+  eq('전설 정산: 아이템·도감·MT +1·전적', [reward.items, reward.mt, reward.bump['npc:matiam'].fishLegend, reward.bump['npc:matiam'].fishRounds],
+    [{ 'npc:matiam': { goldChipShark: 1 } }, { 'npc:matiam': 1 }, 1, 1]);
+}
+{
+  const round = fishing.build({ channelId: 'x', userId: 'npc:migel', name: '미겔' });
+  round.hidden = { key: 'lordOfWater', row: 'bonus', legend: true };
+  const out = takeTurn(round, candidatesOf(round), { die: () => 6 });
+  eq('전설(소계): 윗칸에 가장 큰 점수로 적는다', out.key, 'sixes');
+  eq('판을 짓기만 하면 채널에 안 걸린다', fishing.get('x'), null);
+}
+
 // ---------------------------------------------------------------- 미리 써 둔 대사
 console.log('\n미리 써 둔 대사');
 const KEYS = ['muse', 'chat', 'bye', 'shopOpen', 'shopBrowse', 'shopAfter', 'potionOpen', 'potionAfter',
@@ -177,7 +228,9 @@ const KEYS = ['muse', 'chat', 'bye', 'shopOpen', 'shopBrowse', 'shopAfter', 'pot
   'thanks', 'drinkThanks', 'oops',
   'cookOpen', 'cookForOpen', 'cookDuring', 'cookGood', 'cookMeh', 'cookBroke', 'cookHand',
   'craftOpen', 'craftForOpen', 'craftDuring', 'craftGood', 'craftMeh', 'craftBroke', 'craftHand',
-  'eatAfter', 'eatThanks', 'laugh', 'makeGiveUp'];
+  'eatAfter', 'eatThanks', 'laugh', 'makeGiveUp',
+  'fishOpen', 'fishInvite', 'watchCome', 'fishCast', 'fishNear', 'fishLegend',
+  'fishGot', 'fishLegendGot', 'fishJunk', 'fishNone', 'fishCheer', 'fishTease', 'fishClosed'];
 for (const c of ['migel', 'matiam']) {
   eq(`${c}: 대목이 다 있다`, KEYS.filter((k) => !LINES[c][k]?.length), []);
   eq(`${c}: 혼잣말은 세 줄 한 벌`, LINES[c].muse.every((set) => set.length === 3), true);
@@ -215,11 +268,15 @@ const JUDGED = {
   judged: { fit: 25, craft: 24, harmony: 8, heal: 20, detox: 10, desc: '노릇하게 잘 익었다.', verdict: '정성이 보인다.' },
 };
 
-function fakeIo({ ai = null, saveOk = true, replies = null, judged = JUDGED, recipeOut = undefined } = {}) {
+function fakeIo({
+  ai = null, saveOk = true, replies = null, judged = JUDGED, recipeOut = undefined, fishLeft = 4,
+} = {}) {
   const log = [];
   let turn = 0;
   return {
     log,
+    tryFish: async (id) => { log.push(['tryFish', id]); return fishLeft == null ? { ok: false, left: 0 } : { ok: true, left: fishLeft }; },
+    fishCard: async (round, extra) => { log.push(['fishCard', round.caught, extra]); },
     card: async (mode, craft, info) => { log.push(['card', mode.key, craft, info]); },
     recipe: async () => (recipeOut !== undefined ? recipeOut
       : ai ? { open: 'AI 시작', name: 'AI 요리', process: '씻고 썰어 약불에 익히고 간을 맞췄다.', during: 'AI 도중' } : null),
@@ -371,6 +428,39 @@ const applies = (log) => log.filter(([k]) => k === 'apply').map(([, m]) => m);
   const out = await runDay(ctxOf({ kind: 'gift', duo: true, plan: { craft } }), io);
   eq('만든 것 선물: 통째로 옮긴다', applies(io.log), [{ crafts: { 'npc:migel': { remove: ['soup00001'] }, 'npc:matiam': { add: [craft] } } }]);
   eq('만든 것 선물: 요약에 등급 이모지', out.lines[0], '🎁 마티암에게 🥈 도토리 수프');
+}
+
+{
+  const io = fakeIo({ fishLeft: null });
+  const out = await runDay(ctxOf({ kind: 'fish', duo: false, plan: {} }), io);
+  eq('낚시: 하루 낚시를 다 썼으면 못 던진다', [applies(io.log), LINES.migel.fishClosed.includes(says(io.log).at(-1)[2])], [[], true]);
+  eq('낚시: 못 던진 요약', out.lines[0].includes('못 던졌어요'), true);
+}
+{
+  // rand 0.5 로 지은 판은 일반이 **6의 눈** 줄에 숨는다(COMMON_ROWS 의 가운데). 주사위가 전부 6 이면 언젠가 닿는다.
+  const io = fakeIo();
+  const out = await runDay(ctxOf({ kind: 'fish', duo: false, plan: {} }, { rand: () => 0.5, die: () => 6 }), io);
+  eq('낚시: 첫 마디는 가기로 하는 혼잣말', LINES.migel.fishOpen.includes(io.log.find(([k]) => k === 'say')[2]), true);
+  eq('낚시: 자기 몫 낚시를 쓴다', io.log.find(([k]) => k === 'tryFish')[1], 'npc:migel');
+  eq('낚시: 기회마다 한 줄', io.log.filter(([k, t]) => k === 'note' && String(t).startsWith('🎲')).length >= 1, true);
+  const [moves] = applies(io.log);
+  const got = Object.keys(moves.items['npc:migel'] ?? {})[0];
+  eq('낚시: 낚은 것이 가방·도감에 들어간다', [Boolean(got), Boolean(moves.fish['npc:migel'][got])], [true, true]);
+  eq('낚시: 전적은 `/요트 낚시` 와 같은 칸', [moves.bump['npc:migel'].fishRounds, moves.bump['npc:migel'].fishCaught], [1, 1]);
+  eq('낚시: 결과 카드가 나간다', io.log.some(([k]) => k === 'fishCard'), true);
+  eq('낚시: 요약', out.lines[0].startsWith('🎣 ') && !out.lines[0].includes('빈손'), true);
+  eq('꼬리표: 낚시', labelOf({ kind: 'fish', duo: false, plan: {} }), { icon: '🎣', label: '낚시' });
+}
+{
+  // 주사위가 전부 1 이면 6의 눈에는 영영 못 닿는다 — 여섯 번을 다 쓰고 빈손.
+  const io = fakeIo({ ai: true });
+  const out = await runDay(ctxOf({ kind: 'fish', duo: true, plan: {} }, { rand: () => 0.5, die: () => 1 }), io);
+  const [moves] = applies(io.log);
+  eq('빈손 낚시: 아무것도 안 넣고 빈 판만 센다', [moves.items, moves.bump['npc:migel']], [{}, { fishRounds: 1, fishEmpty: 1 }]);
+  eq('빈손 낚시: 여섯 번을 다 던진다', io.log.filter(([k, t]) => k === 'note' && String(t).startsWith('🎲')).length, 6);
+  eq('빈손 낚시: 상대가 옆에 앉는다', io.log.some(([k, t]) => k === 'note' && t.includes('옆에 앉았다')), true);
+  eq('빈손 낚시: 마지막은 구경하던 상대', says(io.log).at(-1)[1], 'matiam');
+  eq('빈손 낚시: 요약', out.lines[0], '🎣 빈손으로 돌아왔어요.');
 }
 
 // ---------------------------------------------------------------- 자리

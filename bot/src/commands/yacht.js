@@ -450,27 +450,12 @@ async function finishFishing(round) {
   const id = round.userId;
   const c = round.caught;
   const legend = Boolean(c && isLegend(c.key));
-  const bump = {
-    fishRounds: 1,
-    ...(c ? { fishCaught: 1 } : { fishEmpty: 1 }),
-    ...(c && round.firstTry ? { fishFirstTry: 1 } : {}),
-    ...(c && c.cm ? { bestFishCm: c.cm } : {}),
-    ...(c && !isFish(c.key) && !legend ? { fishJunk: 1 } : {}),
-    ...(c && c.key === 'waterCentipede' ? { fishCentipede: 1 } : {}),
-    ...(legend ? { fishLegend: 1 } : {}),
-  };
 
   try {
     // 새 칭호를 알리려면 **쓰기 전 계정**이 있어야 한다(칭호는 전적에서 계산하므로).
     const before = (await getAccounts([id]).catch(() => null))?.accounts?.[id] ?? null;
-    const saved = await apply({
-      items: c ? { [id]: { [c.key]: 1 } } : {},
-      // **잡동사니도 도감에 적는다** — `/물고기 도감` 에 잡동사니 탭이 있다. 나뭇가지 열 개를
-      // 건진 것도 그날의 기록이다.
-      fish: c ? { [id]: { [c.key]: { caught: 1, best: c.cm ?? 0 } } } : {},
-      mt: legend ? { [id]: 1 } : {},
-      bump: { [id]: bump },
-    });
+    // 아이템·도감·MT·전적 — `/일상` 의 낚시와 같은 셈이다(`fishing.rewardOf`).
+    const saved = await apply(fishing.rewardOf(round, id));
     if (!saved.ok) {
       round.result = { line: '건져 올린 것을 놓쳤어요 — 저장하지 못했어요.' };
       return;

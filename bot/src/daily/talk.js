@@ -19,7 +19,7 @@
 import { generate, checkRate, noteCall } from '../ai/client.js';
 import { voicePromptFor, NAME } from '../ai/persona.js';
 import { SPEECH, clean } from '../ai/voice.js';
-import { judge } from '../ai/judge.js';
+import { judge, JUDGE_CALLS } from '../ai/judge.js';
 import config from '../config.js';
 
 const RESERVE = 0.3;
@@ -164,10 +164,10 @@ export async function reply({ character, facts, transcript = [], ask, variant = 
 // ---------------------------------------------------------------- 요리·제작
 
 /**
- * 판정(`ai/judge.js` 의 심사관)까지 부를 수 있는지. 요리·제작은 한 장면에 서너 번을 부르므로
+ * 판정(`ai/judge.js` 의 심사관)까지 부를 수 있는지. 요리·제작은 한 장면에 네댓 번을 부르므로
  * 시작하기 전에 본다 — 막혔으면 `daily/pick.js` 가 후보에서 뺀다.
  */
-export const canJudge = () => Boolean(config.gemini.apiKey) && !checkRate({ reserve: RESERVE });
+export const canJudge = () => Boolean(config.gemini.apiKey) && !checkRate({ reserve: RESERVE, need: JUDGE_CALLS });
 
 /**
  * 무엇을 어떻게 만들지 짓고, 그 사이의 혼잣말도 같이 받는다. `{ open, name, process, during }`.
@@ -217,7 +217,7 @@ export async function recipe({ character, mode, facts, forWhom = null, variant =
 
 /**
  * 채점. `/요리` 와 **같은 심사관**이다 — 캐릭터가 만든다고 후하게 매기지 않는다.
- * 한도에 막히면 부르지 않고 `{ ok: false }`. 심사관이 한도를 한 칸 쓴다(`judge` 가 센다).
+ * 한도에 막히면 부르지 않고 `{ ok: false }`. 심사관이 한도를 두 칸 쓴다(`judge` 가 센다).
  */
 export async function judgeMade(mode, input) {
   if (!canJudge()) return { ok: false, error: '지금은 심사관을 부를 수 없어요' };

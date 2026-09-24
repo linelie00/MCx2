@@ -100,13 +100,16 @@ const kstDay = () =>
  * reserve 는 **사람 몫으로 남겨 둘 비율**이다. 0 이면 분당 한도를 다 쓸 수 있고,
  * 0.4 면 60% 까지만 쓴다. 요트 NPC 는 배경에서 도는 것이라 예약분을 두어,
  * 판이 돌아가는 중에도 사람이 /캐입 을 칠 여지를 남긴다.
+ *
+ * need 는 **이번에 부를 횟수**다. 판정(`judge.js`)은 두 번을 동시에 부른다 — 한 칸만 남았을
+ * 때 부르면 하나가 구글의 429 를 맞고 판정 전체가 실패한다.
  */
-export function checkRate({ reserve = 0 } = {}) {
+export function checkRate({ reserve = 0, need = 1 } = {}) {
   const now = Date.now();
   if (now > minute.resetAt) { minute.count = 0; minute.resetAt = now + 60_000; }
 
   const cap = Math.max(1, Math.floor(config.gemini.rpm * (1 - reserve)));
-  if (minute.count >= cap) {
+  if (minute.count + need > cap) {
     return reserve
       ? '사람이 쓸 몫을 남겨 두려고 잠시 쉬는 중이에요.'
       : `지금 1분 한도(${config.gemini.rpm}회)를 다 썼어요. 잠시 뒤에 다시 불러주세요.`;
@@ -114,7 +117,7 @@ export function checkRate({ reserve = 0 } = {}) {
 
   const today = kstDay();
   if (day.key !== today) { day.key = today; day.count = 0; }
-  if (day.count >= config.gemini.rpd) {
+  if (day.count + need > config.gemini.rpd) {
     return `오늘 몫(${config.gemini.rpd}회)을 다 썼어요. 내일 다시 불러주세요.`;
   }
 

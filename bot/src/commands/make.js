@@ -6,7 +6,8 @@
  *
  *   1. 재료를 가졌는지, 만든 것 칸이 남았는지 본다
  *   2. 🎲 d20 을 굴린다 — **봇이** 굴린다
- *   3. 제미나이가 재료·결과물·과정·주사위를 보고 **항목별 점수와 지문**을 준다
+ *   3. 제미나이가 **항목별 점수와 지문**을 준다 — 점수는 주사위를 모르는 채로, 지문은
+ *      주사위를 알고. 두 번을 동시에 묻는다(`ai/judge.js`)
  *   4. 점수에 주사위를 더해 등급을 낸다 — **공식이** 낸다(crafts.js 머리말)
  *   5. 재료를 빼고 결과물을 넣는다 — **한 번의 쓰기**
  *   6. 등급부터 보여 준다
@@ -31,7 +32,7 @@ import {
 } from '../casino/crafts.js';
 import { earned, gained } from '../casino/titles.js';
 import { awardCard } from '../casino/titleCard.js';
-import { judge as askJudge } from '../ai/judge.js';
+import { judge as askJudge, JUDGE_CALLS } from '../ai/judge.js';
 import { checkRate } from '../ai/client.js';
 import { base, fail, trunc } from '../embeds.js';
 import { displayOf } from '../casino/accounts.js';
@@ -250,13 +251,13 @@ export async function make(interaction, mode, { judge = askJudge, rand = Math.ra
 
   if (!name || !process) { await refuse('무엇을 어떻게 만들지 적어 주세요.'); return; }
 
-  // 한도 — 판정 한 번이 제미나이 한 번이다. /캐입 과 한도를 같이 쓴다.
+  // 한도 — 판정 한 번이 제미나이 두 번이다(점수 · 지문). /캐입 과 한도를 같이 쓴다.
   const since = now() - (lastAt.get(me) ?? 0);
   if (since < COOLDOWN) {
     await refuse(`조금만 천천히요. ${Math.ceil((COOLDOWN - since) / 1000)}초 뒤에 다시 해 주세요. 쓴 글은 위에 남겨 뒀어요.`);
     return;
   }
-  const limited = checkRate();
+  const limited = checkRate({ need: JUDGE_CALLS });
   if (limited) { await refuse(limited); return; }
 
   let account;

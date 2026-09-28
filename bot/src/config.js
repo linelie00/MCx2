@@ -76,7 +76,10 @@ export const config = {
     model: opt('GEMINI_MODEL', 'gemini-flash-lite-latest'),
     // 지정한 모델이 붐빌 때(503) 대신 써 볼 모델. 무료 티어의 인기 모델은 통째로
     // 몇 십 분씩 내려앉기도 해서, 재시도만으로는 못 넘긴다.
-    fallbackModel: opt('GEMINI_MODEL_FALLBACK', 'gemini-flash-lite-latest'),
+    // **본 모델과 달라야 한다** — 같으면 대체를 건너뛴다(ai/client.js). 예전엔 둘 다
+    // flash-lite 라 대체가 한 번도 안 돌았고, 붐빌 때 /일상 혼잣말이 그대로 실패했다.
+    // flash 는 무료 한도가 lite 보다 낮지만 붐빌 때만 쓰니 괜찮다.
+    fallbackModel: opt('GEMINI_MODEL_FALLBACK', 'gemini-flash-latest'),
     // 캐입과 요트 NPC 대사가 이 한도를 같이 쓴다(구글 쪽 한도가 하나라 카운터도 하나다).
     // 기본값은 gemini-flash-lite 무료 티어(분당 15 · 하루 1000)에 맞춰 조금 낮춰 잡았다.
     // 요트는 NPC 턴마다 한 번 부르므로 8 로는 대사가 자주 빠진다.

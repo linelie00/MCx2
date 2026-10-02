@@ -153,8 +153,18 @@ console.log('\n먹으면 — 만들 때 굴려 둔다');
 const judged = (over = {}) => ({ heal: 20, detox: 10, ...over });
 const rate = (fn, n = 20000) => { let k = 0; for (let i = 0; i < n; i += 1) if (fn()) k += 1; return k / n; };
 check('탈 없으면 등급 범위 안', () => {
-  assert.deepStrictEqual(effectOf(COOK, GRADE_BY_KEY.gold, judged({ heal: 999 }), ['honey']), { heal: 35, harm: null });
-  assert.deepStrictEqual(effectOf(COOK, GRADE_BY_KEY.gold, judged({ heal: 1 }), ['honey']), { heal: 15, harm: null });
+  assert.deepStrictEqual(effectOf(COOK, GRADE_BY_KEY.gold, judged({ heal: 999 }), ['honey']), { heal: 60, harm: null });
+  assert.deepStrictEqual(effectOf(COOK, GRADE_BY_KEY.gold, judged({ heal: 1 }), ['honey']), { heal: 50, harm: null });
+});
+check('평범한 요리도 골드면 50 은 찬다 — 등급마다 띠가 겹치지 않는다', () => {
+  // 제미나이는 평범한 요리에 15~35 를 적는다. 골드가 15~35 였을 때는 골드를 먹어도 15 쯤 찼다.
+  for (const heal of [15, 20, 35]) {
+    assert.equal(effectOf(COOK, GRADE_BY_KEY.gold, judged({ heal }), ['honey']).heal, 50);
+  }
+  const eatable = GRADES.filter((g) => g.key !== 'stone');
+  for (let i = 1; i < eatable.length; i += 1) {
+    assert.ok(eatable[i].heal[0] > eatable[i - 1].heal[1], `${eatable[i - 1].key} 와 ${eatable[i].key} 의 회복이 겹친다`);
+  }
 });
 check('탄 것은 늘 아프다', () => {
   for (let i = 0; i < 200; i += 1) {
@@ -176,8 +186,8 @@ check('독은 손질이 서툴수록 탈이 잦다', () => {
 check('독이 안 돌면 멀쩡한 요리다', () => {
   let fine = 0;
   for (let i = 0; i < 2000; i += 1) {
-    const e = effectOf(COOK, GRADE_BY_KEY.gold, judged({ detox: 10 }), ['deathCap']);
-    if (!e.harm) { fine += 1; assert.equal(e.heal, 20); }
+    const e = effectOf(COOK, GRADE_BY_KEY.gold, judged({ detox: 10, heal: 55 }), ['deathCap']);
+    if (!e.harm) { fine += 1; assert.equal(e.heal, 55); }
   }
   assert.ok(fine > 1000);
 });

@@ -32,15 +32,19 @@ import { isLegend } from './fish.js';
  *          만든 골드 요리가 33골드에 팔려서, 스톤만 아니면 절대 손해가 안 나는 골드
  *          수도꼭지가 됐다
  *   mt     `/mt상점` 에 팔면 받는 MT
- *   heal   탈 없는 요리를 먹었을 때의 범위. 제미나이가 이 안에서 고른다
+ *   heal   탈 없는 요리를 먹었을 때의 범위. 제미나이가 적은 "몸에 좋은 정도" 를 이 안으로
+ *          자른다. **등급마다 띠가 겹치지 않게 20씩 오른다.** 제미나이는 평범한 요리에
+ *          15~35 를 적어서 대개 바닥이 찬다(골드 50) — 몸에 아주 좋은 요리만 위로 간다.
+ *          처음엔 골드가 15~35 라 골드를 먹어도 15 쯤 찼고, 실버와 거의 같았다.
+ *          다이아몬드 위가 100 인 것은 서버가 회복량을 ±100 까지만 받아서다
  */
 export const GRADES = [
   { key: 'stone', label: '스톤', emoji: '🪨', color: 0x6b6b6b, mult: 0, flat: 0, mt: 0, heal: [-20, -5] },
-  { key: 'bronze', label: '브론즈', emoji: '🥉', color: 0xa0673a, min: 0, mult: 1, flat: 0, mt: 0, heal: [1, 10] },
-  { key: 'silver', label: '실버', emoji: '🥈', color: 0xb8bcc2, min: 45, mult: 1.2, flat: 10, mt: 0, heal: [5, 20] },
-  { key: 'gold', label: '골드', emoji: '🥇', color: 0xc9a227, min: 65, mult: 1.5, flat: 30, mt: 0, heal: [15, 35] },
-  { key: 'platinum', label: '플래티넘', emoji: '💠', color: 0x7fd1d9, min: 80, dice: 15, mult: 2, flat: 80, mt: 5, heal: [30, 60] },
-  { key: 'diamond', label: '다이아몬드', emoji: '💎', color: 0x7ab8ff, min: 92, dice: 18, mult: 2.5, flat: 150, mt: 10, heal: [50, 80] },
+  { key: 'bronze', label: '브론즈', emoji: '🥉', color: 0xa0673a, min: 0, mult: 1, flat: 0, mt: 0, heal: [10, 20] },
+  { key: 'silver', label: '실버', emoji: '🥈', color: 0xb8bcc2, min: 45, mult: 1.2, flat: 10, mt: 0, heal: [30, 40] },
+  { key: 'gold', label: '골드', emoji: '🥇', color: 0xc9a227, min: 65, mult: 1.5, flat: 30, mt: 0, heal: [50, 60] },
+  { key: 'platinum', label: '플래티넘', emoji: '💠', color: 0x7fd1d9, min: 80, dice: 15, mult: 2, flat: 80, mt: 5, heal: [70, 80] },
+  { key: 'diamond', label: '다이아몬드', emoji: '💎', color: 0x7ab8ff, min: 92, dice: 18, mult: 2.5, flat: 150, mt: 10, heal: [90, 100] },
 ];
 export const GRADE_BY_KEY = Object.fromEntries(GRADES.map((g, rank) => [g.key, { ...g, rank }]));
 
